@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Database, BarChart3, Users, Map, FileSpreadsheet } from 'lucide-react';
+import { Database, BarChart3, Users, Map, FileSpreadsheet, DollarSign } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataImport } from '@/components/DataImport';
 import { DatasetManager } from '@/components/DatasetManager';
 import { KPICards } from '@/components/KPICards';
+import { PermitMap } from '@/components/PermitMap';
+import { CompaniesTab } from '@/components/CompaniesTab';
+import { DealsTab } from '@/components/DealsTab';
 import { useMidconData } from '@/hooks/useMidconData';
 
 const Index = () => {
@@ -11,6 +14,8 @@ const Index = () => {
     permits,
     datasets,
     activeDataset,
+    companies,
+    deals,
     loading,
     refresh,
     switchDataset,
@@ -52,18 +57,26 @@ const Index = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
+          <TabsList className="grid w-full max-w-2xl grid-cols-5">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="data" className="flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              Data
+            <TabsTrigger value="map" className="flex items-center gap-2">
+              <Map className="h-4 w-4" />
+              Map
             </TabsTrigger>
             <TabsTrigger value="companies" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Companies
+            </TabsTrigger>
+            <TabsTrigger value="deals" className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Deals
+            </TabsTrigger>
+            <TabsTrigger value="data" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Data
             </TabsTrigger>
           </TabsList>
 
@@ -165,6 +178,23 @@ const Index = () => {
             )}
           </TabsContent>
 
+          {/* Map Tab */}
+          <TabsContent value="map" className="space-y-6">
+            <div className="h-[600px]">
+              <PermitMap permits={permits} />
+            </div>
+          </TabsContent>
+
+          {/* Companies Tab */}
+          <TabsContent value="companies" className="space-y-6">
+            <CompaniesTab companies={companies} onRefresh={refresh} />
+          </TabsContent>
+
+          {/* Deals Tab */}
+          <TabsContent value="deals" className="space-y-6">
+            <DealsTab deals={deals} companies={companies} onRefresh={refresh} />
+          </TabsContent>
+
           {/* Data Management Tab */}
           <TabsContent value="data" className="space-y-6">
             <DataImport onImportComplete={refresh} />
@@ -174,63 +204,6 @@ const Index = () => {
               onSwitch={switchDataset}
               onDelete={removeDataset}
             />
-          </TabsContent>
-
-          {/* Companies Tab */}
-          <TabsContent value="companies" className="space-y-6">
-            {permits.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-                <h2 className="text-xl font-semibold mb-2">No Companies Yet</h2>
-                <p className="text-muted-foreground">
-                  Import permit data to automatically identify and rank companies.
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-border bg-card">
-                <div className="p-4 border-b border-border">
-                  <h3 className="font-semibold">Companies by Activity</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Ranked by permit count in current dataset
-                  </p>
-                </div>
-                <div className="divide-y divide-border">
-                  {(() => {
-                    const operatorCounts = permits.reduce((acc, p) => {
-                      const op = p.operator || 'Unknown';
-                      acc[op] = (acc[op] || 0) + 1;
-                      return acc;
-                    }, {} as Record<string, number>);
-                    const maxCount = Math.max(...Object.values(operatorCounts));
-                    
-                    return Object.entries(operatorCounts)
-                      .sort((a, b) => b[1] - a[1])
-                      .slice(0, 20)
-                      .map(([operator, count], index) => (
-                        <div key={operator} className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-medium text-muted-foreground w-6">
-                              {index + 1}
-                            </span>
-                            <div>
-                              <p className="font-medium">{operator}</p>
-                              <p className="text-sm text-muted-foreground">{count} permits</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 bg-primary/20 rounded-full w-24">
-                              <div 
-                                className="h-2 bg-primary rounded-full transition-all"
-                                style={{ width: `${(count / maxCount) * 100}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ));
-                  })()}
-                </div>
-              </div>
-            )}
           </TabsContent>
         </Tabs>
       </main>
