@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, X } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { importFile } from '@/lib/data-processor';
+import { importFile } from '@/lib/supabase-data';
 import type { ValidationError } from '@/lib/schema-mapping';
 
 interface DataImportProps {
@@ -112,7 +112,7 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                   </p>
                   {importResult.success && (
                     <p className="text-sm text-muted-foreground">
-                      {importResult.validRows} permits imported • {importResult.skippedRows} rows skipped
+                      {importResult.validRows} new permits imported • {importResult.skippedRows} rows skipped/duplicates
                     </p>
                   )}
                   {importResult.errors.length > 0 && (
