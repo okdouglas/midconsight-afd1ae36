@@ -14,7 +14,345 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activities: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          description: string
+          id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      companies: {
+        Row: {
+          city: string | null
+          created_at: string
+          id: string
+          last_permit_date: string | null
+          name: string
+          operator_number: string | null
+          permit_count: number | null
+          score: string | null
+          state: string | null
+          total_value: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          city?: string | null
+          created_at?: string
+          id?: string
+          last_permit_date?: string | null
+          name: string
+          operator_number?: string | null
+          permit_count?: number | null
+          score?: string | null
+          state?: string | null
+          total_value?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          city?: string | null
+          created_at?: string
+          id?: string
+          last_permit_date?: string | null
+          name?: string
+          operator_number?: string | null
+          permit_count?: number | null
+          score?: string | null
+          state?: string | null
+          total_value?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contacts: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          role: string | null
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          role?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      datasets: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          permit_count: number | null
+          skipped_rows: number | null
+          user_id: string
+          valid_rows: number | null
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          permit_count?: number | null
+          skipped_rows?: number | null
+          user_id: string
+          valid_rows?: number | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          permit_count?: number | null
+          skipped_rows?: number | null
+          user_id?: string
+          valid_rows?: number | null
+        }
+        Relationships: []
+      }
+      deals: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          expected_close_date: string | null
+          id: string
+          linked_permit_ids: string[] | null
+          name: string
+          notes: string | null
+          stage: string | null
+          status: string | null
+          user_id: string
+          value: number | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          expected_close_date?: string | null
+          id?: string
+          linked_permit_ids?: string[] | null
+          name: string
+          notes?: string | null
+          stage?: string | null
+          status?: string | null
+          user_id: string
+          value?: number | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          expected_close_date?: string | null
+          id?: string
+          linked_permit_ids?: string[] | null
+          name?: string
+          notes?: string | null
+          stage?: string | null
+          status?: string | null
+          user_id?: string
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      permits: {
+        Row: {
+          api: string
+          application_type: string | null
+          approval_date: string | null
+          assigned_to: string | null
+          city: string | null
+          county: string | null
+          created_at: string
+          dataset_id: string | null
+          date_imported: string
+          drill_type: string | null
+          estimated_value: number | null
+          expire_date: string | null
+          formation_code: string | null
+          formation_depth: number | null
+          formation_name: string | null
+          id: string
+          image_url: string | null
+          lat: number
+          lon: number
+          measured_total_depth: number | null
+          operator: string
+          operator_number: string | null
+          permit_status: string | null
+          permit_type: string | null
+          range: string | null
+          remarks: string | null
+          section: string | null
+          sign_name: string | null
+          state: string | null
+          submit_date: string | null
+          total_depth: number | null
+          township: string | null
+          true_vertical_depth: number | null
+          user_id: string
+          well_class: string | null
+          well_name: string | null
+          well_number: string | null
+          well_status: string | null
+          well_type: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          api: string
+          application_type?: string | null
+          approval_date?: string | null
+          assigned_to?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          dataset_id?: string | null
+          date_imported?: string
+          drill_type?: string | null
+          estimated_value?: number | null
+          expire_date?: string | null
+          formation_code?: string | null
+          formation_depth?: number | null
+          formation_name?: string | null
+          id?: string
+          image_url?: string | null
+          lat: number
+          lon: number
+          measured_total_depth?: number | null
+          operator: string
+          operator_number?: string | null
+          permit_status?: string | null
+          permit_type?: string | null
+          range?: string | null
+          remarks?: string | null
+          section?: string | null
+          sign_name?: string | null
+          state?: string | null
+          submit_date?: string | null
+          total_depth?: number | null
+          township?: string | null
+          true_vertical_depth?: number | null
+          user_id: string
+          well_class?: string | null
+          well_name?: string | null
+          well_number?: string | null
+          well_status?: string | null
+          well_type?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          api?: string
+          application_type?: string | null
+          approval_date?: string | null
+          assigned_to?: string | null
+          city?: string | null
+          county?: string | null
+          created_at?: string
+          dataset_id?: string | null
+          date_imported?: string
+          drill_type?: string | null
+          estimated_value?: number | null
+          expire_date?: string | null
+          formation_code?: string | null
+          formation_depth?: number | null
+          formation_name?: string | null
+          id?: string
+          image_url?: string | null
+          lat?: number
+          lon?: number
+          measured_total_depth?: number | null
+          operator?: string
+          operator_number?: string | null
+          permit_status?: string | null
+          permit_type?: string | null
+          range?: string | null
+          remarks?: string | null
+          section?: string | null
+          sign_name?: string | null
+          state?: string | null
+          submit_date?: string | null
+          total_depth?: number | null
+          township?: string | null
+          true_vertical_depth?: number | null
+          user_id?: string
+          well_class?: string | null
+          well_name?: string | null
+          well_number?: string | null
+          well_status?: string | null
+          well_type?: string | null
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

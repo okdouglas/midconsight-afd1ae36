@@ -1,27 +1,29 @@
 import { useState } from 'react';
-import { Database, BarChart3, Users, Map, FileSpreadsheet, DollarSign } from 'lucide-react';
+import { Database, BarChart3, Users, Map, FileSpreadsheet, DollarSign, LogOut } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
 import { DatasetManager } from '@/components/DatasetManager';
 import { KPICards } from '@/components/KPICards';
-import { PermitMap } from '@/components/PermitMap';
+import { PermitMapAdvanced } from '@/components/PermitMapAdvanced';
 import { CompaniesTab } from '@/components/CompaniesTab';
 import { DealsTab } from '@/components/DealsTab';
-import { useMidconData } from '@/hooks/useMidconData';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
+import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
+  const { user, signOut } = useAuth();
   const {
     permits,
     datasets,
-    activeDataset,
     companies,
     deals,
     loading,
     refresh,
-    switchDataset,
     removeDataset,
+    newThisWeekPermits,
     stats,
-  } = useMidconData();
+  } = useSupabaseData();
 
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -42,13 +44,11 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              {activeDataset && (
-                <span className="flex items-center gap-2">
-                  <FileSpreadsheet className="h-4 w-4" />
-                  Active: <span className="font-medium text-foreground">{activeDataset.name}</span>
-                </span>
-              )}
-              <span>{permits.length} permits loaded</span>
+              <span>{stats.totalPermits} permits loaded</span>
+              <span className="text-xs">{user?.email}</span>
+              <Button variant="ghost" size="sm" onClick={signOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -100,8 +100,21 @@ const Index = () => {
                   pipelineValue={stats.pipelineValue}
                 />
                 
-                {/* Quick Stats Grid */}
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* New This Week Map */}
+                {newThisWeekPermits.length > 0 && (
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                      <Map className="h-5 w-5 text-primary" />
+                      New This Week ({newThisWeekPermits.length} permits)
+                    </h3>
+                    <div className="h-[300px]">
+                      <PermitMapAdvanced permits={newThisWeekPermits} showFilters={false} />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Quick Stats Grid - removed Formation Types */}
+                <div className="grid gap-6 md:grid-cols-2">
                   <div className="rounded-xl border border-border bg-card p-6">
                     <h3 className="font-semibold mb-4 flex items-center gap-2">
                       <Map className="h-5 w-5 text-primary" />
@@ -149,45 +162,21 @@ const Index = () => {
                         ))}
                     </div>
                   </div>
-
-                  <div className="rounded-xl border border-border bg-card p-6">
-                    <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5 text-primary" />
-                      Formation Types
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      {Object.entries(
-                        permits.reduce((acc, p) => {
-                          const formation = p.formationName || 'Unknown';
-                          acc[formation] = (acc[formation] || 0) + 1;
-                          return acc;
-                        }, {} as Record<string, number>)
-                      )
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 5)
-                        .map(([formation, count]) => (
-                          <div key={formation} className="flex justify-between">
-                            <span className="text-muted-foreground truncate mr-2">{formation}</span>
-                            <span className="font-medium">{count}</span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
                 </div>
               </>
             )}
           </TabsContent>
 
-          {/* Map Tab */}
+          {/* Map Tab - Full featured with filters */}
           <TabsContent value="map" className="space-y-6">
-            <div className="h-[600px]">
-              <PermitMap permits={permits} />
+            <div className="h-[700px]">
+              <PermitMapAdvanced permits={permits} showFilters={true} />
             </div>
           </TabsContent>
 
           {/* Companies Tab */}
           <TabsContent value="companies" className="space-y-6">
-            <CompaniesTab companies={companies} onRefresh={refresh} />
+            <CompaniesTab companies={companies} permits={permits} onRefresh={refresh} />
           </TabsContent>
 
           {/* Deals Tab */}
@@ -200,8 +189,6 @@ const Index = () => {
             <DataImport onImportComplete={refresh} />
             <DatasetManager
               datasets={datasets}
-              activeDataset={activeDataset}
-              onSwitch={switchDataset}
               onDelete={removeDataset}
             />
           </TabsContent>
