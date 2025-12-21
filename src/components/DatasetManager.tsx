@@ -1,7 +1,6 @@
-import { Database, Calendar, FileText, Trash2, CheckCircle } from 'lucide-react';
+import { Database, Calendar, FileText, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   AlertDialog,
@@ -14,16 +13,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import type { Dataset } from '@/lib/indexeddb';
+import type { Dataset } from '@/hooks/useSupabaseData';
 
 interface DatasetManagerProps {
   datasets: Dataset[];
-  activeDataset: Dataset | null;
-  onSwitch: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-export function DatasetManager({ datasets, activeDataset, onSwitch, onDelete }: DatasetManagerProps) {
+export function DatasetManager({ datasets, onDelete }: DatasetManagerProps) {
   if (datasets.length === 0) {
     return (
       <Card>
@@ -56,22 +53,12 @@ export function DatasetManager({ datasets, activeDataset, onSwitch, onDelete }: 
             {datasets.map((dataset) => (
               <div
                 key={dataset.id}
-                className={`p-4 rounded-lg border transition-colors ${
-                  dataset.isActive 
-                    ? 'border-primary bg-primary/5' 
-                    : 'border-border hover:bg-muted/50'
-                }`}
+                className="p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-medium truncate">{dataset.name}</h4>
-                      {dataset.isActive && (
-                        <Badge variant="default" className="gap-1">
-                          <CheckCircle className="h-3 w-3" />
-                          Active
-                        </Badge>
-                      )}
                     </div>
                     
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
@@ -86,27 +73,14 @@ export function DatasetManager({ datasets, activeDataset, onSwitch, onDelete }: 
                     </div>
                     
                     <div className="flex gap-4 mt-2 text-sm">
-                      <span className="text-success">{dataset.validRows} permits</span>
+                      <span className="text-green-500">{dataset.validRows} permits</span>
                       {dataset.skippedRows > 0 && (
-                        <span className="text-warning">{dataset.skippedRows} skipped</span>
-                      )}
-                      {dataset.errors.length > 0 && (
-                        <span className="text-destructive">{dataset.errors.length} errors</span>
+                        <span className="text-amber-500">{dataset.skippedRows} skipped</span>
                       )}
                     </div>
                   </div>
                   
                   <div className="flex gap-2">
-                    {!dataset.isActive && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onSwitch(dataset.id)}
-                      >
-                        Set Active
-                      </Button>
-                    )}
-                    
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">

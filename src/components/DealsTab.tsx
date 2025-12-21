@@ -23,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { type Deal, type Company, saveDeal, saveActivity } from '@/lib/indexeddb';
+import { type Deal, type Company } from '@/hooks/useSupabaseData';
+import { updateDeal } from '@/lib/supabase-data';
 
 interface DealsTabProps {
   deals: Deal[];
@@ -53,20 +54,11 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
   };
 
   const handleStageChange = async (deal: Deal, newStage: DealStage) => {
-    const updatedDeal = { ...deal, stage: newStage };
-    if (newStage === 'closed_won' || newStage === 'closed_lost') {
-      updatedDeal.status = 'closed';
-    } else {
-      updatedDeal.status = 'open';
-    }
+    const newStatus = (newStage === 'closed_won' || newStage === 'closed_lost') ? 'closed' : 'open';
     
-    await saveDeal(updatedDeal);
-    await saveActivity({
-      id: crypto.randomUUID(),
-      type: 'deal_updated',
-      description: `Deal "${deal.name}" moved to ${STAGE_CONFIG[newStage].label}`,
-      date: new Date().toISOString(),
-      companyId: deal.companyId,
+    await updateDeal(deal.id, { 
+      stage: newStage, 
+      status: newStatus 
     });
     
     onRefresh();
