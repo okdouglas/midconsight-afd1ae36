@@ -12,16 +12,15 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import { 
-  type Company, 
-  type Contact,
-  type Deal,
   saveContact, 
-  getContactsByCompany,
+  saveDeal, 
+  getContactsByCompany, 
   getDealsByCompany,
-  saveDeal,
-  saveActivity
-} from '@/lib/indexeddb';
+  type DbContact,
+  type DbDeal
+} from '@/lib/supabase-data';
 
 interface CompanyDetailModalProps {
   company: Company | null;
@@ -30,8 +29,8 @@ interface CompanyDetailModalProps {
 }
 
 export function CompanyDetailModal({ company, onClose, onUpdate }: CompanyDetailModalProps) {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [contacts, setContacts] = useState<DbContact[]>([]);
+  const [deals, setDeals] = useState<DbDeal[]>([]);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddDeal, setShowAddDeal] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', email: '', phone: '', role: '', notes: '' });
@@ -61,24 +60,13 @@ export function CompanyDetailModal({ company, onClose, onUpdate }: CompanyDetail
   const handleAddContact = async () => {
     if (!company || !newContact.name.trim()) return;
 
-    const contact: Contact = {
-      id: crypto.randomUUID(),
-      companyId: company.id,
+    await saveContact({
+      company_id: company.id,
       name: newContact.name,
       email: newContact.email || undefined,
       phone: newContact.phone || undefined,
       role: newContact.role || undefined,
       notes: newContact.notes || undefined,
-      createdDate: new Date().toISOString(),
-    };
-
-    await saveContact(contact);
-    await saveActivity({
-      id: crypto.randomUUID(),
-      type: 'contact_added',
-      description: `Added contact ${contact.name} to ${company.name}`,
-      date: new Date().toISOString(),
-      companyId: company.id,
     });
 
     setNewContact({ name: '', email: '', phone: '', role: '', notes: '' });
@@ -90,26 +78,15 @@ export function CompanyDetailModal({ company, onClose, onUpdate }: CompanyDetail
   const handleAddDeal = async () => {
     if (!company || !newDeal.name.trim()) return;
 
-    const deal: Deal = {
-      id: crypto.randomUUID(),
-      companyId: company.id,
+    await saveDeal({
+      company_id: company.id,
       name: newDeal.name,
       stage: 'new_lead',
       value: parseFloat(newDeal.value) || 0,
-      expectedCloseDate: newDeal.expectedCloseDate || new Date().toISOString(),
+      expected_close_date: newDeal.expectedCloseDate || undefined,
       status: 'open',
-      linkedPermitIds: [],
+      linked_permit_ids: [],
       notes: newDeal.notes || undefined,
-      createdDate: new Date().toISOString(),
-    };
-
-    await saveDeal(deal);
-    await saveActivity({
-      id: crypto.randomUUID(),
-      type: 'deal_created',
-      description: `Created deal "${deal.name}" with ${company.name}`,
-      date: new Date().toISOString(),
-      companyId: company.id,
     });
 
     setNewDeal({ name: '', value: '', expectedCloseDate: '', notes: '' });
@@ -356,13 +333,13 @@ export function CompanyDetailModal({ company, onClose, onUpdate }: CompanyDetail
                       <div>
                         <div className="font-medium">{deal.name}</div>
                         <div className="text-sm text-muted-foreground mt-1">
-                          Stage: <span className="capitalize">{deal.stage.replace('_', ' ')}</span>
+                          Stage: <span className="capitalize">{deal.stage?.replace('_', ' ') || 'New Lead'}</span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-semibold text-primary">${deal.value.toLocaleString()}</div>
+                        <div className="font-semibold text-primary">${Number(deal.value || 0).toLocaleString()}</div>
                         <div className="text-xs text-muted-foreground">
-                          Close: {new Date(deal.expectedCloseDate).toLocaleDateString()}
+                          Close: {deal.expected_close_date ? new Date(deal.expected_close_date).toLocaleDateString() : 'TBD'}
                         </div>
                       </div>
                     </div>

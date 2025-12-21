@@ -12,12 +12,94 @@ import {
 } from '@/lib/supabase-data';
 import type { Permit } from '@/lib/schema-mapping';
 
+// Frontend-friendly types (matching old indexeddb types for compatibility)
+export interface Company {
+  id: string;
+  name: string;
+  operatorNumber?: string;
+  permitCount: number;
+  totalValue: number;
+  score: 'hot' | 'warm' | 'cold';
+  lastPermitDate: string;
+  createdDate: string;
+  city?: string;
+  state?: string;
+}
+
+export interface Deal {
+  id: string;
+  companyId: string;
+  name: string;
+  stage: 'new_lead' | 'contacted' | 'qualified' | 'proposal' | 'closed_won' | 'closed_lost';
+  value: number;
+  expectedCloseDate: string;
+  status: 'open' | 'closed';
+  linkedPermitIds: string[];
+  notes?: string;
+  createdDate: string;
+}
+
+export interface Dataset {
+  id: string;
+  name: string;
+  uploadedAt: string;
+  fileName: string;
+  permitCount: number;
+  validRows: number;
+  skippedRows: number;
+  isActive: boolean;
+}
+
+// Mappers
+function mapDbCompanyToCompany(db: DbCompany): Company {
+  return {
+    id: db.id,
+    name: db.name,
+    operatorNumber: db.operator_number,
+    permitCount: db.permit_count || 0,
+    totalValue: Number(db.total_value) || 0,
+    score: db.score as 'hot' | 'warm' | 'cold',
+    lastPermitDate: db.last_permit_date || db.created_at,
+    createdDate: db.created_at,
+    city: db.city,
+    state: db.state,
+  };
+}
+
+function mapDbDealToDeal(db: DbDeal): Deal {
+  return {
+    id: db.id,
+    companyId: db.company_id,
+    name: db.name,
+    stage: db.stage as Deal['stage'],
+    value: Number(db.value) || 0,
+    expectedCloseDate: db.expected_close_date || db.created_at,
+    status: db.status as 'open' | 'closed',
+    linkedPermitIds: db.linked_permit_ids || [],
+    notes: db.notes,
+    createdDate: db.created_at,
+  };
+}
+
+function mapDbDatasetToDataset(db: DbDataset): Dataset {
+  return {
+    id: db.id,
+    name: db.name,
+    uploadedAt: db.created_at,
+    fileName: db.file_name || 'Unknown',
+    permitCount: db.permit_count || 0,
+    validRows: db.valid_rows || 0,
+    skippedRows: db.skipped_rows || 0,
+    isActive: db.is_active || false,
+  };
+}
+
 export function useSupabaseData() {
   const { user } = useAuth();
-  const [datasets, setDatasets] = useState<DbDataset[]>([]);
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [permits, setPermits] = useState<Permit[]>([]);
-  const [companies, setCompanies] = useState<DbCompany[]>([]);
-  const [deals, setDeals] = useState<DbDeal[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -40,9 +122,9 @@ export function useSupabaseData() {
       ]);
 
       setPermits(perms);
-      setCompanies(comps);
-      setDeals(dls);
-      setDatasets(ds);
+      setCompanies(comps.map(mapDbCompanyToCompany));
+      setDeals(dls.map(mapDbDealToDeal));
+      setDatasets(ds.map(mapDbDatasetToDataset));
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -62,7 +144,7 @@ export function useSupabaseData() {
   // Computed values
   const hotLeads = companies.filter(c => c.score === 'hot').length;
   const warmLeads = companies.filter(c => c.score === 'warm').length;
-  const pipelineValue = deals.filter(d => d.status === 'open').reduce((sum, d) => sum + Number(d.value), 0);
+  const pipelineValue = deals.filter(d => d.status === 'open').reduce((sum, d) => sum + d.value, 0);
 
   // New this week based on date_imported
   const sevenDaysAgo = new Date();

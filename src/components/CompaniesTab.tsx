@@ -7,15 +7,17 @@ import { useState } from 'react';
 import { Users, Flame, Thermometer, Snowflake, Search, Building2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { type Company } from '@/lib/indexeddb';
+import { type Company } from '@/hooks/useSupabaseData';
+import { type Permit } from '@/lib/schema-mapping';
 import { CompanyDetailModal } from './CompanyDetailModal';
 
 interface CompaniesTabProps {
   companies: Company[];
+  permits: Permit[];
   onRefresh: () => void;
 }
 
-export function CompaniesTab({ companies, onRefresh }: CompaniesTabProps) {
+export function CompaniesTab({ companies, permits, onRefresh }: CompaniesTabProps) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [scoreFilter, setScoreFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
@@ -56,6 +58,7 @@ export function CompaniesTab({ companies, onRefresh }: CompaniesTabProps) {
   const hotCount = companies.filter(c => c.score === 'hot').length;
   const warmCount = companies.filter(c => c.score === 'warm').length;
   const coldCount = companies.filter(c => c.score === 'cold').length;
+  const totalPermits = permits.length;
 
   if (companies.length === 0) {
     return (
@@ -72,10 +75,14 @@ export function CompaniesTab({ companies, onRefresh }: CompaniesTabProps) {
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="text-sm text-muted-foreground">Total Companies</div>
           <div className="text-2xl font-bold mt-1">{companies.length}</div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="text-sm text-muted-foreground">Total Permits</div>
+          <div className="text-2xl font-bold mt-1">{totalPermits}</div>
         </div>
         <div 
           className={`rounded-xl border p-4 cursor-pointer transition-colors ${
