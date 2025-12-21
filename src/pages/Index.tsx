@@ -102,12 +102,12 @@ const Index = () => {
                 
                 {/* New This Week Map */}
                 {newThisWeekPermits.length > 0 && (
-                  <div className="rounded-xl border border-border bg-card p-4">
+                  <div className="rounded-xl border border-border bg-card p-4 relative z-0 overflow-hidden isolate">
                     <h3 className="font-semibold mb-4 flex items-center gap-2">
                       <Map className="h-5 w-5 text-primary" />
                       New This Week ({newThisWeekPermits.length} permits)
                     </h3>
-                    <div className="h-[300px]">
+                    <div className="h-[300px] relative z-0">
                       <PermitMapAdvanced permits={newThisWeekPermits} showFilters={false} />
                     </div>
                   </div>
