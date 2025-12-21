@@ -200,7 +200,7 @@ export function PermitMapAdvanced({
   }, [filteredPermits, onPermitClick]);
 
   return (
-    <div className="relative w-full h-full min-h-[400px] rounded-xl overflow-hidden border border-border">
+    <div className="relative w-full h-full rounded-xl overflow-hidden border border-border">
       {/* Filter Controls */}
       {showFilters && (
         <div className="absolute top-4 left-4 right-4 z-[1000] flex flex-wrap gap-2">

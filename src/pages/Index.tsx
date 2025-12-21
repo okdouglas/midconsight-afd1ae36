@@ -55,8 +55,8 @@ const Index = () => {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <main className="container mx-auto px-4 py-4 min-h-[calc(100vh-73px)]">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 h-full">
           <TabsList className="grid w-full max-w-2xl grid-cols-5">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -81,7 +81,7 @@ const Index = () => {
           </TabsList>
 
           {/* Dashboard Tab */}
-          <TabsContent value="dashboard" className="space-y-6">
+          <TabsContent value="dashboard" className="space-y-3">
             {permits.length === 0 ? (
               <div className="text-center py-12">
                 <Database className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
@@ -100,23 +100,23 @@ const Index = () => {
                   pipelineValue={stats.pipelineValue}
                 />
                 
-                {/* New This Week Map */}
+                {/* New This Week Map - Expanded to 60-70% viewport */}
                 {newThisWeekPermits.length > 0 && (
                   <div className="rounded-xl border border-border bg-card p-4 relative z-0 overflow-hidden isolate">
-                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <Map className="h-5 w-5 text-primary" />
                       New This Week ({newThisWeekPermits.length} permits)
                     </h3>
-                    <div className="h-[300px] relative z-0">
+                    <div className="h-[calc(60vh-120px)] min-h-[400px] relative z-0">
                       <PermitMapAdvanced permits={newThisWeekPermits} showFilters={false} />
                     </div>
                   </div>
                 )}
                 
-                {/* Quick Stats Grid - removed Formation Types */}
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="rounded-xl border border-border bg-card p-6">
-                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                {/* Quick Stats Grid */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <Map className="h-5 w-5 text-primary" />
                       Geographic Distribution
                     </h3>
@@ -139,8 +139,8 @@ const Index = () => {
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-border bg-card p-6">
-                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
                       <Users className="h-5 w-5 text-primary" />
                       Top Operators
                     </h3>
