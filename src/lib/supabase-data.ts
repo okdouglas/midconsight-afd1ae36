@@ -308,11 +308,64 @@ export async function parseFile(file: File): Promise<Record<string, unknown>[]> 
         const workbook = XLSX.read(data, { type: 'binary', cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+        
+        // Get all data as array of arrays to detect Texas RRC format
+        const rawRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+          header: 1,
           defval: '',
           raw: false
         });
-        resolve(jsonData);
+        
+        // Detect Texas RRC format: first row contains "Search Criteria"
+        const isTexasRRC = rawRows.length > 0 && 
+          String(rawRows[0]?.[0] || '').includes('Search Criteria');
+        
+        if (isTexasRRC) {
+          // Find the header row (contains "Status Date")
+          let headerRowIndex = -1;
+          for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+            const row = rawRows[i] as unknown[];
+            if (row && row.some(cell => String(cell) === 'Status Date')) {
+              headerRowIndex = i;
+              break;
+            }
+          }
+          
+          if (headerRowIndex === -1) {
+            throw new Error('Could not find header row in Texas RRC file');
+          }
+          
+          // Use the header row as column names
+          const headers = (rawRows[headerRowIndex] as unknown[]).map(h => String(h).trim());
+          const dataRows: Record<string, unknown>[] = [];
+          
+          // Process data rows (after header)
+          for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
+            const row = rawRows[i] as unknown[];
+            if (!row || row.length === 0 || !row[0]) continue; // Skip empty rows
+            
+            const record: Record<string, unknown> = {};
+            headers.forEach((header, idx) => {
+              if (header) {
+                record[header] = row[idx] ?? '';
+              }
+            });
+            
+            // Only add rows that have an API number
+            if (record['API NO.']) {
+              dataRows.push(record);
+            }
+          }
+          
+          resolve(dataRows);
+        } else {
+          // Standard Excel/CSV format (Oklahoma ITD)
+          const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
+            defval: '',
+            raw: false
+          });
+          resolve(jsonData);
+        }
       } catch (error) {
         reject(error);
       }
