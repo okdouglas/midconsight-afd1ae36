@@ -6,7 +6,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { processExcelData, generateId, type Permit, type ImportResult } from './schema-mapping';
-import { parseTexasZipFile, type TexasPermit as ParsedTexasPermit } from './texas-parser';
 
 const AVG_PERMIT_VALUE = 5000; // Updated to $5k per permit
 
@@ -629,108 +628,6 @@ export async function importTexasPermits(
     user_id: user.id,
     type: 'import',
     description: `Synced ${validPermits.length} Texas RRC permits. ${skippedCount} skipped (duplicates or missing GPS).`
-  });
-
-  return { validRows: validPermits.length, skippedRows: skippedCount };
-}
-
-// ============ TEXAS ZIP FILE IMPORT ============
-
-export async function importTexasPermitsFromZip(
-  file: File,
-  datasetName: string
-): Promise<{ validRows: number; skippedRows: number }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
-  // Parse the ZIP file client-side
-  const parseResult = await parseTexasZipFile(file);
-
-  if (!parseResult.success) {
-    throw new Error(parseResult.error || 'Failed to parse Texas ZIP file');
-  }
-
-  if (!parseResult.permits || parseResult.permits.length === 0) {
-    throw new Error('No permits found in the ZIP file. Make sure you downloaded the correct file from RRC.');
-  }
-
-  console.log(`Parsed ${parseResult.permits.length} permits from ZIP`);
-
-  // Check for existing permits by API to avoid duplicates
-  const { data: existingPermits } = await supabase
-    .from('permits')
-    .select('api');
-  
-  const existingApis = new Set((existingPermits || []).map(p => p.api));
-  
-  // Filter to only permits with valid coordinates and new APIs
-  const validPermits = parseResult.permits.filter(p => 
-    p.lat !== null && 
-    p.lon !== null && 
-    p.operator &&
-    !existingApis.has(p.api)
-  );
-
-  const skippedCount = parseResult.permits.length - validPermits.length;
-
-  console.log(`Valid new permits: ${validPermits.length}, Skipped: ${skippedCount}`);
-
-  if (validPermits.length === 0) {
-    return { validRows: 0, skippedRows: skippedCount };
-  }
-
-  // Create dataset
-  const datasetId = crypto.randomUUID();
-  const { error: datasetError } = await supabase
-    .from('datasets')
-    .insert({
-      id: datasetId,
-      user_id: user.id,
-      name: datasetName,
-      file_name: file.name,
-      permit_count: validPermits.length,
-      valid_rows: validPermits.length,
-      skipped_rows: skippedCount,
-      is_active: true
-    });
-
-  if (datasetError) throw datasetError;
-
-  // Insert permits
-  const permitsToInsert = validPermits.map(p => ({
-    id: crypto.randomUUID(),
-    user_id: user.id,
-    api: p.api,
-    operator: p.operator,
-    operator_number: p.operatorNumber,
-    lat: p.lat!,
-    lon: p.lon!,
-    county: p.county,
-    well_name: p.wellName,
-    well_number: p.wellNumber,
-    total_depth: p.totalDepth,
-    approval_date: p.approvalDate,
-    permit_type: p.permitType,
-    state: 'TX',
-    date_imported: new Date().toISOString().split('T')[0],
-    dataset_id: datasetId,
-    estimated_value: AVG_PERMIT_VALUE
-  }));
-
-  const { error: permitsError } = await supabase
-    .from('permits')
-    .insert(permitsToInsert);
-
-  if (permitsError) throw permitsError;
-
-  // Rebuild companies
-  await rebuildCompanies(user.id);
-
-  // Log activity
-  await supabase.from('activities').insert({
-    user_id: user.id,
-    type: 'import',
-    description: `Imported ${validPermits.length} Texas RRC permits from ${file.name}. ${skippedCount} skipped (duplicates or missing GPS).`
   });
 
   return { validRows: validPermits.length, skippedRows: skippedCount };
