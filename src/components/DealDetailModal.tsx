@@ -83,10 +83,26 @@ export function DealDetailModal({
   useEffect(() => {
     const loadOptions = async () => {
       const options = await getSellingOptions();
-      setSellingOptions(options);
+      
+      // Sort: Standard Packages first, then GGX Add-on, each sorted by annual_rental ascending
+      const sortedOptions = [...options].sort((a, b) => {
+        // First sort by category (Standard Packages before GGX Add-on)
+        const categoryOrder = ['Standard Packages', 'GGX Add-on'];
+        const aCatIndex = categoryOrder.indexOf(a.category || 'Standard Packages');
+        const bCatIndex = categoryOrder.indexOf(b.category || 'Standard Packages');
+        if (aCatIndex !== bCatIndex) {
+          return aCatIndex - bCatIndex;
+        }
+        // Then sort by annual_rental ascending
+        const aRental = Number(a.annual_rental) || 0;
+        const bRental = Number(b.annual_rental) || 0;
+        return aRental - bRental;
+      });
+      
+      setSellingOptions(sortedOptions);
       
       if (deal?.sellingOptionId) {
-        const linked = options.find(o => o.id === deal.sellingOptionId);
+        const linked = sortedOptions.find(o => o.id === deal.sellingOptionId);
         setSelectedProduct(linked || null);
       }
     };
@@ -206,7 +222,7 @@ export function DealDetailModal({
                     <SelectItem value="none">No product linked</SelectItem>
                     {sellingOptions.map(opt => (
                       <SelectItem key={opt.id} value={opt.id}>
-                        {opt.name} - ${formatCurrency(Number(opt.default_price))}
+                        {opt.name} - ${formatCurrency(Number(opt.annual_rental) || Number(opt.default_price))}
                       </SelectItem>
                     ))}
                   </SelectContent>
