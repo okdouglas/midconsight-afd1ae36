@@ -494,3 +494,141 @@ async function rebuildCompanies(userId: string): Promise<void> {
     if (error) console.error('Failed to upsert company:', error);
   }
 }
+
+// ============ TEXAS RRC IMPORT ============
+
+interface TexasPermit {
+  universalDocNo: string;
+  api: string;
+  operator: string;
+  operatorNumber: string;
+  county: string;
+  wellName: string;
+  wellNumber: string;
+  totalDepth: number;
+  approvalDate: string;
+  lat: number | null;
+  lon: number | null;
+  districtCode: string;
+  leaseNumber: string;
+  permitType: string;
+}
+
+interface TexasSyncResponse {
+  success: boolean;
+  permits?: TexasPermit[];
+  error?: string;
+  hint?: string;
+  stats?: {
+    total: number;
+    withGps: number;
+    withoutGps: number;
+  };
+}
+
+export async function importTexasPermits(
+  datasetName: string,
+  onStatusUpdate?: (status: string) => void
+): Promise<{ validRows: number; skippedRows: number }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  onStatusUpdate?.('Fetching data from Texas RRC...');
+
+  // Call the edge function
+  const { data, error } = await supabase.functions.invoke<TexasSyncResponse>('texas-rrc-sync');
+
+  if (error) {
+    throw new Error(`Failed to sync: ${error.message}`);
+  }
+
+  if (!data?.success) {
+    throw new Error(data?.error || 'Unknown error from Texas RRC sync');
+  }
+
+  if (!data.permits || data.permits.length === 0) {
+    throw new Error('No permits returned from Texas RRC');
+  }
+
+  onStatusUpdate?.(`Parsing ${data.permits.length} permits...`);
+
+  // Check for existing permits by API to avoid duplicates
+  const { data: existingPermits } = await supabase
+    .from('permits')
+    .select('api');
+  
+  const existingApis = new Set((existingPermits || []).map(p => p.api));
+  
+  // Filter to only permits with valid coordinates and new APIs
+  const validPermits = data.permits.filter(p => 
+    p.lat !== null && 
+    p.lon !== null && 
+    p.operator &&
+    !existingApis.has(p.api)
+  );
+
+  const skippedCount = data.permits.length - validPermits.length;
+
+  onStatusUpdate?.(`Importing ${validPermits.length} new permits...`);
+
+  if (validPermits.length === 0) {
+    return { validRows: 0, skippedRows: skippedCount };
+  }
+
+  // Create dataset
+  const datasetId = crypto.randomUUID();
+  const { error: datasetError } = await supabase
+    .from('datasets')
+    .insert({
+      id: datasetId,
+      user_id: user.id,
+      name: datasetName,
+      file_name: 'Texas RRC Sync',
+      permit_count: validPermits.length,
+      valid_rows: validPermits.length,
+      skipped_rows: skippedCount,
+      is_active: true
+    });
+
+  if (datasetError) throw datasetError;
+
+  // Insert permits
+  const permitsToInsert = validPermits.map(p => ({
+    id: crypto.randomUUID(),
+    user_id: user.id,
+    api: p.api,
+    operator: p.operator,
+    operator_number: p.operatorNumber,
+    lat: p.lat!,
+    lon: p.lon!,
+    county: p.county,
+    well_name: p.wellName,
+    well_number: p.wellNumber,
+    total_depth: p.totalDepth,
+    approval_date: p.approvalDate,
+    permit_type: p.permitType,
+    state: 'TX',
+    date_imported: new Date().toISOString().split('T')[0],
+    dataset_id: datasetId,
+    estimated_value: AVG_PERMIT_VALUE
+  }));
+
+  const { error: permitsError } = await supabase
+    .from('permits')
+    .insert(permitsToInsert);
+
+  if (permitsError) throw permitsError;
+
+  // Rebuild companies
+  onStatusUpdate?.('Updating company records...');
+  await rebuildCompanies(user.id);
+
+  // Log activity
+  await supabase.from('activities').insert({
+    user_id: user.id,
+    type: 'import',
+    description: `Synced ${validPermits.length} Texas RRC permits. ${skippedCount} skipped (duplicates or missing GPS).`
+  });
+
+  return { validRows: validPermits.length, skippedRows: skippedCount };
+}
