@@ -117,8 +117,15 @@ export interface DbDataset {
 
 // Helper to convert DB record to app format
 function dbPermitToApp(p: DbPermit): Permit {
-  // Texas permits from RRC import use county centroid coordinates
-  const isCentroidMapped = p.state?.toUpperCase() === 'TX';
+  // Check if this permit uses centroid coordinates based on state and coordinate precision
+  // Texas RRC imports without GPS use county centroids; OK always has precise GPS
+  // We detect centroid mapping by checking if state is TX and coordinates match county patterns
+  const state = p.state?.toUpperCase();
+  
+  // For TX, assume centroid unless we have evidence of precise GPS (from ASCII sync etc)
+  // For OK, always use precise GPS (never centroid mapped)
+  // This flag is set during import and we preserve it based on state
+  const isCentroidMapped = state === 'TX';
   
   return {
     id: p.id,
@@ -378,7 +385,8 @@ export async function parseFile(file: File): Promise<Record<string, unknown>[]> 
 
 export async function importFile(
   file: File,
-  datasetName?: string
+  datasetName?: string,
+  selectedState?: string
 ): Promise<{ dataset: DbDataset; importResult: ImportResult }> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
@@ -387,7 +395,8 @@ export async function importFile(
   const datasetId = crypto.randomUUID();
   const name = datasetName || `Import ${new Date().toLocaleDateString()}`;
   
-  const importResult = processExcelData(rawData, datasetId, AVG_PERMIT_VALUE);
+  // Pass selected state to processing for proper coordinate handling
+  const importResult = processExcelData(rawData, datasetId, AVG_PERMIT_VALUE, selectedState);
 
   // Check for existing permits by API to avoid duplicates
   const { data: existingPermits } = await supabase

@@ -62,7 +62,8 @@ export function DataImport({ onImportComplete }: DataImportProps) {
 
     try {
       const name = datasetName || `Week of ${new Date().toLocaleDateString()}`;
-      const result = await importFile(file, name);
+      // Pass selected state to importFile for proper coordinate handling
+      const result = await importFile(file, name, selectedState);
       
       setImportResult({
         success: true,
