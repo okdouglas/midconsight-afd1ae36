@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Database, BarChart3, Users, Map, FileSpreadsheet, DollarSign, LogOut } from 'lucide-react';
+import { Database, BarChart3, Users, Map, FileSpreadsheet, DollarSign, LogOut, Package } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
@@ -8,6 +8,7 @@ import { KPICards } from '@/components/KPICards';
 import { PermitMapAdvanced } from '@/components/PermitMapAdvanced';
 import { CompaniesTab } from '@/components/CompaniesTab';
 import { DealsTab } from '@/components/DealsTab';
+import { ProductCatalog } from '@/components/ProductCatalog';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -57,7 +58,7 @@ const Index = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-4 min-h-[calc(100vh-73px)]">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 h-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-5">
+          <TabsList className="grid w-full max-w-3xl grid-cols-6">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Dashboard
@@ -73,6 +74,10 @@ const Index = () => {
             <TabsTrigger value="deals" className="flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
               Deals
+            </TabsTrigger>
+            <TabsTrigger value="products" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Products
             </TabsTrigger>
             <TabsTrigger value="data" className="flex items-center gap-2">
               <Database className="h-4 w-4" />
@@ -184,7 +189,19 @@ const Index = () => {
             <DealsTab deals={deals} companies={companies} onRefresh={refresh} />
           </TabsContent>
 
+          {/* Products Tab */}
+          <TabsContent value="products" className="space-y-6">
+            <ProductCatalog />
+          </TabsContent>
+
           {/* Data Management Tab */}
+          <TabsContent value="data" className="space-y-6">
+            <DataImport onImportComplete={refresh} />
+            <DatasetManager
+              datasets={datasets}
+              onDelete={removeDataset}
+            />
+          </TabsContent>
           <TabsContent value="data" className="space-y-6">
             <DataImport onImportComplete={refresh} />
             <DatasetManager

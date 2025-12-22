@@ -186,6 +186,7 @@ export function CompaniesTab({ companies, permits, onRefresh }: CompaniesTabProp
       {/* Company Detail Modal */}
       <CompanyDetailModal
         company={selectedCompany}
+        companyPermits={permits.filter(p => p.operator === selectedCompany?.name)}
         onClose={() => setSelectedCompany(null)}
         onUpdate={onRefresh}
       />

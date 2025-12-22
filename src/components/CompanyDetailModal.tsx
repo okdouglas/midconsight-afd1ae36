@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Plus, User, Phone, Mail, Briefcase, Building2, FileText, Flame, Thermometer, Snowflake, Trash2 } from 'lucide-react';
+import { X, Plus, User, Phone, Mail, Briefcase, Building2, FileText, Flame, Thermometer, Snowflake, Trash2, Lightbulb } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
+import { SellingOpportunities } from '@/components/SellingOpportunities';
+import type { Permit } from '@/lib/schema-mapping';
 import { 
   saveContact, 
   saveDeal, 
@@ -24,11 +26,12 @@ import {
 
 interface CompanyDetailModalProps {
   company: Company | null;
+  companyPermits?: Permit[];
   onClose: () => void;
   onUpdate?: () => void;
 }
 
-export function CompanyDetailModal({ company, onClose, onUpdate }: CompanyDetailModalProps) {
+export function CompanyDetailModal({ company, companyPermits = [], onClose, onUpdate }: CompanyDetailModalProps) {
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [deals, setDeals] = useState<DbDeal[]>([]);
   const [showAddContact, setShowAddContact] = useState(false);
@@ -137,12 +140,26 @@ export function CompanyDetailModal({ company, onClose, onUpdate }: CompanyDetail
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="contacts" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="opportunities" className="mt-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="opportunities">Opportunities</TabsTrigger>
             <TabsTrigger value="contacts">Contacts ({contacts.length})</TabsTrigger>
             <TabsTrigger value="deals">Deals ({deals.length})</TabsTrigger>
-            <TabsTrigger value="info">Company Info</TabsTrigger>
+            <TabsTrigger value="info">Info</TabsTrigger>
           </TabsList>
+
+          {/* Selling Opportunities Tab */}
+          <TabsContent value="opportunities" className="mt-4">
+            <SellingOpportunities
+              companyId={company.id}
+              companyName={company.name}
+              permits={companyPermits}
+              onDealCreated={() => {
+                loadCompanyData();
+                onUpdate?.();
+              }}
+            />
+          </TabsContent>
 
           {/* Contacts Tab */}
           <TabsContent value="contacts" className="space-y-4 mt-4">
