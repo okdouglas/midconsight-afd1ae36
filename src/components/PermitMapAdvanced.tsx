@@ -194,27 +194,31 @@ export function PermitMapAdvanced({
         icon: getMarkerIcon(permit.wellType || '', permit.isCentroidMapped),
       });
 
-      const centroidNote = permit.isCentroidMapped 
-        ? `<div style="background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
-            ⚠️ Location estimated based on county center
-          </div>` 
-        : '';
+      const sourceLabel = permit.isCentroidMapped 
+        ? 'Source: County Estimate' 
+        : 'Source: State GPS';
+      
+      const sourceColor = permit.isCentroidMapped ? '#f97316' : '#16a34a';
 
       const popupContent = `
         <div style="font-family: system-ui; font-size: 12px; min-width: 200px;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: ${permit.isCentroidMapped ? '#f97316' : '#16a34a'};">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: ${sourceColor};">
             ${permit.wellName || 'Unknown Well'}
           </div>
           <div style="display: grid; gap: 4px;">
             <div><strong>Operator:</strong> ${permit.operator || 'N/A'}</div>
             <div><strong>API:</strong> ${permit.api || 'N/A'}</div>
             <div><strong>County:</strong> ${permit.county || 'N/A'}</div>
+            <div><strong>State:</strong> ${permit.state || 'N/A'}</div>
             <div><strong>Formation:</strong> ${permit.formationName || 'N/A'}</div>
             <div><strong>Well Type:</strong> ${permit.wellType || 'N/A'}</div>
+            <div><strong>Drill Type:</strong> ${permit.drillType || 'N/A'}</div>
             <div><strong>Approval Date:</strong> ${permit.approvalDate || 'N/A'}</div>
             <div><strong>Imported:</strong> ${permit.dateImported || 'N/A'}</div>
           </div>
-          ${centroidNote}
+          <div style="background: ${permit.isCentroidMapped ? '#fef3c7' : '#dcfce7'}; color: ${permit.isCentroidMapped ? '#92400e' : '#166534'}; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
+            ${permit.isCentroidMapped ? '⚠️' : '📍'} ${sourceLabel}
+          </div>
         </div>
       `;
 
@@ -285,12 +289,19 @@ export function PermitMapAdvanced({
       
       {/* Legend */}
       <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000]">
-        <div className="font-semibold mb-2">Well Types</div>
+        <div className="font-semibold mb-2">Location Source</div>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-green-500 border border-white" />
-            <span>Oil</span>
+            <span>State GPS (Precise)</span>
           </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-orange-500 border border-white" />
+            <span>County Estimate (TX)</span>
+          </div>
+        </div>
+        <div className="font-semibold mt-3 mb-2">Well Types</div>
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-blue-500 border border-white" />
             <span>Gas</span>
@@ -302,10 +313,6 @@ export function PermitMapAdvanced({
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-500 border border-white" />
             <span>Disposal</span>
-          </div>
-          <div className="flex items-center gap-2 pt-1 border-t border-border/50 mt-1">
-            <div className="w-3 h-3 rounded-full bg-orange-500 border border-white" />
-            <span>County Estimate</span>
           </div>
         </div>
       </div>

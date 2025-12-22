@@ -300,6 +300,7 @@ function parseRrcOperator(operatorField: string): { operator: string; operatorNu
 
 /**
  * Maps a Texas RRC row to the internal Permit model
+ * Uses county centroids with jitter for coordinates (TX RRC has no GPS)
  */
 export function mapRrcRowToPermit(
   row: Record<string, unknown>,
@@ -333,7 +334,7 @@ export function mapRrcRowToPermit(
   let lon: number | undefined;
   
   if (county) {
-    const coords = getTexasCountyCoordinates(county, true);
+    const coords = getTexasCountyCoordinates(county, true); // Apply jitter for clustering
     if (coords) {
       [lat, lon] = coords;
     }
@@ -405,7 +406,7 @@ export function mapRrcRowToPermit(
     // Calculated value
     estimatedValue: avgPermitValue,
     
-    // Flag that coordinates are from county centroid
+    // Flag that coordinates are from county centroid (TX RRC only)
     isCentroidMapped: true
   };
   
@@ -413,13 +414,19 @@ export function mapRrcRowToPermit(
 }
 
 /**
- * Maps a raw Excel row to the internal Permit model
+ * Maps an Oklahoma ITD row to the internal Permit model
+ * Uses precise GPS coordinates directly from the file
+ */
+/**
+ * Maps an Oklahoma ITD row to the internal Permit model
+ * Uses precise GPS coordinates directly from the file (no jitter)
  */
 export function mapRowToPermit(
   row: Record<string, unknown>,
   rowIndex: number,
   datasetId: string,
-  avgPermitValue: number = 50000
+  avgPermitValue: number = 50000,
+  forceState?: string
 ): { permit: Permit | null; errors: ValidationError[] } {
   const errors: ValidationError[] = [];
   
@@ -453,12 +460,13 @@ export function mapRowToPermit(
     });
   }
   
+  // Oklahoma requires precise GPS - skip if missing
   if (lat === undefined || lon === undefined || lat === 0 || lon === 0) {
     errors.push({
       row: rowIndex,
       field: 'Surf_Lat_Y/Surf_Long_X',
       value: `lat: ${lat}, lon: ${lon}`,
-      reason: 'Invalid or missing coordinates'
+      reason: 'Missing or invalid coordinates - Oklahoma data requires precise GPS'
     });
     return { permit: null, errors };
   }
@@ -520,7 +528,7 @@ export function mapRowToPermit(
     
     // Address
     city: String(getValue('City') ?? '').trim() || undefined,
-    state: String(getValue('State') ?? '').trim() || undefined,
+    state: String(getValue('State') ?? '').trim() || forceState || 'OK',
     zipCode: String(getValue('Zip_Code') ?? '').trim() || undefined,
     
     // Metadata
@@ -530,7 +538,10 @@ export function mapRowToPermit(
     datasetId,
     
     // Calculated value
-    estimatedValue: avgPermitValue
+    estimatedValue: avgPermitValue,
+    
+    // Oklahoma uses precise GPS - never centroid mapped
+    isCentroidMapped: false
   };
   
   return { permit, errors };
@@ -539,11 +550,13 @@ export function mapRowToPermit(
 /**
  * Validates and transforms raw Excel data to permits
  * Auto-detects the format (Oklahoma ITD or Texas RRC)
+ * @param selectedState - User-selected state for proper coordinate handling
  */
 export function processExcelData(
   rawData: Record<string, unknown>[],
   datasetId: string,
-  avgPermitValue: number = 50000
+  avgPermitValue: number = 50000,
+  selectedState?: string
 ): ImportResult {
   const permits: Permit[] = [];
   const allErrors: ValidationError[] = [];
@@ -570,16 +583,27 @@ export function processExcelData(
     };
   }
   
-  // Detect format from first valid row
-  const format = detectDataFormat(dataRows[0]);
+  // Detect format from first valid row OR use selected state to determine format
+  let format = detectDataFormat(dataRows[0]);
+  
+  // If user selected TX and format is unknown, treat as RRC
+  if (selectedState === 'TX' && format === 'unknown') {
+    format = 'rrc';
+  }
+  // If user selected OK and format is unknown, treat as ITD
+  if (selectedState === 'OK' && format === 'unknown') {
+    format = 'itd';
+  }
   
   dataRows.forEach((row, index) => {
     let result: { permit: Permit | null; errors: ValidationError[] };
     
     if (format === 'rrc') {
+      // Texas RRC: Use county centroids with jitter
       result = mapRrcRowToPermit(row, index + 2, datasetId, avgPermitValue);
     } else {
-      result = mapRowToPermit(row, index + 2, datasetId, avgPermitValue);
+      // Oklahoma ITD: Use precise GPS coordinates (no jitter)
+      result = mapRowToPermit(row, index + 2, datasetId, avgPermitValue, selectedState);
     }
     
     allErrors.push(...result.errors);
