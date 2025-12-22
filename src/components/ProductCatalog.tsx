@@ -520,14 +520,14 @@ export function ProductCatalog() {
               <div>
                 <Label>Trigger Type</Label>
                 <Select
-                  value={editingOption?.trigger_type || ''}
-                  onValueChange={(v) => setEditingOption(prev => ({ ...prev, trigger_type: v }))}
+                  value={editingOption?.trigger_type || 'none'}
+                  onValueChange={(v) => setEditingOption(prev => ({ ...prev, trigger_type: v === 'none' ? undefined : v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select trigger..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {TRIGGER_TYPES.map(t => (
                       <SelectItem key={t} value={t}>
                         {t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}

@@ -193,9 +193,9 @@ export function DealDetailModal({
               <div>
                 <Label>Linked Product</Label>
                 <Select 
-                  value={selectedProduct?.id || ''} 
+                  value={selectedProduct?.id || 'none'} 
                   onValueChange={(v) => {
-                    const opt = sellingOptions.find(o => o.id === v);
+                    const opt = v === 'none' ? null : sellingOptions.find(o => o.id === v);
                     setSelectedProduct(opt || null);
                   }}
                 >
@@ -203,7 +203,7 @@ export function DealDetailModal({
                     <SelectValue placeholder="Select a product..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No product linked</SelectItem>
+                    <SelectItem value="none">No product linked</SelectItem>
                     {sellingOptions.map(opt => (
                       <SelectItem key={opt.id} value={opt.id}>
                         {opt.name} - ${formatCurrency(Number(opt.default_price))}
