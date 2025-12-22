@@ -11,6 +11,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { importFile } from '@/lib/supabase-data';
 import { toast } from 'sonner';
 import type { ValidationError } from '@/lib/schema-mapping';
+import { ImportAddendum, type ImportMetadata, type SkippedRow } from './ImportAddendum';
 
 interface DataImportProps {
   onImportComplete: () => void;
@@ -28,6 +29,10 @@ export function DataImport({ onImportComplete }: DataImportProps) {
   const [datasetName, setDatasetName] = useState('');
   const [selectedState, setSelectedState] = useState('OK');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Import addendum state
+  const [importMetadata, setImportMetadata] = useState<ImportMetadata | null>(null);
+  const [skippedRowsLog, setSkippedRowsLog] = useState<SkippedRow[]>([]);
 
   // Calculate suggested date range for Texas RRC (last 7 days)
   const suggestedDateRange = useMemo(() => {
@@ -59,6 +64,8 @@ export function DataImport({ onImportComplete }: DataImportProps) {
 
     setIsImporting(true);
     setImportResult(null);
+    setImportMetadata(null);
+    setSkippedRowsLog([]);
 
     try {
       const name = datasetName || `Week of ${new Date().toLocaleDateString()}`;
@@ -71,6 +78,10 @@ export function DataImport({ onImportComplete }: DataImportProps) {
         skippedRows: result.importResult.skippedRows,
         errors: result.importResult.errors
       });
+      
+      // Set addendum data
+      setImportMetadata(result.metadata);
+      setSkippedRowsLog(result.skippedRows);
       
       onImportComplete();
       setDatasetName('');
@@ -86,6 +97,11 @@ export function DataImport({ onImportComplete }: DataImportProps) {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+  
+  const handleClearLogs = () => {
+    setSkippedRowsLog([]);
+    setImportMetadata(null);
   };
 
   return (
@@ -369,6 +385,13 @@ export function DataImport({ onImportComplete }: DataImportProps) {
           </div>
         </aside>
       </div>
+      
+      {/* Import Addendum - Metadata and Skipped Rows */}
+      <ImportAddendum 
+        metadata={importMetadata} 
+        skippedRows={skippedRowsLog} 
+        onClearLogs={handleClearLogs}
+      />
 
       <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
