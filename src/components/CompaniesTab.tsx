@@ -3,24 +3,67 @@
  * Perpetual all-time view of companies with click-to-expand CRM
  */
 
-import { useState } from 'react';
-import { Users, Flame, Thermometer, Snowflake, Search, Building2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { type Company } from '@/hooks/useSupabaseData';
+import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import { type Permit } from '@/lib/schema-mapping';
 import { CompanyDetailModal } from './CompanyDetailModal';
+import { getContactsByCompany, getAllDeals, type DbContact, type DbDeal } from '@/lib/supabase-data';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface CompaniesTabProps {
   companies: Company[];
   permits: Permit[];
+  deals: Deal[];
   onRefresh: () => void;
 }
 
-export function CompaniesTab({ companies, permits, onRefresh }: CompaniesTabProps) {
+type SortField = 'name' | 'permitCount' | 'totalValue' | 'dealCount' | 'weightedRevenue' | 'score';
+type SortDirection = 'asc' | 'desc';
+
+interface CompanyWithDetails extends Company {
+  primaryContact?: string;
+  dealCount: number;
+  weightedRevenue: number;
+}
+
+export function CompaniesTab({ companies, permits, deals, onRefresh }: CompaniesTabProps) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [scoreFilter, setScoreFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
+  const [contacts, setContacts] = useState<Record<string, DbContact[]>>({});
+  const [sortField, setSortField] = useState<SortField>('score');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Load contacts for all companies
+  useEffect(() => {
+    const loadContacts = async () => {
+      const contactMap: Record<string, DbContact[]> = {};
+      for (const company of companies) {
+        try {
+          const companyContacts = await getContactsByCompany(company.id);
+          if (companyContacts.length > 0) {
+            contactMap[company.id] = companyContacts;
+          }
+        } catch (error) {
+          // Silently fail for individual companies
+        }
+      }
+      setContacts(contactMap);
+    };
+    if (companies.length > 0) {
+      loadContacts();
+    }
+  }, [companies]);
 
   const getScoreIcon = (score: Company['score']) => {
     switch (score) {
@@ -39,20 +82,91 @@ export function CompaniesTab({ companies, permits, onRefresh }: CompaniesTabProp
     return variants[score];
   };
 
+  // Compute company details with deals and contacts
+  const companiesWithDetails: CompanyWithDetails[] = useMemo(() => {
+    return companies.map(company => {
+      const companyDeals = deals.filter(d => d.companyId === company.id && d.status === 'open');
+      const dealCount = companyDeals.length;
+      const weightedRevenue = companyDeals.reduce((sum, d) => {
+        return sum + Math.round(d.value * ((d.probability || 10) / 100));
+      }, 0);
+      const primaryContact = contacts[company.id]?.[0]?.name || '-';
+      
+      return {
+        ...company,
+        primaryContact,
+        dealCount,
+        weightedRevenue
+      };
+    });
+  }, [companies, deals, contacts]);
+
+  // Handle sorting
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <TableHead 
+      className="cursor-pointer hover:bg-muted/50 select-none"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field ? (
+          sortDirection === 'asc' ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )
+        ) : (
+          <ArrowUpDown className="h-4 w-4 opacity-30" />
+        )}
+      </div>
+    </TableHead>
+  );
+
   // Filter and sort companies
-  const filteredCompanies = companies
+  const filteredCompanies = companiesWithDetails
     .filter(c => {
-      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (c.primaryContact && c.primaryContact.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesScore = scoreFilter === 'all' || c.score === scoreFilter;
       return matchesSearch && matchesScore;
     })
     .sort((a, b) => {
-      // Sort by score priority (hot > warm > cold), then by permit count
       const scorePriority = { hot: 3, warm: 2, cold: 1 };
-      if (scorePriority[a.score] !== scorePriority[b.score]) {
-        return scorePriority[b.score] - scorePriority[a.score];
+      let comparison = 0;
+      
+      switch (sortField) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'permitCount':
+          comparison = a.permitCount - b.permitCount;
+          break;
+        case 'totalValue':
+          comparison = a.totalValue - b.totalValue;
+          break;
+        case 'dealCount':
+          comparison = a.dealCount - b.dealCount;
+          break;
+        case 'weightedRevenue':
+          comparison = a.weightedRevenue - b.weightedRevenue;
+          break;
+        case 'score':
+          comparison = scorePriority[a.score] - scorePriority[b.score];
+          break;
+        default:
+          comparison = 0;
       }
-      return b.permitCount - a.permitCount;
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
     });
 
   const hotCount = companies.filter(c => c.score === 'hot').length;
@@ -127,7 +241,7 @@ export function CompaniesTab({ companies, permits, onRefresh }: CompaniesTabProp
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search companies..."
+            placeholder="Search companies or contacts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -135,7 +249,7 @@ export function CompaniesTab({ companies, permits, onRefresh }: CompaniesTabProp
         </div>
       </div>
 
-      {/* Companies List */}
+      {/* Companies Table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="p-4 border-b border-border bg-muted/30">
           <h3 className="font-semibold">All-Time Companies</h3>
@@ -144,42 +258,68 @@ export function CompaniesTab({ companies, permits, onRefresh }: CompaniesTabProp
           </p>
         </div>
         
-        <div className="divide-y divide-border">
-          {filteredCompanies.map((company, index) => (
-            <div 
-              key={company.id} 
-              className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors cursor-pointer"
-              onClick={() => setSelectedCompany(company)}
-            >
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-medium text-muted-foreground w-8">
-                  {index + 1}
-                </span>
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <div className="font-medium flex items-center gap-2">
-                    {company.name}
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="w-12">#</TableHead>
+                <SortHeader field="name">Company</SortHeader>
+                <SortHeader field="score">Score</SortHeader>
+                <TableHead>Primary Contact</TableHead>
+                <SortHeader field="permitCount">Permits</SortHeader>
+                <SortHeader field="dealCount">Deals</SortHeader>
+                <SortHeader field="weightedRevenue">Weighted Revenue</SortHeader>
+                <SortHeader field="totalValue">Est. Value</SortHeader>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredCompanies.map((company, index) => (
+                <TableRow 
+                  key={company.id} 
+                  className="hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => setSelectedCompany(company)}
+                >
+                  <TableCell className="text-sm font-medium text-muted-foreground">
+                    {index + 1}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Building2 className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <div className="font-medium">{company.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Last: {new Date(company.lastPermitDate).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <Badge className={`${getScoreBadge(company.score)} text-xs`}>
                       {getScoreIcon(company.score)}
                       <span className="ml-1 capitalize">{company.score}</span>
                     </Badge>
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {company.permitCount} permits • Last activity: {new Date(company.lastPermitDate).toLocaleDateString()}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="text-right">
-                <div className="font-semibold text-primary">
-                  ${company.totalValue.toLocaleString()}
-                </div>
-                <div className="text-xs text-muted-foreground">Est. value</div>
-              </div>
-            </div>
-          ))}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {company.primaryContact}
+                  </TableCell>
+                  <TableCell className="text-sm font-medium">
+                    {company.permitCount}
+                  </TableCell>
+                  <TableCell className="text-sm font-medium">
+                    {company.dealCount}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-green-600">
+                    ${company.weightedRevenue.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-primary">
+                    ${company.totalValue.toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       </div>
 

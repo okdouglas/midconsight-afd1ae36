@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -69,14 +70,17 @@ export function DealDetailModal({
   const { toast } = useToast();
   const [notes, setNotes] = useState(deal?.notes || '');
   const [probability, setProbability] = useState<number>(deal?.probability || 10);
+  const [dealValue, setDealValue] = useState<number>(deal?.value || 0);
   const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<DbSellingOption | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isEditingValue, setIsEditingValue] = useState(false);
 
   useEffect(() => {
     if (deal) {
       setNotes(deal.notes || '');
       setProbability(deal.probability || 10);
+      setDealValue(deal.value || 0);
     }
   }, [deal]);
 
@@ -117,6 +121,7 @@ export function DealDetailModal({
       await updateDeal(deal.id, { 
         notes,
         probability,
+        value: dealValue,
         selling_option_id: selectedProduct?.id || null
       });
       toast({ title: 'Saved', description: 'Deal updated successfully' });
@@ -128,7 +133,7 @@ export function DealDetailModal({
     }
   };
 
-  const weightedValue = deal ? Math.round(deal.value * (probability / 100)) : 0;
+  const weightedValue = deal ? Math.round(dealValue * (probability / 100)) : 0;
 
   if (!deal) return null;
 
@@ -153,12 +158,30 @@ export function DealDetailModal({
 
           {/* Value & Probability Row */}
           <div className="grid grid-cols-3 gap-4">
-            <Card>
+            <Card 
+              className="cursor-pointer hover:border-primary/50 transition-colors"
+              onClick={() => setIsEditingValue(true)}
+            >
               <CardContent className="pt-4">
                 <div className="text-sm text-muted-foreground">Deal Value</div>
-                <div className="text-2xl font-bold text-primary">
-                  ${formatCurrency(deal.value)}
-                </div>
+                {isEditingValue ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xl font-bold text-primary">$</span>
+                    <Input
+                      type="number"
+                      value={dealValue}
+                      onChange={(e) => setDealValue(Number(e.target.value) || 0)}
+                      onBlur={() => setIsEditingValue(false)}
+                      onKeyDown={(e) => e.key === 'Enter' && setIsEditingValue(false)}
+                      className="text-xl font-bold h-8 w-28"
+                      autoFocus
+                    />
+                  </div>
+                ) : (
+                  <div className="text-2xl font-bold text-primary">
+                    ${formatCurrency(dealValue)}
+                  </div>
+                )}
               </CardContent>
             </Card>
             
