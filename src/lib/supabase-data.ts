@@ -6,8 +6,17 @@
 import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { processExcelData, generateId, type Permit, type ImportResult } from './schema-mapping';
+import type { ImportMetadata, SkippedRow } from '@/components/ImportAddendum';
 
 const AVG_PERMIT_VALUE = 5000; // Updated to $5k per permit
+
+// Extended import result with metadata for UI
+export interface ExtendedImportResult {
+  dataset: DbDataset;
+  importResult: ImportResult;
+  metadata: ImportMetadata;
+  skippedRows: SkippedRow[];
+}
 
 // Types for database records
 export interface DbPermit {
@@ -305,7 +314,13 @@ function calculateScore(permitCount: number, recentPermits: number): 'hot' | 'wa
   return 'cold';
 }
 
-export async function parseFile(file: File): Promise<Record<string, unknown>[]> {
+interface ParsedFileResult {
+  data: Record<string, unknown>[];
+  metadata: ImportMetadata;
+  headerSkippedRows: SkippedRow[];
+}
+
+export async function parseFile(file: File): Promise<ParsedFileResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -323,6 +338,9 @@ export async function parseFile(file: File): Promise<Record<string, unknown>[]> 
           raw: false
         });
         
+        const metadata: ImportMetadata = {};
+        const headerSkippedRows: SkippedRow[] = [];
+        
         // Detect Texas RRC format: first row contains "Search Criteria"
         const isTexasRRC = rawRows.length > 0 && 
           String(rawRows[0]?.[0] || '').includes('Search Criteria');
@@ -330,17 +348,58 @@ export async function parseFile(file: File): Promise<Record<string, unknown>[]> 
         if (isTexasRRC) {
           // Find the header row (contains "Status Date")
           let headerRowIndex = -1;
+          const rawHeaderRows: string[] = [];
+          
           for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
             const row = rawRows[i] as unknown[];
+            const rowText = row ? row.map(cell => String(cell || '')).join(' | ') : '';
+            
             if (row && row.some(cell => String(cell) === 'Status Date')) {
               headerRowIndex = i;
               break;
             }
+            
+            // Capture metadata rows
+            if (rowText.trim()) {
+              rawHeaderRows.push(rowText);
+              
+              // Extract search criteria info
+              const firstCell = String(row[0] || '');
+              if (firstCell.includes('Search Criteria')) {
+                metadata.searchCriteria = rowText;
+              }
+              if (firstCell.includes('Date') || rowText.toLowerCase().includes('date range')) {
+                // Try to extract date range from metadata
+                const dateMatch = rowText.match(/(\d{1,2}\/\d{1,2}\/\d{4})/g);
+                if (dateMatch && dateMatch.length >= 2) {
+                  metadata.dateRange = `${dateMatch[0]} to ${dateMatch[1]}`;
+                } else if (dateMatch && dateMatch.length === 1) {
+                  metadata.dateRange = dateMatch[0];
+                }
+              }
+              
+              // Add as skipped header row
+              headerSkippedRows.push({
+                rowNumber: i + 1,
+                reason: 'Header/Metadata',
+                rawContent: rowText.substring(0, 200) // Limit length
+              });
+            }
           }
+          
+          metadata.rawHeaderRows = rawHeaderRows;
           
           if (headerRowIndex === -1) {
             throw new Error('Could not find header row in Texas RRC file');
           }
+          
+          // Add header row itself as skipped
+          const headerRow = rawRows[headerRowIndex] as unknown[];
+          headerSkippedRows.push({
+            rowNumber: headerRowIndex + 1,
+            reason: 'Header/Metadata',
+            rawContent: headerRow.map(cell => String(cell || '')).join(' | ').substring(0, 200)
+          });
           
           // Use the header row as column names
           const headers = (rawRows[headerRowIndex] as unknown[]).map(h => String(h).trim());
@@ -364,14 +423,19 @@ export async function parseFile(file: File): Promise<Record<string, unknown>[]> 
             }
           }
           
-          resolve(dataRows);
+          metadata.totalRecords = dataRows.length;
+          
+          resolve({ data: dataRows, metadata, headerSkippedRows });
         } else {
           // Standard Excel/CSV format (Oklahoma ITD)
           const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
             defval: '',
             raw: false
           });
-          resolve(jsonData);
+          
+          metadata.totalRecords = jsonData.length;
+          
+          resolve({ data: jsonData, metadata, headerSkippedRows: [] });
         }
       } catch (error) {
         reject(error);
@@ -387,16 +451,36 @@ export async function importFile(
   file: File,
   datasetName?: string,
   selectedState?: string
-): Promise<{ dataset: DbDataset; importResult: ImportResult }> {
+): Promise<ExtendedImportResult> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
-  const rawData = await parseFile(file);
+  const { data: rawData, metadata, headerSkippedRows } = await parseFile(file);
   const datasetId = crypto.randomUUID();
   const name = datasetName || `Import ${new Date().toLocaleDateString()}`;
   
   // Pass selected state to processing for proper coordinate handling
   const importResult = processExcelData(rawData, datasetId, AVG_PERMIT_VALUE, selectedState);
+
+  // Collect all skipped rows: headers + validation errors
+  const allSkippedRows: SkippedRow[] = [...headerSkippedRows];
+  
+  // Convert validation errors to skipped rows
+  for (const error of importResult.errors) {
+    // Determine reason based on error field/reason
+    let reason: SkippedRow['reason'] = 'Invalid Data';
+    if (error.reason.toLowerCase().includes('coordinate') || error.reason.toLowerCase().includes('gps')) {
+      reason = 'Missing Coordinates';
+    } else if (error.reason.toLowerCase().includes('mapping') || error.reason.toLowerCase().includes('county')) {
+      reason = 'Mapping Failed';
+    }
+    
+    allSkippedRows.push({
+      rowNumber: error.row + 1, // Convert to 1-indexed
+      reason,
+      rawContent: `${error.field}: ${error.value} - ${error.reason}`.substring(0, 200)
+    });
+  }
 
   // Check for existing permits by API to avoid duplicates
   const { data: existingPermits } = await supabase
@@ -405,6 +489,16 @@ export async function importFile(
   
   const existingApis = new Set((existingPermits || []).map(p => p.api));
   const newPermits = importResult.permits.filter(p => !existingApis.has(p.api));
+  
+  // Track duplicates as skipped rows
+  const duplicatePermits = importResult.permits.filter(p => existingApis.has(p.api));
+  for (const dup of duplicatePermits) {
+    allSkippedRows.push({
+      rowNumber: 0, // We don't track original row number for permits
+      reason: 'Duplicate',
+      rawContent: `API: ${dup.api} - ${dup.operator}`.substring(0, 200)
+    });
+  }
 
   // Insert dataset
   const { data: datasetData, error: datasetError } = await supabase
@@ -482,7 +576,7 @@ export async function importFile(
   await supabase.from('activities').insert({
     user_id: user.id,
     type: 'import',
-    description: `Imported ${newPermits.length} new permits from ${file.name}. ${importResult.skippedRows} rows skipped, ${importResult.validRows - newPermits.length} duplicates.`
+    description: `Imported ${newPermits.length} new permits from ${file.name}. ${importResult.skippedRows} rows skipped, ${duplicatePermits.length} duplicates.`
   });
 
   return { 
@@ -490,8 +584,10 @@ export async function importFile(
     importResult: {
       ...importResult,
       validRows: newPermits.length,
-      skippedRows: importResult.skippedRows + (importResult.validRows - newPermits.length)
-    }
+      skippedRows: importResult.skippedRows + duplicatePermits.length
+    },
+    metadata,
+    skippedRows: allSkippedRows
   };
 }
 
