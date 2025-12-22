@@ -101,6 +101,7 @@ export interface DbDeal {
   linked_permit_ids?: string[];
   notes?: string;
   selling_option_id?: string;
+  probability?: number;
   created_at: string;
 }
 

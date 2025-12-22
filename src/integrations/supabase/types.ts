@@ -183,6 +183,7 @@ export type Database = {
           linked_permit_ids: string[] | null
           name: string
           notes: string | null
+          probability: number | null
           selling_option_id: string | null
           stage: string | null
           status: string | null
@@ -197,6 +198,7 @@ export type Database = {
           linked_permit_ids?: string[] | null
           name: string
           notes?: string | null
+          probability?: number | null
           selling_option_id?: string | null
           stage?: string | null
           status?: string | null
@@ -211,6 +213,7 @@ export type Database = {
           linked_permit_ids?: string[] | null
           name?: string
           notes?: string | null
+          probability?: number | null
           selling_option_id?: string | null
           stage?: string | null
           status?: string | null

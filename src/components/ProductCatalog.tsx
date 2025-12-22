@@ -3,8 +3,8 @@
  * Displays selling options with pricing tiers based on GVERSE GeoGraphix price sheet
  */
 
-import { useState, useEffect } from 'react';
-import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Package, Tag } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Package, Tag, Upload, FileSpreadsheet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,7 @@ import {
   deleteSellingOption,
   type DbSellingOption,
 } from '@/lib/supabase-data';
+import * as XLSX from 'xlsx';
 
 export interface SellingOption {
   id: string;
@@ -71,8 +72,10 @@ const TRIGGER_TYPES = [
 
 export function ProductCatalog() {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [options, setOptions] = useState<DbSellingOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'Network' | 'Standalone'>('all');
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
@@ -103,6 +106,65 @@ export function ProductCatalog() {
   useEffect(() => {
     loadOptions();
   }, []);
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
+
+      let imported = 0;
+      for (const row of jsonData) {
+        // Map common column names
+        const name = String(row['Name'] || row['Product Name'] || row['Product'] || row['Description'] || '').trim();
+        if (!name) continue;
+
+        const category = String(row['Category'] || 'Standard Packages');
+        const type = String(row['Type'] || 'Network');
+        const defaultPrice = parseFloat(String(row['Price'] || row['Default Price'] || row['Perpetual'] || row['Perpetual ($)'] || 0).replace(/[,$]/g, '')) || 0;
+        const annualRental = parseFloat(String(row['Annual Rental'] || row['Annual Rental ($)'] || row['Rental'] || 0).replace(/[,$]/g, '')) || undefined;
+        const annualMaintenance = parseFloat(String(row['Annual M&S'] || row['Annual M&S ($)'] || row['Maintenance'] || row['M&S'] || 0).replace(/[,$]/g, '')) || undefined;
+        const triggerType = String(row['Trigger Type'] || row['Trigger'] || '').trim() || undefined;
+        const description = String(row['Description'] || row['Notes'] || '').trim() || undefined;
+
+        await saveSellingOption({
+          name,
+          category: category.includes('Add-on') ? 'GGX Add-on' : 'Standard Packages',
+          type: type.toLowerCase().includes('standalone') ? 'Standalone' : 'Network',
+          default_price: defaultPrice,
+          annual_rental: annualRental,
+          annual_maintenance: annualMaintenance,
+          trigger_type: triggerType,
+          description,
+        });
+        imported++;
+      }
+
+      toast({ 
+        title: 'Import Complete', 
+        description: `Imported ${imported} products from spreadsheet` 
+      });
+      loadOptions();
+    } catch (error) {
+      console.error('Import failed:', error);
+      toast({ 
+        title: 'Import Failed', 
+        description: 'Could not parse the spreadsheet. Check format and try again.', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleAddNew = () => {
     setEditingOption({
@@ -191,10 +253,23 @@ export function ProductCatalog() {
               <Package className="h-5 w-5 text-primary" />
               <CardTitle>Product Catalog</CardTitle>
             </div>
-            <Button onClick={handleAddNew}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Product
-            </Button>
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportFile}
+                className="hidden"
+              />
+              <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                {importing ? 'Importing...' : 'Import'}
+              </Button>
+              <Button onClick={handleAddNew}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
