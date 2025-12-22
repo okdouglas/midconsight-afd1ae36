@@ -4,13 +4,20 @@
  */
 
 import { useState, useEffect } from 'react';
-import { X, Plus, User, Phone, Mail, Briefcase, Building2, FileText, Flame, Thermometer, Snowflake, Trash2, Lightbulb } from 'lucide-react';
+import { X, Plus, User, Phone, Mail, Briefcase, Building2, FileText, Flame, Thermometer, Snowflake, Trash2, Lightbulb, Package } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import { SellingOpportunities } from '@/components/SellingOpportunities';
@@ -20,8 +27,10 @@ import {
   saveDeal, 
   getContactsByCompany, 
   getDealsByCompany,
+  getSellingOptions,
   type DbContact,
-  type DbDeal
+  type DbDeal,
+  type DbSellingOption
 } from '@/lib/supabase-data';
 
 interface CompanyDetailModalProps {
@@ -34,6 +43,7 @@ interface CompanyDetailModalProps {
 export function CompanyDetailModal({ company, companyPermits = [], onClose, onUpdate }: CompanyDetailModalProps) {
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [deals, setDeals] = useState<DbDeal[]>([]);
+  const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddDeal, setShowAddDeal] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', email: '', phone: '', role: '', notes: '' });
@@ -41,14 +51,33 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
     name: '', 
     value: '', 
     expectedCloseDate: '',
-    notes: '' 
+    notes: '',
+    sellingOptionId: ''
   });
 
   useEffect(() => {
     if (company) {
       loadCompanyData();
     }
+    loadSellingOptions();
   }, [company]);
+
+  const loadSellingOptions = async () => {
+    const options = await getSellingOptions();
+    // Sort: Standard Packages first, then GGX Add-on, each sorted by annual_rental ascending
+    const sortedOptions = [...options].sort((a, b) => {
+      const categoryOrder = ['Standard Packages', 'GGX Add-on'];
+      const aCatIndex = categoryOrder.indexOf(a.category || 'Standard Packages');
+      const bCatIndex = categoryOrder.indexOf(b.category || 'Standard Packages');
+      if (aCatIndex !== bCatIndex) {
+        return aCatIndex - bCatIndex;
+      }
+      const aRental = Number(a.annual_rental) || 0;
+      const bRental = Number(b.annual_rental) || 0;
+      return aRental - bRental;
+    });
+    setSellingOptions(sortedOptions);
+  };
 
   const loadCompanyData = async () => {
     if (!company) return;
@@ -90,12 +119,18 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
       status: 'open',
       linked_permit_ids: [],
       notes: newDeal.notes || undefined,
+      selling_option_id: newDeal.sellingOptionId && newDeal.sellingOptionId !== 'none' ? newDeal.sellingOptionId : undefined,
+      probability: 10, // New Lead stage = 10%
     });
 
-    setNewDeal({ name: '', value: '', expectedCloseDate: '', notes: '' });
+    setNewDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
     setShowAddDeal(false);
     loadCompanyData();
     onUpdate?.();
+  };
+
+  const formatCurrency = (value: number): string => {
+    return value.toLocaleString('en-US');
   };
 
   const getScoreIcon = (score: Company['score']) => {
@@ -307,13 +342,32 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                       placeholder="50000"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <Label>Expected Close Date</Label>
                     <Input 
                       type="date"
                       value={newDeal.expectedCloseDate} 
                       onChange={(e) => setNewDeal({ ...newDeal, expectedCloseDate: e.target.value })}
                     />
+                  </div>
+                  <div>
+                    <Label>Product</Label>
+                    <Select
+                      value={newDeal.sellingOptionId || 'none'}
+                      onValueChange={(v) => setNewDeal({ ...newDeal, sellingOptionId: v === 'none' ? '' : v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select product..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No product</SelectItem>
+                        {sellingOptions.map(opt => (
+                          <SelectItem key={opt.id} value={opt.id}>
+                            {opt.name} - ${formatCurrency(Number(opt.annual_rental) || Number(opt.default_price))}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div>

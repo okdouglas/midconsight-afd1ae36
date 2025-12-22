@@ -256,6 +256,26 @@ export function ProductCatalog() {
     return acc;
   }, {} as Record<string, DbSellingOption[]>);
 
+  // Sort each category by annual_rental ascending (cheapest first)
+  Object.keys(groupedOptions).forEach(category => {
+    groupedOptions[category].sort((a, b) => {
+      const aRental = Number(a.annual_rental) || 0;
+      const bRental = Number(b.annual_rental) || 0;
+      return aRental - bRental;
+    });
+  });
+
+  // Define category order: Standard Packages first, then GGX Add-on
+  const CATEGORY_ORDER = ['Standard Packages', 'GGX Add-on'];
+  const sortedCategories = Object.keys(groupedOptions).sort((a, b) => {
+    const aIndex = CATEGORY_ORDER.indexOf(a);
+    const bIndex = CATEGORY_ORDER.indexOf(b);
+    if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
+
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => ({
       ...prev,
@@ -326,7 +346,9 @@ export function ProductCatalog() {
             </div>
           ) : (
             <div className="space-y-4">
-              {Object.entries(groupedOptions).map(([category, categoryOptions]) => (
+              {sortedCategories.map(category => {
+                const categoryOptions = groupedOptions[category];
+                return (
                 <Collapsible
                   key={category}
                   open={expandedCategories[category]}
@@ -420,7 +442,8 @@ export function ProductCatalog() {
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
-              ))}
+              );
+              })}
             </div>
           )}
         </CardContent>
