@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Info, ExternalLink, BookOpen, HelpCircle } from 'lucide-react';
+import { useState, useRef, useMemo } from 'react';
+import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Info, ExternalLink, BookOpen, HelpCircle, Calendar, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { importFile } from '@/lib/supabase-data';
+import { toast } from 'sonner';
 import type { ValidationError } from '@/lib/schema-mapping';
 
 interface DataImportProps {
@@ -27,6 +28,30 @@ export function DataImport({ onImportComplete }: DataImportProps) {
   const [datasetName, setDatasetName] = useState('');
   const [selectedState, setSelectedState] = useState('OK');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Calculate suggested date range for Texas RRC (last 7 days)
+  const suggestedDateRange = useMemo(() => {
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    
+    const formatDate = (date: Date) => {
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${month}/${day}/${year}`;
+    };
+    
+    return {
+      from: formatDate(sevenDaysAgo),
+      to: formatDate(today)
+    };
+  }, []);
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copied to clipboard`);
+  };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -160,11 +185,12 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="OK">Oklahoma (OK)</SelectItem>
+                  <SelectItem value="TX">Texas (TX)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Conditional Instructions */}
+            {/* Conditional Instructions - Oklahoma */}
             {selectedState === 'OK' && (
               <Accordion type="single" collapsible defaultValue="instructions">
                 <AccordionItem value="instructions" className="border-border/50">
@@ -215,6 +241,122 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
+            )}
+
+            {/* Conditional Instructions - Texas */}
+            {selectedState === 'TX' && (
+              <div className="space-y-4">
+                {/* Date Range Helper */}
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <Calendar className="h-4 w-4" />
+                    <span className="text-sm font-medium">Suggested Date Range</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5">
+                      <div>
+                        <span className="text-muted-foreground text-xs">From:</span>
+                        <p className="font-mono font-medium">{suggestedDateRange.from}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => copyToClipboard(suggestedDateRange.from, 'From date')}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5">
+                      <div>
+                        <span className="text-muted-foreground text-xs">To:</span>
+                        <p className="font-mono font-medium">{suggestedDateRange.to}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => copyToClipboard(suggestedDateRange.to, 'To date')}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <Accordion type="single" collapsible defaultValue="instructions">
+                  <AccordionItem value="instructions" className="border-border/50">
+                    <AccordionTrigger className="text-sm font-medium hover:no-underline py-3">
+                      <span className="flex items-center gap-2">
+                        <HelpCircle className="h-4 w-4 text-primary" />
+                        How to pull Texas Drilling Permits (W-1)
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-2 pb-4">
+                      <ol className="space-y-4 text-sm text-muted-foreground">
+                        <li className="flex gap-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            1
+                          </span>
+                          <div>
+                            <p>Open the Texas RRC Drilling Permit Query:</p>
+                            <a
+                              href="https://www.rrc.texas.gov/resource-center/research/data-sets-available-for-download/"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-primary hover:underline mt-1 font-medium"
+                            >
+                              Texas RRC Data Downloads
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            2
+                          </span>
+                          <p>Scroll down to the <strong>"Approved Date"</strong> section.</p>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            3
+                          </span>
+                          <p>In the <strong>"Approved Date From:"</strong> field, enter: <code className="bg-muted px-1 rounded">{suggestedDateRange.from}</code></p>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            4
+                          </span>
+                          <p>In the <strong>"Approved Date To:"</strong> field, enter: <code className="bg-muted px-1 rounded">{suggestedDateRange.to}</code></p>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            5
+                          </span>
+                          <p>Click <strong>"Submit"</strong> at the bottom of the page.</p>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            6
+                          </span>
+                          <p>On the results page, click the <strong>"Download Results"</strong> button and select CSV/Excel format.</p>
+                        </li>
+                        <li className="flex gap-3">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            7
+                          </span>
+                          <p>Upload that file here.</p>
+                        </li>
+                      </ol>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+
+                {/* Texas-specific note */}
+                <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2">
+                  <strong>Note:</strong> Texas permits without exact coordinates will be mapped to their county center with a small offset (shown as orange pins).
+                </div>
+              </div>
             )}
 
             {/* Help Footer */}
