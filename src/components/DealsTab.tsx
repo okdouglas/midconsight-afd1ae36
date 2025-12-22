@@ -3,7 +3,7 @@
  * CRM for managing deal flow from companies
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   DollarSign, 
   ArrowRight, 
@@ -11,7 +11,9 @@ import {
   XCircle, 
   Building2,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Percent,
+  TrendingUp
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +26,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type Deal, type Company } from '@/hooks/useSupabaseData';
-import { updateDeal, getSellingOptionById, type DbSellingOption } from '@/lib/supabase-data';
+import { updateDeal, getSellingOptionById, getSellingOptions, type DbSellingOption } from '@/lib/supabase-data';
+import { DealDetailModal } from './DealDetailModal';
 
 interface DealsTabProps {
   deals: Deal[];
@@ -45,20 +48,46 @@ const STAGE_CONFIG: Record<DealStage, { label: string; color: string; icon: Reac
   closed_lost: { label: 'Closed Lost', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: <XCircle className="h-4 w-4" /> },
 };
 
+const PROBABILITY_COLORS: Record<number, string> = {
+  10: 'text-red-400',
+  30: 'text-orange-400',
+  60: 'text-amber-400',
+  90: 'text-green-400',
+  100: 'text-green-500',
+};
+
 export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
   const [view, setView] = useState<'pipeline' | 'list'>('pipeline');
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
+  const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
+
+  useEffect(() => {
+    getSellingOptions().then(setSellingOptions);
+  }, []);
 
   const getCompanyName = (companyId: string) => {
     const company = companies.find(c => c.id === companyId);
     return company?.name || 'Unknown Company';
   };
 
+  const getCompany = (companyId: string) => {
+    return companies.find(c => c.id === companyId) || null;
+  };
+
+  const getSellingOptionName = (sellingOptionId?: string) => {
+    if (!sellingOptionId) return null;
+    const opt = sellingOptions.find(o => o.id === sellingOptionId);
+    return opt?.name || null;
+  };
+
   const handleStageChange = async (deal: Deal, newStage: DealStage) => {
     const newStatus = (newStage === 'closed_won' || newStage === 'closed_lost') ? 'closed' : 'open';
+    const newProbability = newStage === 'closed_won' || newStage === 'closed_lost' ? 100 : deal.probability;
     
     await updateDeal(deal.id, { 
       stage: newStage, 
-      status: newStatus 
+      status: newStatus,
+      probability: newProbability
     });
     
     onRefresh();
@@ -67,6 +96,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
   const openDeals = deals.filter(d => d.status === 'open');
   const closedDeals = deals.filter(d => d.status === 'closed');
   const totalPipeline = openDeals.reduce((sum, d) => sum + d.value, 0);
+  const weightedPipeline = openDeals.reduce((sum, d) => sum + Math.round(d.value * (d.probability / 100)), 0);
   const wonValue = deals.filter(d => d.stage === 'closed_won').reduce((sum, d) => sum + d.value, 0);
 
   // Group deals by stage for pipeline view
@@ -90,7 +120,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
   return (
     <div className="space-y-6">
       {/* KPI Summary */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Pipeline</CardTitle>
@@ -98,6 +128,19 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
           <CardContent>
             <div className="text-2xl font-bold text-primary">${totalPipeline.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{openDeals.length} open deals</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+              <TrendingUp className="h-3 w-3" />
+              Weighted Pipeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-500">${weightedPipeline.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground">Based on probability</p>
           </CardContent>
         </Card>
         
@@ -173,37 +216,63 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
               </div>
               
               <div className="bg-muted/30 rounded-lg p-2 min-h-[200px] space-y-2">
-                {dealsByStage[stage].map(deal => (
-                  <div 
-                    key={deal.id}
-                    className="bg-card border border-border rounded-lg p-3 hover:border-primary/50 transition-colors cursor-pointer"
-                  >
-                    <div className="font-medium text-sm truncate">{deal.name}</div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                      <Building2 className="h-3 w-3" />
-                      {getCompanyName(deal.companyId)}
+                {dealsByStage[stage].map(deal => {
+                  const productName = getSellingOptionName(deal.sellingOptionId);
+                  const weightedValue = Math.round(deal.value * (deal.probability / 100));
+                  
+                  return (
+                    <div 
+                      key={deal.id}
+                      className="bg-card border border-border rounded-lg p-3 hover:border-primary/50 transition-colors cursor-pointer"
+                      onClick={() => setSelectedDeal(deal)}
+                    >
+                      <div className="font-medium text-sm truncate">{deal.name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                        <Building2 className="h-3 w-3" />
+                        {getCompanyName(deal.companyId)}
+                      </div>
+                      
+                      {productName && (
+                        <Badge variant="outline" className="mt-2 text-xs">
+                          {productName}
+                        </Badge>
+                      )}
+                      
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="text-sm font-semibold text-primary">
+                          ${deal.value.toLocaleString()}
+                        </div>
+                        <div className={`text-xs font-medium flex items-center gap-1 ${PROBABILITY_COLORS[deal.probability] || 'text-muted-foreground'}`}>
+                          <Percent className="h-3 w-3" />
+                          {deal.probability}%
+                        </div>
+                      </div>
+                      
+                      {stage !== 'closed_won' && stage !== 'closed_lost' && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Weighted: ${weightedValue.toLocaleString()}
+                        </div>
+                      )}
+                      
+                      {stage !== 'closed_won' && stage !== 'closed_lost' && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="w-full mt-2 h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const currentIndex = STAGE_ORDER.indexOf(stage);
+                            if (currentIndex < STAGE_ORDER.length - 2) {
+                              handleStageChange(deal, STAGE_ORDER[currentIndex + 1]);
+                            }
+                          }}
+                        >
+                          Move Forward <ChevronRight className="h-3 w-3 ml-1" />
+                        </Button>
+                      )}
                     </div>
-                    <div className="text-sm font-semibold text-primary mt-2">
-                      ${deal.value.toLocaleString()}
-                    </div>
-                    
-                    {stage !== 'closed_won' && stage !== 'closed_lost' && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="w-full mt-2 h-7 text-xs"
-                        onClick={() => {
-                          const currentIndex = STAGE_ORDER.indexOf(stage);
-                          if (currentIndex < STAGE_ORDER.length - 2) {
-                            handleStageChange(deal, STAGE_ORDER[currentIndex + 1]);
-                          }
-                        }}
-                      >
-                        Move Forward <ChevronRight className="h-3 w-3 ml-1" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -218,62 +287,105 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
               <tr>
                 <th className="text-left p-4 text-sm font-medium">Deal</th>
                 <th className="text-left p-4 text-sm font-medium">Company</th>
+                <th className="text-left p-4 text-sm font-medium">Product</th>
                 <th className="text-left p-4 text-sm font-medium">Stage</th>
+                <th className="text-center p-4 text-sm font-medium">Probability</th>
                 <th className="text-right p-4 text-sm font-medium">Value</th>
+                <th className="text-right p-4 text-sm font-medium">Weighted</th>
                 <th className="text-left p-4 text-sm font-medium">Expected Close</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {deals.map(deal => (
-                <tr key={deal.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="p-4">
-                    <div className="font-medium">{deal.name}</div>
-                    {deal.notes && (
-                      <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                        {deal.notes}
+              {deals.map(deal => {
+                const productName = getSellingOptionName(deal.sellingOptionId);
+                const weightedValue = Math.round(deal.value * (deal.probability / 100));
+                
+                return (
+                  <tr 
+                    key={deal.id} 
+                    className="hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setSelectedDeal(deal)}
+                  >
+                    <td className="p-4">
+                      <div className="font-medium">{deal.name}</div>
+                      {deal.notes && (
+                        <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+                          {deal.notes}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        {getCompanyName(deal.companyId)}
                       </div>
-                    )}
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
-                      {getCompanyName(deal.companyId)}
-                    </div>
-                  </td>
-                  <td className="p-4">
-                    <Select 
-                      value={deal.stage} 
-                      onValueChange={(value) => handleStageChange(deal, value as DealStage)}
-                    >
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {STAGE_ORDER.map(stage => (
-                          <SelectItem key={stage} value={stage}>
-                            {STAGE_CONFIG[stage].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </td>
-                  <td className="p-4 text-right">
-                    <span className="font-semibold text-primary">
-                      ${deal.value.toLocaleString()}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(deal.expectedCloseDate).toLocaleDateString()}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="p-4">
+                      {productName ? (
+                        <Badge variant="outline" className="text-xs">
+                          {productName}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <Select 
+                        value={deal.stage} 
+                        onValueChange={(value) => handleStageChange(deal, value as DealStage)}
+                      >
+                        <SelectTrigger className="w-[140px]" onClick={e => e.stopPropagation()}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {STAGE_ORDER.map(stage => (
+                            <SelectItem key={stage} value={stage}>
+                              {STAGE_CONFIG[stage].label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="p-4 text-center">
+                      <span className={`font-medium ${PROBABILITY_COLORS[deal.probability] || 'text-muted-foreground'}`}>
+                        {deal.probability}%
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <span className="font-semibold text-primary">
+                        ${deal.value.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right">
+                      <span className="text-muted-foreground">
+                        ${weightedValue.toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(deal.expectedCloseDate).toLocaleDateString()}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Deal Detail Modal */}
+      <DealDetailModal
+        deal={selectedDeal}
+        company={selectedDeal ? getCompany(selectedDeal.companyId) : null}
+        isOpen={!!selectedDeal}
+        onClose={() => setSelectedDeal(null)}
+        onRefresh={() => {
+          onRefresh();
+          setSelectedDeal(null);
+        }}
+      />
     </div>
   );
 }

@@ -37,6 +37,7 @@ export interface Deal {
   linkedPermitIds: string[];
   notes?: string;
   sellingOptionId?: string;
+  probability: number;
   createdDate: string;
 }
 
@@ -79,6 +80,7 @@ function mapDbDealToDeal(db: DbDeal): Deal {
     linkedPermitIds: db.linked_permit_ids || [],
     notes: db.notes,
     sellingOptionId: db.selling_option_id,
+    probability: db.probability || 10,
     createdDate: db.created_at,
   };
 }
