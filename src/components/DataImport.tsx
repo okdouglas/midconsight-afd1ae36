@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Info, ExternalLink, BookOpen, HelpCircle, RefreshCw, Loader2, Calendar } from 'lucide-react';
+import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Info, ExternalLink, BookOpen, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { importFile, importTexasPermits } from '@/lib/supabase-data';
-import { toast } from 'sonner';
+import { importFile } from '@/lib/supabase-data';
 import type { ValidationError } from '@/lib/schema-mapping';
 
 interface DataImportProps {
@@ -18,8 +17,6 @@ interface DataImportProps {
 
 export function DataImport({ onImportComplete }: DataImportProps) {
   const [isImporting, setIsImporting] = useState(false);
-  const [isSyncingTexas, setIsSyncingTexas] = useState(false);
-  const [texasSyncStatus, setTexasSyncStatus] = useState<string>('');
   const [importResult, setImportResult] = useState<{
     success: boolean;
     validRows: number;
@@ -30,24 +27,6 @@ export function DataImport({ onImportComplete }: DataImportProps) {
   const [datasetName, setDatasetName] = useState('');
   const [selectedState, setSelectedState] = useState('OK');
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Calculate suggested date range for Texas RRC (last 7 days)
-  const getTexasDateRange = () => {
-    const today = new Date();
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(today.getDate() - 7);
-    
-    const formatDate = (d: Date) => {
-      return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
-    };
-    
-    return {
-      from: formatDate(sevenDaysAgo),
-      to: formatDate(today)
-    };
-  };
-
-  const dateRange = getTexasDateRange();
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -83,49 +62,6 @@ export function DataImport({ onImportComplete }: DataImportProps) {
     }
   };
 
-  const handleTexasSync = async () => {
-    setIsSyncingTexas(true);
-    setTexasSyncStatus('Connecting to Texas RRC...');
-    setImportResult(null);
-
-    try {
-      setTexasSyncStatus('Downloading data from RRC...');
-      
-      const result = await importTexasPermits(
-        datasetName || `Texas Permits - ${new Date().toLocaleDateString()}`,
-        (status) => setTexasSyncStatus(status)
-      );
-      
-      setImportResult({
-        success: true,
-        validRows: result.validRows,
-        skippedRows: result.skippedRows,
-        errors: []
-      });
-
-      toast.success(`Texas Dashboard Updated: ${result.validRows} New Permits Added with GPS`);
-      onImportComplete();
-      setDatasetName('');
-    } catch (error) {
-      console.error('Texas sync failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      toast.error('Texas RRC Sync Failed', {
-        description: errorMessage
-      });
-      
-      setImportResult({
-        success: false,
-        validRows: 0,
-        skippedRows: 0,
-        errors: [{ row: 0, field: 'sync', value: '', reason: errorMessage }]
-      });
-    } finally {
-      setIsSyncingTexas(false);
-      setTexasSyncStatus('');
-    }
-  };
-
   return (
     <>
       <div className="flex flex-col lg:flex-row gap-6">
@@ -149,7 +85,7 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                 />
               </div>
 
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -160,33 +96,12 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                 />
                 <Button
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting || isSyncingTexas}
+                  disabled={isImporting}
                   className="gap-2"
                 >
                   <Upload className="h-4 w-4" />
                   {isImporting ? 'Processing...' : 'Upload Excel/CSV File'}
                 </Button>
-
-                {selectedState === 'TX' && (
-                  <Button
-                    onClick={handleTexasSync}
-                    disabled={isImporting || isSyncingTexas}
-                    variant="secondary"
-                    className="gap-2"
-                  >
-                    {isSyncingTexas ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {texasSyncStatus || 'Syncing...'}
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4" />
-                        Sync Latest Texas Data
-                      </>
-                    )}
-                  </Button>
-                )}
               </div>
 
               {importResult && (
@@ -245,12 +160,11 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="OK">Oklahoma (OK)</SelectItem>
-                  <SelectItem value="TX">Texas (TX)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Oklahoma Instructions */}
+            {/* Conditional Instructions */}
             {selectedState === 'OK' && (
               <Accordion type="single" collapsible defaultValue="instructions">
                 <AccordionItem value="instructions" className="border-border/50">
@@ -303,117 +217,10 @@ export function DataImport({ onImportComplete }: DataImportProps) {
               </Accordion>
             )}
 
-            {/* Texas Instructions */}
-            {selectedState === 'TX' && (
-              <>
-                {/* Quick Sync Option */}
-                <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <RefreshCw className="h-4 w-4 text-primary mt-0.5" />
-                    <div className="text-sm">
-                      <p className="font-medium text-foreground">Automatic Sync Available</p>
-                      <p className="text-muted-foreground mt-1">
-                        Click "Sync Latest Texas Data" to automatically fetch pending W-1 drilling permits with GPS coordinates.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Date Range Helper */}
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm font-medium mb-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    Suggested Date Range (Last 7 Days)
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">From:</span>
-                      <code className="ml-2 px-2 py-1 bg-background rounded border text-foreground">{dateRange.from}</code>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">To:</span>
-                      <code className="ml-2 px-2 py-1 bg-background rounded border text-foreground">{dateRange.to}</code>
-                    </div>
-                  </div>
-                </div>
-
-                <Accordion type="single" collapsible>
-                  <AccordionItem value="instructions" className="border-border/50">
-                    <AccordionTrigger className="text-sm font-medium hover:no-underline py-3">
-                      <span className="flex items-center gap-2">
-                        <HelpCircle className="h-4 w-4 text-primary" />
-                        How to pull Texas Drilling Permits (W-1)
-                      </span>
-                    </AccordionTrigger>
-                    <AccordionContent className="pt-2 pb-4">
-                      <ol className="space-y-4 text-sm text-muted-foreground">
-                        <li className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            1
-                          </span>
-                          <div>
-                            <p>Open the Texas RRC Drilling Permit Query:</p>
-                            <a
-                              href="https://webapps.rrc.texas.gov/DP/query/queryPermit.do"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-primary hover:underline mt-1 font-medium"
-                            >
-                              RRC Drilling Permit Query
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          </div>
-                        </li>
-                        <li className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            2
-                          </span>
-                          <p>Scroll down to the <strong>"Approved Date"</strong> section.</p>
-                        </li>
-                        <li className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            3
-                          </span>
-                          <p>In the <strong>"Approved Date From:"</strong> field, enter <code className="px-1.5 py-0.5 bg-muted rounded">{dateRange.from}</code></p>
-                        </li>
-                        <li className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            4
-                          </span>
-                          <p>In the <strong>"Approved Date To:"</strong> field, enter <code className="px-1.5 py-0.5 bg-muted rounded">{dateRange.to}</code></p>
-                        </li>
-                        <li className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            5
-                          </span>
-                          <p>Click <strong>"Submit"</strong> at the bottom of the page.</p>
-                        </li>
-                        <li className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            6
-                          </span>
-                          <p>On the results page, click the <strong>"Download Results"</strong> button and select the CSV/Excel format.</p>
-                        </li>
-                        <li className="flex gap-3">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            7
-                          </span>
-                          <p>Upload that file here.</p>
-                        </li>
-                      </ol>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </>
-            )}
-
             {/* Help Footer */}
             <div className="pt-3 border-t border-border/50">
               <p className="text-xs text-muted-foreground">
-                {selectedState === 'TX' 
-                  ? 'Use the automatic sync for the fastest import, or follow the manual steps above.'
-                  : 'Need help with other states? More data sources coming soon.'
-                }
+                Need help with other states? More data sources coming soon.
               </p>
             </div>
           </div>

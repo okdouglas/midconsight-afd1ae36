@@ -1,4 +1,1 @@
 project_id = "ijglazuuudcqclafomai"
-
-[functions.texas-rrc-sync]
-verify_jwt = false
