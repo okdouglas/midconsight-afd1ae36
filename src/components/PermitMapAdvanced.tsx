@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Permit } from '@/lib/schema-mapping';
+import { getTexasCountyCoordinates } from '@/lib/texas-counties';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -46,13 +47,22 @@ const TILE_LAYERS = {
   }
 };
 
-// Custom marker icon based on well type
-const getMarkerIcon = (wellType: string): L.DivIcon => {
-  let color = '#10b981';
-  if (wellType?.toLowerCase().includes('oil')) color = '#22c55e';
-  if (wellType?.toLowerCase().includes('gas')) color = '#3b82f6';
-  if (wellType?.toLowerCase().includes('injection')) color = '#f59e0b';
-  if (wellType?.toLowerCase().includes('disposal')) color = '#ef4444';
+// Custom marker icon based on well type and centroid status
+const getMarkerIcon = (wellType: string, isCentroidMapped: boolean = false): L.DivIcon => {
+  let color = '#10b981'; // Default green
+  
+  // Orange for centroid-mapped pins
+  if (isCentroidMapped) {
+    color = '#f97316'; // Orange
+  } else if (wellType?.toLowerCase().includes('oil')) {
+    color = '#22c55e';
+  } else if (wellType?.toLowerCase().includes('gas')) {
+    color = '#3b82f6';
+  } else if (wellType?.toLowerCase().includes('injection')) {
+    color = '#f59e0b';
+  } else if (wellType?.toLowerCase().includes('disposal')) {
+    color = '#ef4444';
+  }
 
   return L.divIcon({
     className: 'custom-marker',
@@ -154,7 +164,25 @@ export function PermitMapAdvanced({
 
     markersRef.current.clearLayers();
 
-    const validPermits = filteredPermits.filter(
+    // Process permits - apply centroid mapping for those without coordinates
+    const processedPermits = filteredPermits.map(permit => {
+      let lat = permit.lat;
+      let lon = permit.lon;
+      let isCentroidMapped = false;
+
+      // If no valid coordinates but has county, try Texas county centroid
+      if ((!lat || !lon || lat === 0 || lon === 0) && permit.county && permit.state?.toUpperCase() === 'TX') {
+        const centroidCoords = getTexasCountyCoordinates(permit.county, true);
+        if (centroidCoords) {
+          [lat, lon] = centroidCoords;
+          isCentroidMapped = true;
+        }
+      }
+
+      return { ...permit, lat, lon, isCentroidMapped };
+    });
+
+    const validPermits = processedPermits.filter(
       p => p.lat && p.lon && !isNaN(p.lat) && !isNaN(p.lon)
     );
 
@@ -162,12 +190,18 @@ export function PermitMapAdvanced({
 
     validPermits.forEach(permit => {
       const marker = L.marker([permit.lat!, permit.lon!], {
-        icon: getMarkerIcon(permit.wellType || ''),
+        icon: getMarkerIcon(permit.wellType || '', permit.isCentroidMapped),
       });
+
+      const centroidNote = permit.isCentroidMapped 
+        ? `<div style="background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
+            ⚠️ Location estimated based on county center
+          </div>` 
+        : '';
 
       const popupContent = `
         <div style="font-family: system-ui; font-size: 12px; min-width: 200px;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #16a34a;">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: ${permit.isCentroidMapped ? '#f97316' : '#16a34a'};">
             ${permit.wellName || 'Unknown Well'}
           </div>
           <div style="display: grid; gap: 4px;">
@@ -179,6 +213,7 @@ export function PermitMapAdvanced({
             <div><strong>Approval Date:</strong> ${permit.approvalDate || 'N/A'}</div>
             <div><strong>Imported:</strong> ${permit.dateImported || 'N/A'}</div>
           </div>
+          ${centroidNote}
         </div>
       `;
 
@@ -266,6 +301,10 @@ export function PermitMapAdvanced({
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-500 border border-white" />
             <span>Disposal</span>
+          </div>
+          <div className="flex items-center gap-2 pt-1 border-t border-border/50 mt-1">
+            <div className="w-3 h-3 rounded-full bg-orange-500 border border-white" />
+            <span>County Estimate</span>
           </div>
         </div>
       </div>
