@@ -68,23 +68,22 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
   };
 
   return (
-    <div className="mt-6 space-y-4">
-      <div className="flex items-center gap-2">
-        <FileWarning className="h-5 w-5 text-muted-foreground" />
-        <h3 className="font-medium text-muted-foreground">Import Summary & Metadata</h3>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Left Column: Search Context / Metadata */}
-        {metadata && (metadata.searchCriteria || metadata.dateRange || (metadata.rawHeaderRows && metadata.rawHeaderRows.length > 0)) && (
-          <Card className="bg-muted/30 border-muted">
-            <CardHeader className="py-3 px-4">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileWarning className="h-5 w-5" />
+          Import Summary & Metadata
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Left Column: Search Context / Metadata */}
+          {metadata && (metadata.searchCriteria || metadata.dateRange || (metadata.rawHeaderRows && metadata.rawHeaderRows.length > 0)) && (
+            <div className="bg-muted/30 border border-muted rounded-lg p-4 space-y-2">
+              <div className="text-sm font-medium flex items-center gap-2 text-muted-foreground mb-2">
                 <Info className="h-4 w-4" />
                 Search Context
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="py-2 px-4 space-y-2">
+              </div>
               {metadata.searchCriteria && (
                 <div className="text-sm">
                   <span className="text-muted-foreground">Criteria:</span>{' '}
@@ -119,19 +118,17 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
 
-        {/* Right Column: Skipped Rows Grid */}
-        {skippedRows.length > 0 && (
-          <Card className="bg-destructive/5 border-destructive/20">
-            <CardHeader className="py-3 px-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium flex items-center gap-2 text-destructive/80">
+          {/* Right Column: Skipped Rows Grid */}
+          {skippedRows.length > 0 && (
+            <div className="bg-destructive/5 border border-destructive/20 rounded-lg">
+              <div className="flex items-center justify-between py-3 px-4 border-b border-destructive/10">
+                <div className="text-sm font-medium flex items-center gap-2 text-destructive/80">
                   <AlertTriangle className="h-4 w-4" />
                   Skipped Rows ({skippedRows.length})
-                </CardTitle>
+                </div>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="ghost"
@@ -154,49 +151,49 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
                   </Button>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="py-2 px-4">
-              <ScrollArea className="h-[200px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent border-destructive/10">
-                      <TableHead className="w-16 text-xs py-1 text-destructive/60">Row</TableHead>
-                      <TableHead className="w-32 text-xs py-1 text-destructive/60">Reason</TableHead>
-                      <TableHead className="text-xs py-1 text-destructive/60">Raw Content</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {skippedRows.map((row, idx) => (
-                      <TableRow 
-                        key={idx} 
-                        className="hover:bg-destructive/5 border-destructive/10"
-                      >
-                        <TableCell className="font-mono text-xs py-1.5 text-muted-foreground">
-                          {row.rowNumber}
-                        </TableCell>
-                        <TableCell className="text-xs py-1.5">
-                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                            row.reason === 'Header/Metadata' 
-                              ? 'bg-muted text-muted-foreground' 
-                              : row.reason === 'Duplicate'
-                              ? 'bg-amber-500/10 text-amber-600'
-                              : 'bg-destructive/10 text-destructive'
-                          }`}>
-                            {row.reason}
-                          </span>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs py-1.5 text-muted-foreground truncate max-w-[300px]">
-                          {row.rawContent}
-                        </TableCell>
+              <div className="py-2 px-4">
+                <ScrollArea className="h-[200px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent border-destructive/10">
+                        <TableHead className="w-16 text-xs py-1 text-destructive/60">Row</TableHead>
+                        <TableHead className="w-32 text-xs py-1 text-destructive/60">Reason</TableHead>
+                        <TableHead className="text-xs py-1 text-destructive/60">Raw Content</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    </div>
+                    </TableHeader>
+                    <TableBody>
+                      {skippedRows.map((row, idx) => (
+                        <TableRow 
+                          key={idx} 
+                          className="hover:bg-destructive/5 border-destructive/10"
+                        >
+                          <TableCell className="font-mono text-xs py-1.5 text-muted-foreground">
+                            {row.rowNumber}
+                          </TableCell>
+                          <TableCell className="text-xs py-1.5">
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                              row.reason === 'Header/Metadata' 
+                                ? 'bg-muted text-muted-foreground' 
+                                : row.reason === 'Duplicate'
+                                ? 'bg-amber-500/10 text-amber-600'
+                                : 'bg-destructive/10 text-destructive'
+                            }`}>
+                              {row.reason}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs py-1.5 text-muted-foreground truncate max-w-[300px]">
+                            {row.rawContent}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
