@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Package, Tag, Upload, FileSpreadsheet } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Package, Tag, Upload, FileSpreadsheet, ArrowUpDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +70,9 @@ const TRIGGER_TYPES = [
   'high_value',
 ];
 
+type SortField = 'name' | 'default_price' | 'annual_rental' | 'annual_maintenance';
+type SortDirection = 'asc' | 'desc';
+
 export function ProductCatalog() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +85,8 @@ export function ProductCatalog() {
     'Standard Packages': true,
     'GGX Add-on': true,
   });
+  const [sortField, setSortField] = useState<SortField>('annual_rental');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOption, setEditingOption] = useState<Partial<DbSellingOption> | null>(null);
@@ -106,6 +111,15 @@ export function ProductCatalog() {
   useEffect(() => {
     loadOptions();
   }, []);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -256,12 +270,32 @@ export function ProductCatalog() {
     return acc;
   }, {} as Record<string, DbSellingOption[]>);
 
-  // Sort each category by annual_rental ascending (cheapest first)
+  // Sort each category based on current sort settings
   Object.keys(groupedOptions).forEach(category => {
     groupedOptions[category].sort((a, b) => {
-      const aRental = Number(a.annual_rental) || 0;
-      const bRental = Number(b.annual_rental) || 0;
-      return aRental - bRental;
+      let aVal: number = 0;
+      let bVal: number = 0;
+      
+      switch (sortField) {
+        case 'name':
+          return sortDirection === 'asc' 
+            ? a.name.localeCompare(b.name) 
+            : b.name.localeCompare(a.name);
+        case 'default_price':
+          aVal = Number(a.default_price) || 0;
+          bVal = Number(b.default_price) || 0;
+          break;
+        case 'annual_rental':
+          aVal = Number(a.annual_rental) || 0;
+          bVal = Number(b.annual_rental) || 0;
+          break;
+        case 'annual_maintenance':
+          aVal = Number(a.annual_maintenance) || 0;
+          bVal = Number(b.annual_maintenance) || 0;
+          break;
+      }
+      
+      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
     });
   });
 
@@ -275,6 +309,26 @@ export function ProductCatalog() {
     if (bIndex === -1) return -1;
     return aIndex - bIndex;
   });
+
+  const SortableHeader = ({ field, children, className = '' }: { field: SortField; children: React.ReactNode; className?: string }) => (
+    <TableHead 
+      className={`cursor-pointer hover:bg-muted/50 select-none ${className}`}
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field ? (
+          sortDirection === 'asc' ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )
+        ) : (
+          <ArrowUpDown className="h-4 w-4 opacity-30" />
+        )}
+      </div>
+    </TableHead>
+  );
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => ({
@@ -374,10 +428,10 @@ export function ProductCatalog() {
                         <TableHeader>
                           <TableRow className="bg-muted/30">
                             <TableHead className="w-24">Type</TableHead>
-                            <TableHead>Product Description</TableHead>
-                            <TableHead className="text-right">Perpetual ($)</TableHead>
-                            <TableHead className="text-right">Annual Rental ($)</TableHead>
-                            <TableHead className="text-right">Annual M&S ($)</TableHead>
+                            <SortableHeader field="name">Product Description</SortableHeader>
+                            <SortableHeader field="default_price" className="text-right">Perpetual ($)</SortableHeader>
+                            <SortableHeader field="annual_rental" className="text-right">Annual Rental ($)</SortableHeader>
+                            <SortableHeader field="annual_maintenance" className="text-right">Annual M&S ($)</SortableHeader>
                             <TableHead className="w-24">Actions</TableHead>
                           </TableRow>
                         </TableHeader>

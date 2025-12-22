@@ -181,7 +181,7 @@ const Index = () => {
 
           {/* Companies Tab */}
           <TabsContent value="companies" className="space-y-6">
-            <CompaniesTab companies={companies} permits={permits} onRefresh={refresh} />
+            <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} />
           </TabsContent>
 
           {/* Deals Tab */}
