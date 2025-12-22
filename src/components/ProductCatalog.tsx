@@ -120,23 +120,42 @@ export function ProductCatalog() {
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
       let imported = 0;
+      let currentCategory = 'Standard Packages';
+
       for (const row of jsonData) {
-        // Map common column names
-        const name = String(row['Name'] || row['Product Name'] || row['Product'] || row['Description'] || '').trim();
+        // Get the Type column - this can be "Network", "Standalone", or a category header
+        const typeValue = String(row['Type'] || '').trim();
+        
+        // Check if this row is a category header (e.g., "Standard Packages", "GGX Add-on")
+        if (typeValue === 'Standard Packages' || typeValue === 'GGX Add-on') {
+          currentCategory = typeValue;
+          continue; // Skip category header rows
+        }
+
+        // Get product name from "Product Description" column
+        const name = String(row['Product Description'] || row['Name'] || row['Product Name'] || row['Product'] || '').trim();
         if (!name) continue;
 
-        const category = String(row['Category'] || 'Standard Packages');
-        const type = String(row['Type'] || 'Network');
-        const defaultPrice = parseFloat(String(row['Price'] || row['Default Price'] || row['Perpetual'] || row['Perpetual ($)'] || 0).replace(/[,$]/g, '')) || 0;
-        const annualRental = parseFloat(String(row['Annual Rental'] || row['Annual Rental ($)'] || row['Rental'] || 0).replace(/[,$]/g, '')) || undefined;
-        const annualMaintenance = parseFloat(String(row['Annual M&S'] || row['Annual M&S ($)'] || row['Maintenance'] || row['M&S'] || 0).replace(/[,$]/g, '')) || undefined;
+        // Parse pricing - handle comma-formatted numbers
+        const perpetual = row['Perpetual ($)'] || row['Perpetual'] || row['Price'] || row['Default Price'];
+        const rental = row['Annual Rental ($)'] || row['Annual Rental'] || row['Rental'];
+        const maintenance = row['Annual M&S ($)'] || row['Annual M&S'] || row['Maintenance'] || row['M&S'];
+
+        const defaultPrice = parseFloat(String(perpetual || 0).replace(/[,$]/g, '')) || 0;
+        const annualRental = parseFloat(String(rental || 0).replace(/[,$]/g, '')) || undefined;
+        const annualMaintenance = parseFloat(String(maintenance || 0).replace(/[,$]/g, '')) || undefined;
+        
+        // Determine type from Type column
+        const type = typeValue.toLowerCase().includes('standalone') ? 'Standalone' : 'Network';
+        
+        // Optional fields
         const triggerType = String(row['Trigger Type'] || row['Trigger'] || '').trim() || undefined;
         const description = String(row['Description'] || row['Notes'] || '').trim() || undefined;
 
         await saveSellingOption({
           name,
-          category: category.includes('Add-on') ? 'GGX Add-on' : 'Standard Packages',
-          type: type.toLowerCase().includes('standalone') ? 'Standalone' : 'Network',
+          category: currentCategory,
+          type,
           default_price: defaultPrice,
           annual_rental: annualRental,
           annual_maintenance: annualMaintenance,
