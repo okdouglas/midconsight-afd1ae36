@@ -164,13 +164,14 @@ export function PermitMapAdvanced({
 
     markersRef.current.clearLayers();
 
-    // Process permits - apply centroid mapping for those without coordinates
+    // Process permits - use isCentroidMapped flag if present, or apply centroid mapping for those without coordinates
     const processedPermits = filteredPermits.map(permit => {
       let lat = permit.lat;
       let lon = permit.lon;
-      let isCentroidMapped = false;
+      // Use the flag from permit data if available
+      let isCentroidMapped = permit.isCentroidMapped || false;
 
-      // If no valid coordinates but has county, try Texas county centroid
+      // Fallback: If no valid coordinates but has county, try Texas county centroid
       if ((!lat || !lon || lat === 0 || lon === 0) && permit.county && permit.state?.toUpperCase() === 'TX') {
         const centroidCoords = getTexasCountyCoordinates(permit.county, true);
         if (centroidCoords) {

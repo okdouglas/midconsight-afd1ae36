@@ -1,9 +1,11 @@
 /**
- * Schema Mapping Layer for ITD Excel Format
- * Maps ITD-wells-formations-daily columns to internal data model
+ * Schema Mapping Layer for Multiple State Permit Formats
+ * Supports: Oklahoma ITD, Texas RRC
  */
 
-// ITD Excel column names → Internal field names
+import { getTexasCountyCoordinates } from './texas-counties';
+
+// ITD Excel column names → Internal field names (Oklahoma)
 export const ITD_COLUMN_MAP: Record<string, string> = {
   // Core identifiers
   'API_Number': 'api',
@@ -93,6 +95,24 @@ export const ITD_COLUMN_MAP: Record<string, string> = {
   'Remarks': 'remarks',
 };
 
+// Texas RRC column names → Internal field names
+export const RRC_COLUMN_MAP: Record<string, string> = {
+  'API NO.': 'api',
+  'Operator Name/Number': 'operatorWithNumber',
+  'Lease Name': 'wellName',
+  'Well #': 'wellNumber',
+  'Dist.': 'district',
+  'County': 'county',
+  'Wellbore Profile': 'drillType',
+  'Filing Purpose': 'applicationType',
+  'Amend': 'amend',
+  'Total Depth': 'totalDepth',
+  'Status Date': 'statusDate',
+  'Status #': 'statusNumber',
+  'Current Queue': 'permitStatus',
+  'Stacked Lateral Parent Well DP #': 'parentWellId',
+};
+
 // Internal permit data model
 export interface Permit {
   id: string;
@@ -151,6 +171,9 @@ export interface Permit {
   
   // Calculated
   estimatedValue: number;
+  
+  // Flag for centroid-mapped coordinates (Texas permits without exact location)
+  isCentroidMapped?: boolean;
 }
 
 export interface ValidationError {
@@ -166,6 +189,7 @@ export interface ImportResult {
   totalRows: number;
   validRows: number;
   skippedRows: number;
+  sourceFormat?: 'itd' | 'rrc' | 'unknown';
 }
 
 /**
@@ -216,6 +240,176 @@ export function parseNumeric(value: unknown): number | undefined {
  */
 export function generateId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Detects the data format based on column headers
+ */
+export function detectDataFormat(row: Record<string, unknown>): 'itd' | 'rrc' | 'unknown' {
+  const keys = Object.keys(row);
+  
+  // Check for Texas RRC format indicators
+  if (keys.some(k => k === 'API NO.' || k === 'Operator Name/Number' || k === 'Lease Name')) {
+    return 'rrc';
+  }
+  
+  // Check for Oklahoma ITD format indicators
+  if (keys.some(k => k === 'API_Number' || k === 'Entity_Name' || k === 'Surf_Lat_Y')) {
+    return 'itd';
+  }
+  
+  return 'unknown';
+}
+
+/**
+ * Parse Texas RRC "Status Date" field to extract submit and approval dates
+ * Format: "Submitted 04/23/2025 Approved 12/17/2025"
+ */
+function parseRrcStatusDate(statusDate: string): { submitDate?: string; approvalDate?: string } {
+  const result: { submitDate?: string; approvalDate?: string } = {};
+  
+  const submitMatch = statusDate.match(/Submitted\s+(\d{2}\/\d{2}\/\d{4})/);
+  if (submitMatch) {
+    const [month, day, year] = submitMatch[1].split('/');
+    result.submitDate = `${year}-${month}-${day}`;
+  }
+  
+  const approvedMatch = statusDate.match(/Approved\s+(\d{2}\/\d{2}\/\d{4})/);
+  if (approvedMatch) {
+    const [month, day, year] = approvedMatch[1].split('/');
+    result.approvalDate = `${year}-${month}-${day}`;
+  }
+  
+  return result;
+}
+
+/**
+ * Parse Texas RRC "Operator Name/Number" field
+ * Format: "WPX ENERGY PERMIAN, LLC (942623)"
+ */
+function parseRrcOperator(operatorField: string): { operator: string; operatorNumber?: string } {
+  const match = operatorField.match(/^(.+?)\s*\((\d+)\)\s*$/);
+  if (match) {
+    return {
+      operator: match[1].trim(),
+      operatorNumber: match[2]
+    };
+  }
+  return { operator: operatorField.trim() };
+}
+
+/**
+ * Maps a Texas RRC row to the internal Permit model
+ */
+export function mapRrcRowToPermit(
+  row: Record<string, unknown>,
+  rowIndex: number,
+  datasetId: string,
+  avgPermitValue: number = 50000
+): { permit: Permit | null; errors: ValidationError[] } {
+  const errors: ValidationError[] = [];
+  
+  const getValue = (rrcColumn: string): unknown => {
+    return row[rrcColumn];
+  };
+  
+  // Parse API - it's numeric in RRC format
+  const apiRaw = getValue('API NO.');
+  const api = apiRaw ? String(apiRaw).trim() : '';
+  
+  // Parse operator name/number
+  const operatorField = String(getValue('Operator Name/Number') ?? '').trim();
+  const { operator, operatorNumber } = parseRrcOperator(operatorField);
+  
+  // Parse dates from status field
+  const statusDate = String(getValue('Status Date') ?? '');
+  const { submitDate, approvalDate } = parseRrcStatusDate(statusDate);
+  
+  // Get county for coordinate lookup
+  const county = String(getValue('County') ?? '').trim();
+  
+  // Texas RRC doesn't provide lat/lon, so we use county centroids with jitter
+  let lat: number | undefined;
+  let lon: number | undefined;
+  
+  if (county) {
+    const coords = getTexasCountyCoordinates(county, true);
+    if (coords) {
+      [lat, lon] = coords;
+    }
+  }
+  
+  // Validate required fields
+  if (!api) {
+    errors.push({
+      row: rowIndex,
+      field: 'API NO.',
+      value: String(apiRaw ?? ''),
+      reason: 'Missing API number'
+    });
+  }
+  
+  if (!operator) {
+    errors.push({
+      row: rowIndex,
+      field: 'Operator Name/Number',
+      value: operatorField,
+      reason: 'Missing operator name'
+    });
+  }
+  
+  if (!lat || !lon) {
+    errors.push({
+      row: rowIndex,
+      field: 'County',
+      value: county || 'empty',
+      reason: `Could not determine coordinates for county: ${county || 'unknown'}`
+    });
+    return { permit: null, errors };
+  }
+  
+  const permit: Permit = {
+    id: generateId('permit'),
+    api: api || generateId('temp'),
+    operator: operator || 'Unknown Operator',
+    operatorNumber,
+    
+    // Location (from county centroid with jitter)
+    lat,
+    lon,
+    county,
+    
+    // Well info
+    wellName: String(getValue('Lease Name') ?? '').trim() || undefined,
+    wellNumber: String(getValue('Well #') ?? '').trim() || undefined,
+    
+    // Depth
+    totalDepth: parseNumeric(getValue('Total Depth')),
+    
+    // Permit info
+    permitStatus: String(getValue('Current Queue') ?? '').trim() || undefined,
+    applicationType: String(getValue('Filing Purpose') ?? '').trim() || undefined,
+    drillType: String(getValue('Wellbore Profile') ?? '').trim() || undefined,
+    
+    // Dates
+    approvalDate,
+    submitDate,
+    
+    // Set state to Texas
+    state: 'TX',
+    
+    // Metadata
+    dateImported: new Date().toISOString().split('T')[0],
+    datasetId,
+    
+    // Calculated value
+    estimatedValue: avgPermitValue,
+    
+    // Flag that coordinates are from county centroid
+    isCentroidMapped: true
+  };
+  
+  return { permit, errors };
 }
 
 /**
@@ -344,6 +538,7 @@ export function mapRowToPermit(
 
 /**
  * Validates and transforms raw Excel data to permits
+ * Auto-detects the format (Oklahoma ITD or Texas RRC)
  */
 export function processExcelData(
   rawData: Record<string, unknown>[],
@@ -354,13 +549,43 @@ export function processExcelData(
   const allErrors: ValidationError[] = [];
   let skippedRows = 0;
   
-  rawData.forEach((row, index) => {
-    const { permit, errors } = mapRowToPermit(row, index + 2, datasetId, avgPermitValue);
+  // Skip empty rows or header rows (Texas RRC has metadata rows at top)
+  const dataRows = rawData.filter(row => {
+    const keys = Object.keys(row);
+    // Skip rows that are search criteria or empty
+    if (keys.length < 3) return false;
+    // Skip the "Search Criteria" header row from Texas RRC
+    if (Object.values(row).some(v => String(v).includes('Search Criteria'))) return false;
+    return true;
+  });
+  
+  if (dataRows.length === 0) {
+    return {
+      permits: [],
+      errors: [{ row: 0, field: 'file', value: '', reason: 'No valid data rows found' }],
+      totalRows: 0,
+      validRows: 0,
+      skippedRows: 0,
+      sourceFormat: 'unknown'
+    };
+  }
+  
+  // Detect format from first valid row
+  const format = detectDataFormat(dataRows[0]);
+  
+  dataRows.forEach((row, index) => {
+    let result: { permit: Permit | null; errors: ValidationError[] };
     
-    allErrors.push(...errors);
+    if (format === 'rrc') {
+      result = mapRrcRowToPermit(row, index + 2, datasetId, avgPermitValue);
+    } else {
+      result = mapRowToPermit(row, index + 2, datasetId, avgPermitValue);
+    }
     
-    if (permit) {
-      permits.push(permit);
+    allErrors.push(...result.errors);
+    
+    if (result.permit) {
+      permits.push(result.permit);
     } else {
       skippedRows++;
     }
@@ -369,8 +594,9 @@ export function processExcelData(
   return {
     permits,
     errors: allErrors,
-    totalRows: rawData.length,
+    totalRows: dataRows.length,
     validRows: permits.length,
-    skippedRows
+    skippedRows,
+    sourceFormat: format
   };
 }

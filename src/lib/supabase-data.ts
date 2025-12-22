@@ -117,6 +117,9 @@ export interface DbDataset {
 
 // Helper to convert DB record to app format
 function dbPermitToApp(p: DbPermit): Permit {
+  // Texas permits from RRC import use county centroid coordinates
+  const isCentroidMapped = p.state?.toUpperCase() === 'TX';
+  
   return {
     id: p.id,
     api: p.api,
@@ -155,7 +158,8 @@ function dbPermitToApp(p: DbPermit): Permit {
     remarks: p.remarks,
     dateImported: p.date_imported,
     datasetId: p.dataset_id || '',
-    estimatedValue: Number(p.estimated_value)
+    estimatedValue: Number(p.estimated_value),
+    isCentroidMapped
   };
 }
 
