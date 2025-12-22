@@ -183,6 +183,7 @@ export type Database = {
           linked_permit_ids: string[] | null
           name: string
           notes: string | null
+          selling_option_id: string | null
           stage: string | null
           status: string | null
           user_id: string
@@ -196,6 +197,7 @@ export type Database = {
           linked_permit_ids?: string[] | null
           name: string
           notes?: string | null
+          selling_option_id?: string | null
           stage?: string | null
           status?: string | null
           user_id: string
@@ -209,6 +211,7 @@ export type Database = {
           linked_permit_ids?: string[] | null
           name?: string
           notes?: string | null
+          selling_option_id?: string | null
           stage?: string | null
           status?: string | null
           user_id?: string
@@ -220,6 +223,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deals_selling_option_id_fkey"
+            columns: ["selling_option_id"]
+            isOneToOne: false
+            referencedRelation: "selling_options"
             referencedColumns: ["id"]
           },
         ]
@@ -350,6 +360,51 @@ export type Database = {
           well_status?: string | null
           well_type?: string | null
           zip_code?: string | null
+        }
+        Relationships: []
+      }
+      selling_options: {
+        Row: {
+          annual_maintenance: number | null
+          annual_rental: number | null
+          category: string
+          created_at: string
+          default_price: number
+          description: string | null
+          id: string
+          name: string
+          trigger_type: string | null
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          annual_maintenance?: number | null
+          annual_rental?: number | null
+          category?: string
+          created_at?: string
+          default_price?: number
+          description?: string | null
+          id?: string
+          name: string
+          trigger_type?: string | null
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          annual_maintenance?: number | null
+          annual_rental?: number | null
+          category?: string
+          created_at?: string
+          default_price?: number
+          description?: string | null
+          id?: string
+          name?: string
+          trigger_type?: string | null
+          type?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

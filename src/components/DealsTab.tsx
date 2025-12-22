@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type Deal, type Company } from '@/hooks/useSupabaseData';
-import { updateDeal } from '@/lib/supabase-data';
+import { updateDeal, getSellingOptionById, type DbSellingOption } from '@/lib/supabase-data';
 
 interface DealsTabProps {
   deals: Deal[];

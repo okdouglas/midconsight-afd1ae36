@@ -36,6 +36,7 @@ export interface Deal {
   status: 'open' | 'closed';
   linkedPermitIds: string[];
   notes?: string;
+  sellingOptionId?: string;
   createdDate: string;
 }
 
@@ -77,6 +78,7 @@ function mapDbDealToDeal(db: DbDeal): Deal {
     status: db.status as 'open' | 'closed',
     linkedPermitIds: db.linked_permit_ids || [],
     notes: db.notes,
+    sellingOptionId: db.selling_option_id,
     createdDate: db.created_at,
   };
 }

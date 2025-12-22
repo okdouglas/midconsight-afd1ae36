@@ -100,7 +100,23 @@ export interface DbDeal {
   status: 'open' | 'closed';
   linked_permit_ids?: string[];
   notes?: string;
+  selling_option_id?: string;
   created_at: string;
+}
+
+export interface DbSellingOption {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string;
+  type: string;
+  description?: string;
+  default_price: number;
+  annual_rental?: number;
+  annual_maintenance?: number;
+  trigger_type?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DbActivity {
@@ -655,4 +671,71 @@ async function rebuildCompanies(userId: string): Promise<void> {
     
     if (error) console.error('Failed to upsert company:', error);
   }
+}
+
+// ============ SELLING OPTIONS ============
+
+export async function getSellingOptions(): Promise<DbSellingOption[]> {
+  const { data, error } = await supabase
+    .from('selling_options')
+    .select('*')
+    .order('category', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as DbSellingOption[];
+}
+
+export async function saveSellingOption(
+  option: Omit<DbSellingOption, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+): Promise<DbSellingOption> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('selling_options')
+    .insert({
+      ...option,
+      user_id: user.id
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbSellingOption;
+}
+
+export async function updateSellingOption(
+  id: string,
+  updates: Partial<DbSellingOption>
+): Promise<void> {
+  const { error } = await supabase
+    .from('selling_options')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function deleteSellingOption(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('selling_options')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function getSellingOptionById(id: string): Promise<DbSellingOption | null> {
+  const { data, error } = await supabase
+    .from('selling_options')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null; // Not found
+    throw error;
+  }
+  return data as DbSellingOption;
 }
