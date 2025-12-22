@@ -48,7 +48,18 @@ const STAGE_CONFIG: Record<DealStage, { label: string; color: string; icon: Reac
   closed_lost: { label: 'Closed Lost', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: <XCircle className="h-4 w-4" /> },
 };
 
+// Stage-to-probability mapping
+const STAGE_PROBABILITY: Record<DealStage, number> = {
+  new_lead: 10,
+  contacted: 30,
+  qualified: 60,
+  proposal: 90,
+  closed_won: 100,
+  closed_lost: 0,
+};
+
 const PROBABILITY_COLORS: Record<number, string> = {
+  0: 'text-red-500',
   10: 'text-red-400',
   30: 'text-orange-400',
   60: 'text-amber-400',
@@ -82,7 +93,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
 
   const handleStageChange = async (deal: Deal, newStage: DealStage) => {
     const newStatus = (newStage === 'closed_won' || newStage === 'closed_lost') ? 'closed' : 'open';
-    const newProbability = newStage === 'closed_won' || newStage === 'closed_lost' ? 100 : deal.probability;
+    const newProbability = STAGE_PROBABILITY[newStage];
     
     await updateDeal(deal.id, { 
       stage: newStage, 
