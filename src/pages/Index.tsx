@@ -202,13 +202,6 @@ const Index = () => {
               onDelete={removeDataset}
             />
           </TabsContent>
-          <TabsContent value="data" className="space-y-6">
-            <DataImport onImportComplete={refresh} />
-            <DatasetManager
-              datasets={datasets}
-              onDelete={removeDataset}
-            />
-          </TabsContent>
         </Tabs>
       </main>
     </div>
