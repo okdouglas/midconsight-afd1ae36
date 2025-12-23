@@ -1,12 +1,14 @@
 /**
  * Companies Tab Component
  * Perpetual all-time view of companies with click-to-expand CRM
+ * Includes Current Clients section
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
+import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import { type Permit } from '@/lib/schema-mapping';
 import { CompanyDetailModal } from './CompanyDetailModal';
@@ -43,6 +45,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
   const [contacts, setContacts] = useState<Record<string, DbContact[]>>({});
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [activeView, setActiveView] = useState<'prospects' | 'clients'>('prospects');
 
   // Load contacts for all companies
   useEffect(() => {
@@ -82,9 +85,20 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
     return variants[score];
   };
 
+  // Split companies into clients and prospects
+  const currentClients = useMemo(() => {
+    return companies.filter(c => c.isCurrentClient);
+  }, [companies]);
+
+  const prospects = useMemo(() => {
+    return companies.filter(c => !c.isCurrentClient);
+  }, [companies]);
+
   // Compute company details with deals and contacts
-  const companiesWithDetails: CompanyWithDetails[] = useMemo(() => {
-    return companies.map(company => {
+  const companiesWithDetails = useMemo<CompanyWithDetails[]>(() => {
+    const baseCompanies = activeView === 'clients' ? currentClients : prospects;
+    
+    return baseCompanies.map(company => {
       const companyDeals = deals.filter(d => d.companyId === company.id && d.status === 'open');
       const dealCount = companyDeals.length;
       const weightedRevenue = companyDeals.reduce((sum, d) => {
@@ -99,7 +113,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
         weightedRevenue
       };
     });
-  }, [companies, deals, contacts]);
+  }, [activeView, currentClients, prospects, deals, contacts]);
 
   // Handle sorting
   const handleSort = (field: SortField) => {
@@ -169,9 +183,9 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
       return sortDirection === 'asc' ? comparison : -comparison;
     });
 
-  const hotCount = companies.filter(c => c.score === 'hot').length;
-  const warmCount = companies.filter(c => c.score === 'warm').length;
-  const coldCount = companies.filter(c => c.score === 'cold').length;
+  const hotCount = prospects.filter(c => c.score === 'hot').length;
+  const warmCount = prospects.filter(c => c.score === 'warm').length;
+  const coldCount = prospects.filter(c => c.score === 'cold').length;
   const totalPermits = permits.length;
 
   if (companies.length === 0) {
@@ -189,10 +203,17 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-6">
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="text-sm text-muted-foreground">Total Companies</div>
           <div className="text-2xl font-bold mt-1">{companies.length}</div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <UserCheck className="h-4 w-4 text-purple-500" />
+            Current Clients
+          </div>
+          <div className="text-2xl font-bold text-purple-500 mt-1">{currentClients.length}</div>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="text-sm text-muted-foreground">Total Permits</div>
@@ -236,6 +257,20 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
         </div>
       </div>
 
+      {/* View Toggle */}
+      <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'prospects' | 'clients')}>
+        <TabsList>
+          <TabsTrigger value="prospects" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Prospects ({prospects.length})
+          </TabsTrigger>
+          <TabsTrigger value="clients" className="flex items-center gap-2">
+            <UserCheck className="h-4 w-4" />
+            Current Clients ({currentClients.length})
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Search and Filter */}
       <div className="flex gap-4">
         <div className="relative flex-1">
@@ -252,9 +287,11 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
       {/* Companies Table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="p-4 border-b border-border bg-muted/30">
-          <h3 className="font-semibold">All-Time Companies</h3>
+          <h3 className="font-semibold">
+            {activeView === 'clients' ? 'Current Clients' : 'All-Time Companies'}
+          </h3>
           <p className="text-sm text-muted-foreground">
-            Showing {filteredCompanies.length} of {companies.length} companies • Click to view details and add contacts
+            Showing {filteredCompanies.length} of {activeView === 'clients' ? currentClients.length : prospects.length} {activeView === 'clients' ? 'clients' : 'companies'} • Click to view details and add contacts
           </p>
         </div>
         
@@ -273,51 +310,75 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCompanies.map((company, index) => (
-                <TableRow 
-                  key={company.id} 
-                  className="hover:bg-muted/50 transition-colors cursor-pointer"
-                  onClick={() => setSelectedCompany(company)}
-                >
-                  <TableCell className="text-sm font-medium text-muted-foreground">
-                    {index + 1}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Building2 className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <div className="font-medium">{company.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          Last: {new Date(company.lastPermitDate).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={`${getScoreBadge(company.score)} text-xs`}>
-                      {getScoreIcon(company.score)}
-                      <span className="ml-1 capitalize">{company.score}</span>
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {company.primaryContact}
-                  </TableCell>
-                  <TableCell className="text-sm font-medium">
-                    {company.permitCount}
-                  </TableCell>
-                  <TableCell className="text-sm font-medium">
-                    {company.dealCount}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-green-600">
-                    ${company.weightedRevenue.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-primary">
-                    ${company.totalValue.toLocaleString()}
+              {filteredCompanies.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    {activeView === 'clients' 
+                      ? 'No current clients. Mark companies as clients from the Lead Research tab.'
+                      : 'No companies found. Import permit data or adjust filters.'
+                    }
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                filteredCompanies.map((company, index) => (
+                  <TableRow 
+                    key={company.id} 
+                    className="hover:bg-muted/50 transition-colors cursor-pointer"
+                    onClick={() => setSelectedCompany(company)}
+                  >
+                    <TableCell className="text-sm font-medium text-muted-foreground">
+                      {index + 1}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                          company.isCurrentClient ? 'bg-purple-500/10' : 'bg-primary/10'
+                        }`}>
+                          {company.isCurrentClient ? (
+                            <UserCheck className="h-4 w-4 text-purple-500" />
+                          ) : (
+                            <Building2 className="h-4 w-4 text-primary" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-medium flex items-center gap-2">
+                            {company.name}
+                            {company.isCurrentClient && (
+                              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                                Client
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Last: {new Date(company.lastPermitDate).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={`${getScoreBadge(company.score)} text-xs`}>
+                        {getScoreIcon(company.score)}
+                        <span className="ml-1 capitalize">{company.score}</span>
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {company.primaryContact}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium">
+                      {company.permitCount}
+                    </TableCell>
+                    <TableCell className="text-sm font-medium">
+                      {company.dealCount}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold text-green-600">
+                      ${company.weightedRevenue.toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold text-primary">
+                      ${company.totalValue.toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>

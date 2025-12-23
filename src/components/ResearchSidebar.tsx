@@ -6,16 +6,11 @@
 import { useState, useEffect } from 'react';
 import { 
   X, 
-  ExternalLink, 
   User, 
-  Mail, 
-  Phone,
-  Building2,
   Package,
   ArrowRight,
   CheckCircle2,
   MapPin,
-  Layers,
   Calendar,
   FileText
 } from 'lucide-react';
@@ -44,10 +39,11 @@ import {
 } from '@/lib/supabase-data';
 import { toast } from 'sonner';
 
-type ResearchStatus = 'new' | 'pending' | 'verified' | 'archived';
+type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
 
 interface ResearchSidebarProps {
   permit: Permit;
+  allPermits?: Permit[];
   companies: Company[];
   onClose: () => void;
   onStatusChange: (status: ResearchStatus) => void;
@@ -55,24 +51,9 @@ interface ResearchSidebarProps {
   onRefresh: () => void;
 }
 
-// OCC lookup URLs by state
-const getOCCLink = (permit: Permit): string | null => {
-  const state = permit.state?.toUpperCase();
-  
-  if (state === 'OK') {
-    // Oklahoma Corporation Commission well lookup
-    return `https://imaging.occeweb.com/imaging/OGWellBrowse.aspx`;
-  }
-  if (state === 'TX') {
-    // Texas RRC well lookup
-    const apiClean = permit.api.replace(/-/g, '');
-    return `https://webapps.rrc.texas.gov/WRAB/wellborePDQ.xhtml?api=${apiClean}`;
-  }
-  return null;
-};
-
 export function ResearchSidebar({ 
   permit, 
+  allPermits = [permit],
   companies, 
   onClose, 
   onStatusChange,
@@ -95,6 +76,10 @@ export function ResearchSidebar({
 
   // Find matching company
   const company = companies.find(c => c.name === permit.operator);
+
+  // Calculate totals for this operator
+  const totalPermits = allPermits.length;
+  const estimatedValue = allPermits.reduce((sum, p) => sum + (p.estimatedValue || 5000), 0);
 
   useEffect(() => {
     getSellingOptions().then(opts => {
@@ -190,8 +175,8 @@ export function ResearchSidebar({
         value: dealValue,
         expected_close_date: expectedClose.toISOString().split('T')[0],
         status: 'open',
-        linked_permit_ids: [permit.id],
-        notes: dealNotes || `Created from Research Desk. Permit: ${permit.api}`,
+        linked_permit_ids: allPermits.map(p => p.id),
+        notes: dealNotes || `Created from Research Desk. ${allPermits.length} permits linked.`,
         selling_option_id: selectedProductId,
         probability: 30, // Contacted stage probability
       });
@@ -206,15 +191,13 @@ export function ResearchSidebar({
     }
   };
 
-  const occLink = getOCCLink(permit);
-
   return (
     <div className="w-96 border border-border rounded-lg bg-card flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-border flex items-center justify-between">
         <div>
           <h3 className="font-semibold">Research Panel</h3>
-          <p className="text-xs text-muted-foreground">{permit.api}</p>
+          <p className="text-xs text-muted-foreground">{permit.operator}</p>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
@@ -223,21 +206,12 @@ export function ResearchSidebar({
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-4 space-y-6">
-        {/* Permit Summary */}
+        {/* Operator Summary */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-primary" />
-            <span className="font-medium">{permit.operator}</span>
-          </div>
-          
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="flex items-center gap-2">
               <MapPin className="h-3 w-3 text-muted-foreground" />
               <span className="text-muted-foreground">{permit.county}, {permit.state}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Layers className="h-3 w-3 text-muted-foreground" />
-              <span className="text-muted-foreground">{permit.wellType || permit.drillType || 'Unknown'}</span>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-3 w-3 text-muted-foreground" />
@@ -249,36 +223,17 @@ export function ResearchSidebar({
               </span>
             </div>
             {permit.wellName && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 col-span-2">
                 <FileText className="h-3 w-3 text-muted-foreground" />
                 <span className="text-muted-foreground truncate">{permit.wellName}</span>
               </div>
             )}
           </div>
 
-          {company && (
-            <Badge variant="outline" className="text-xs">
-              {company.permitCount} total permits • ${company.totalValue.toLocaleString()} est. value
-            </Badge>
-          )}
+          <Badge variant="outline" className="text-xs">
+            {totalPermits} total permit{totalPermits > 1 ? 's' : ''} • ${estimatedValue.toLocaleString()} est. value
+          </Badge>
         </div>
-
-        <Separator />
-
-        {/* External Link */}
-        {occLink && (
-          <div>
-            <Label className="text-xs text-muted-foreground mb-2 block">Regulatory Record</Label>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start"
-              onClick={() => window.open(occLink, '_blank')}
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open {permit.state === 'OK' ? 'OCC' : 'RRC'} Well Record
-            </Button>
-          </div>
-        )}
 
         <Separator />
 
