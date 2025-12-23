@@ -340,6 +340,15 @@ export async function updateDeal(id: string, updates: Partial<DbDeal>): Promise<
   if (error) throw error;
 }
 
+export async function deleteDeal(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('deals')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 export async function deleteDataset(datasetId: string): Promise<void> {
   // Delete permits associated with the dataset
   const { error: permitsError } = await supabase

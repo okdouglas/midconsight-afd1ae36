@@ -39,6 +39,8 @@ import {
   updateCompany,
   updateContact,
   deleteContact,
+  updateDeal,
+  deleteDeal,
   getLicensePurchases,
   saveLicensePurchase,
   deleteLicensePurchase,
@@ -63,10 +65,18 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const [showAddContact, setShowAddContact] = useState(false);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [showAddDeal, setShowAddDeal] = useState(false);
+  const [editingDealId, setEditingDealId] = useState<string | null>(null);
   const [showAddLicense, setShowAddLicense] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', email: '', phone: '', role: '', notes: '' });
   const [editContact, setEditContact] = useState({ name: '', email: '', phone: '', role: '', notes: '' });
   const [newDeal, setNewDeal] = useState({ 
+    name: '', 
+    value: '', 
+    expectedCloseDate: '',
+    notes: '',
+    sellingOptionId: ''
+  });
+  const [editDeal, setEditDeal] = useState({ 
     name: '', 
     value: '', 
     expectedCloseDate: '',
@@ -229,6 +239,45 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
 
     setNewDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
     setShowAddDeal(false);
+    loadCompanyData();
+    onUpdate?.();
+  };
+
+  const handleStartEditDeal = (deal: DbDeal) => {
+    setEditingDealId(deal.id);
+    setEditDeal({
+      name: deal.name,
+      value: deal.value?.toString() || '',
+      expectedCloseDate: deal.expected_close_date || '',
+      notes: deal.notes || '',
+      sellingOptionId: deal.selling_option_id || ''
+    });
+  };
+
+  const handleCancelEditDeal = () => {
+    setEditingDealId(null);
+    setEditDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
+  };
+
+  const handleSaveEditDeal = async () => {
+    if (!editingDealId || !editDeal.name.trim()) return;
+
+    await updateDeal(editingDealId, {
+      name: editDeal.name,
+      value: parseFloat(editDeal.value) || 0,
+      expected_close_date: editDeal.expectedCloseDate || null,
+      notes: editDeal.notes || null,
+      selling_option_id: editDeal.sellingOptionId && editDeal.sellingOptionId !== 'none' ? editDeal.sellingOptionId : null
+    });
+
+    setEditingDealId(null);
+    setEditDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
+    loadCompanyData();
+    onUpdate?.();
+  };
+
+  const handleDeleteDeal = async (dealId: string) => {
+    await deleteDeal(dealId);
     loadCompanyData();
     onUpdate?.();
   };
@@ -873,27 +922,117 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
             ) : (
               <div className="space-y-2">
                 {deals.map(deal => (
-                  <div key={deal.id} className="border border-border rounded-lg p-4 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-medium">{deal.name}</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          Stage: <span className="capitalize">{deal.stage?.replace('_', ' ') || 'New Lead'}</span>
+                  editingDealId === deal.id ? (
+                    // Edit mode
+                    <div key={deal.id} className="border border-primary rounded-lg p-4 space-y-4 bg-muted/30">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Deal Name *</Label>
+                          <Input 
+                            value={editDeal.name} 
+                            onChange={(e) => setEditDeal({ ...editDeal, name: e.target.value })}
+                            placeholder="Q1 Drilling Services"
+                          />
+                        </div>
+                        <div>
+                          <Label>Value ($)</Label>
+                          <Input 
+                            type="number"
+                            value={editDeal.value} 
+                            onChange={(e) => setEditDeal({ ...editDeal, value: e.target.value })}
+                            placeholder="50000"
+                          />
+                        </div>
+                        <div>
+                          <Label>Expected Close Date</Label>
+                          <Input 
+                            type="date"
+                            value={editDeal.expectedCloseDate} 
+                            onChange={(e) => setEditDeal({ ...editDeal, expectedCloseDate: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label>Product</Label>
+                          <Select
+                            value={editDeal.sellingOptionId || 'none'}
+                            onValueChange={(v) => setEditDeal({ ...editDeal, sellingOptionId: v === 'none' ? '' : v })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select product..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No product</SelectItem>
+                              {sellingOptions.map(opt => (
+                                <SelectItem key={opt.id} value={opt.id}>
+                                  {opt.name} - ${formatCurrency(Number(opt.annual_rental) || Number(opt.default_price))}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-primary">${Number(deal.value || 0).toLocaleString()}</div>
-                        <div className="text-xs text-muted-foreground">
-                          Close: {deal.expected_close_date ? new Date(deal.expected_close_date).toLocaleDateString() : 'TBD'}
-                        </div>
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea 
+                          value={editDeal.notes} 
+                          onChange={(e) => setEditDeal({ ...editDeal, notes: e.target.value })}
+                          placeholder="Deal details and context..."
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={handleCancelEditDeal}>
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleSaveEditDeal}>
+                          Save Changes
+                        </Button>
                       </div>
                     </div>
-                    {deal.notes && (
-                      <p className="text-sm text-muted-foreground mt-2 border-t border-border pt-2">
-                        {deal.notes}
-                      </p>
-                    )}
-                  </div>
+                  ) : (
+                    // View mode
+                    <div key={deal.id} className="border border-border rounded-lg p-4 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium">{deal.name}</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Stage: <span className="capitalize">{deal.stage?.replace('_', ' ') || 'New Lead'}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <div className="text-right">
+                            <div className="font-semibold text-primary">${Number(deal.value || 0).toLocaleString()}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Close: {deal.expected_close_date ? new Date(deal.expected_close_date).toLocaleDateString() : 'TBD'}
+                            </div>
+                          </div>
+                          <div className="flex gap-1 ml-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleStartEditDeal(deal)}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteDeal(deal.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      {deal.notes && (
+                        <p className="text-sm text-muted-foreground mt-2 border-t border-border pt-2">
+                          {deal.notes}
+                        </p>
+                      )}
+                    </div>
+                  )
                 ))}
               </div>
             )}
