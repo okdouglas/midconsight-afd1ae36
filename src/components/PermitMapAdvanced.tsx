@@ -1,17 +1,20 @@
 /**
  * Advanced Leaflet Map Component for Permit Visualization
- * Features: CartoDB/StreetView layers, filtering, search, light mode default
+ * Features: Satellite/Streets toggle, time slider, operator leaderboard
  */
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Permit } from '@/lib/schema-mapping';
 import { getTexasCountyCoordinates } from '@/lib/texas-counties';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Layers, Filter } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
+import { Search, MapPin, Satellite, Map as MapIcon, TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 // Fix default marker icons for Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -30,39 +33,36 @@ interface PermitMapAdvancedProps {
 
 // Tile layer configurations
 const TILE_LAYERS = {
-  cartodb_light: {
+  streets: {
     url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    name: 'CartoDB Light'
+    name: 'Streets'
   },
-  cartodb_dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    name: 'CartoDB Dark'
-  },
-  osm_street: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    name: 'Street View'
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    name: 'Satellite'
   }
 };
 
-// Custom marker icon based on well type and centroid status
+// Custom marker icon based on well type
 const getMarkerIcon = (wellType: string, isCentroidMapped: boolean = false): L.DivIcon => {
   let color = '#10b981'; // Default green
   
-  // Orange for centroid-mapped pins
-  if (isCentroidMapped) {
-    color = '#f97316'; // Orange
-  } else if (wellType?.toLowerCase().includes('oil')) {
-    color = '#22c55e';
-  } else if (wellType?.toLowerCase().includes('gas')) {
-    color = '#3b82f6';
-  } else if (wellType?.toLowerCase().includes('injection')) {
-    color = '#f59e0b';
-  } else if (wellType?.toLowerCase().includes('disposal')) {
-    color = '#ef4444';
+  // Determine color by well type
+  const wellTypeLower = wellType?.toLowerCase() || '';
+  if (wellTypeLower.includes('gas')) {
+    color = '#3b82f6'; // Blue for gas
+  } else if (wellTypeLower.includes('injection')) {
+    color = '#f97316'; // Orange for injection
+  } else if (wellTypeLower.includes('disposal')) {
+    color = '#ef4444'; // Red for disposal
+  } else if (wellTypeLower.includes('oil')) {
+    color = '#22c55e'; // Green for oil
   }
+
+  // Add border indicator for centroid-mapped
+  const borderColor = isCentroidMapped ? '#f97316' : 'white';
 
   return L.divIcon({
     className: 'custom-marker',
@@ -70,7 +70,7 @@ const getMarkerIcon = (wellType: string, isCentroidMapped: boolean = false): L.D
       width: 12px;
       height: 12px;
       background: ${color};
-      border: 2px solid white;
+      border: 2px solid ${borderColor};
       border-radius: 50%;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
     "></div>`,
@@ -79,51 +79,123 @@ const getMarkerIcon = (wellType: string, isCentroidMapped: boolean = false): L.D
   });
 };
 
+// Helper to parse date string to year
+const getYearFromDate = (dateStr: string | null | undefined): number | null => {
+  if (!dateStr) return null;
+  const year = new Date(dateStr).getFullYear();
+  return isNaN(year) ? null : year;
+};
+
 export function PermitMapAdvanced({ 
   permits, 
   onPermitClick, 
   showFilters = true,
-  defaultFilter = 'all'
 }: PermitMapAdvancedProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const boundsInitialized = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeLayer, setActiveLayer] = useState<keyof typeof TILE_LAYERS>('cartodb_light');
-  const [timeFilter, setTimeFilter] = useState<'all' | 'new_this_week'>(defaultFilter);
+  const [isSatellite, setIsSatellite] = useState(false);
+  const [dateRange, setDateRange] = useState<[number, number]>([2020, 2025]);
+  const [viewportBounds, setViewportBounds] = useState<L.LatLngBounds | null>(null);
 
-  // Compute filtered permits
-  const filteredPermits = useMemo(() => {
-    let filtered = permits;
-
-    // Time filter
-    if (timeFilter === 'new_this_week') {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
-      filtered = filtered.filter(p => p.dateImported >= sevenDaysAgoStr);
-    }
-
-    // Search filter (by operator)
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p => 
-        p.operator?.toLowerCase().includes(query) ||
-        p.wellName?.toLowerCase().includes(query) ||
-        p.api?.toLowerCase().includes(query)
-      );
-    }
-
-    return filtered;
-  }, [permits, timeFilter, searchQuery]);
-
-  // Get unique operators for search suggestions
-  const operators = useMemo(() => {
-    const opSet = new Set(permits.map(p => p.operator).filter(Boolean));
-    return Array.from(opSet).sort();
+  // Compute date range from permits
+  const { minYear, maxYear } = useMemo(() => {
+    let min = 2020;
+    let max = new Date().getFullYear();
+    
+    permits.forEach(p => {
+      const year = getYearFromDate(p.approvalDate);
+      if (year) {
+        if (year < min) min = year;
+        if (year > max) max = year;
+      }
+    });
+    
+    return { minYear: min, maxYear: max };
   }, [permits]);
+
+  // Initialize date range on permits change
+  useEffect(() => {
+    setDateRange([minYear, maxYear]);
+  }, [minYear, maxYear]);
+
+  // Filter permits by date range and search
+  const filteredPermits = useMemo(() => {
+    return permits.filter(p => {
+      // Date filter
+      const year = getYearFromDate(p.approvalDate);
+      if (year && (year < dateRange[0] || year > dateRange[1])) {
+        return false;
+      }
+
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        return (
+          p.operator?.toLowerCase().includes(query) ||
+          p.wellName?.toLowerCase().includes(query) ||
+          p.api?.toLowerCase().includes(query)
+        );
+      }
+
+      return true;
+    });
+  }, [permits, dateRange, searchQuery]);
+
+  // Process permits with coordinates
+  const processedPermits = useMemo(() => {
+    return filteredPermits.map(permit => {
+      let lat = permit.lat;
+      let lon = permit.lon;
+      let isCentroidMapped = permit.isCentroidMapped || false;
+
+      if ((!lat || !lon || lat === 0 || lon === 0) && permit.county && permit.state?.toUpperCase() === 'TX') {
+        const centroidCoords = getTexasCountyCoordinates(permit.county, true);
+        if (centroidCoords) {
+          [lat, lon] = centroidCoords;
+          isCentroidMapped = true;
+        }
+      }
+
+      return { ...permit, lat, lon, isCentroidMapped };
+    }).filter(p => p.lat && p.lon && !isNaN(p.lat) && !isNaN(p.lon));
+  }, [filteredPermits]);
+
+  // Calculate well type counts
+  const wellTypeCounts = useMemo(() => {
+    const counts = { gas: 0, injection: 0, disposal: 0, other: 0 };
+    processedPermits.forEach(p => {
+      const type = p.wellType?.toLowerCase() || '';
+      if (type.includes('gas')) counts.gas++;
+      else if (type.includes('injection')) counts.injection++;
+      else if (type.includes('disposal')) counts.disposal++;
+      else counts.other++;
+    });
+    return counts;
+  }, [processedPermits]);
+
+  // Calculate operator leaderboard based on viewport
+  const operatorLeaderboard = useMemo(() => {
+    const visiblePermits = viewportBounds
+      ? processedPermits.filter(p => viewportBounds.contains([p.lat!, p.lon!]))
+      : processedPermits;
+
+    const operatorCounts: Record<string, number> = {};
+    visiblePermits.forEach(p => {
+      if (p.operator) {
+        operatorCounts[p.operator] = (operatorCounts[p.operator] || 0) + 1;
+      }
+    });
+
+    return Object.entries(operatorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([operator, count]) => ({ operator, count }));
+  }, [processedPermits, viewportBounds]);
 
   // Initialize map
   useEffect(() => {
@@ -135,14 +207,22 @@ export function PermitMapAdvanced({
       scrollWheelZoom: true,
     });
 
-    const layer = TILE_LAYERS[activeLayer];
+    const layerKey = isSatellite ? 'satellite' : 'streets';
+    const layer = TILE_LAYERS[layerKey];
     tileLayerRef.current = L.tileLayer(layer.url, {
       attribution: layer.attribution,
-      subdomains: 'abcd',
+      subdomains: layerKey === 'streets' ? 'abcd' : undefined,
       maxZoom: 19,
     }).addTo(mapRef.current);
 
     markersRef.current = L.layerGroup().addTo(mapRef.current);
+
+    // Update viewport bounds on move
+    mapRef.current.on('moveend', () => {
+      if (mapRef.current) {
+        setViewportBounds(mapRef.current.getBounds());
+      }
+    });
 
     return () => {
       mapRef.current?.remove();
@@ -150,46 +230,30 @@ export function PermitMapAdvanced({
     };
   }, []);
 
-  // Update tile layer when changed
+  // Update tile layer when toggled
   useEffect(() => {
     if (!mapRef.current || !tileLayerRef.current) return;
 
-    const layer = TILE_LAYERS[activeLayer];
-    tileLayerRef.current.setUrl(layer.url);
-  }, [activeLayer]);
+    const layerKey = isSatellite ? 'satellite' : 'streets';
+    const layer = TILE_LAYERS[layerKey];
+    
+    tileLayerRef.current.remove();
+    tileLayerRef.current = L.tileLayer(layer.url, {
+      attribution: layer.attribution,
+      subdomains: layerKey === 'streets' ? 'abcd' : undefined,
+      maxZoom: 19,
+    }).addTo(mapRef.current);
+  }, [isSatellite]);
 
-  // Update markers when filtered permits change
+  // Update markers when processed permits change
   useEffect(() => {
     if (!mapRef.current || !markersRef.current) return;
 
     markersRef.current.clearLayers();
 
-    // Process permits - use isCentroidMapped flag if present, or apply centroid mapping for those without coordinates
-    const processedPermits = filteredPermits.map(permit => {
-      let lat = permit.lat;
-      let lon = permit.lon;
-      // Use the flag from permit data if available
-      let isCentroidMapped = permit.isCentroidMapped || false;
+    if (processedPermits.length === 0) return;
 
-      // Fallback: If no valid coordinates but has county, try Texas county centroid
-      if ((!lat || !lon || lat === 0 || lon === 0) && permit.county && permit.state?.toUpperCase() === 'TX') {
-        const centroidCoords = getTexasCountyCoordinates(permit.county, true);
-        if (centroidCoords) {
-          [lat, lon] = centroidCoords;
-          isCentroidMapped = true;
-        }
-      }
-
-      return { ...permit, lat, lon, isCentroidMapped };
-    });
-
-    const validPermits = processedPermits.filter(
-      p => p.lat && p.lon && !isNaN(p.lat) && !isNaN(p.lon)
-    );
-
-    if (validPermits.length === 0) return;
-
-    validPermits.forEach(permit => {
+    processedPermits.forEach(permit => {
       const marker = L.marker([permit.lat!, permit.lon!], {
         icon: getMarkerIcon(permit.wellType || '', permit.isCentroidMapped),
       });
@@ -214,7 +278,6 @@ export function PermitMapAdvanced({
             <div><strong>Well Type:</strong> ${permit.wellType || 'N/A'}</div>
             <div><strong>Drill Type:</strong> ${permit.drillType || 'N/A'}</div>
             <div><strong>Approval Date:</strong> ${permit.approvalDate || 'N/A'}</div>
-            <div><strong>Imported:</strong> ${permit.dateImported || 'N/A'}</div>
           </div>
           <div style="background: ${permit.isCentroidMapped ? '#fef3c7' : '#dcfce7'}; color: ${permit.isCentroidMapped ? '#92400e' : '#166534'}; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
             ${permit.isCentroidMapped ? '⚠️' : '📍'} ${sourceLabel}
@@ -230,100 +293,172 @@ export function PermitMapAdvanced({
       markersRef.current?.addLayer(marker);
     });
 
-    // Fit bounds if we have permits
-    if (validPermits.length > 0) {
+    // Fit bounds on initial load or when there are permits
+    if (!boundsInitialized.current && processedPermits.length > 0) {
       const bounds = L.latLngBounds(
-        validPermits.map(p => [p.lat!, p.lon!] as [number, number])
+        processedPermits.map(p => [p.lat!, p.lon!] as [number, number])
       );
-      mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
+      mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 8 });
+      setViewportBounds(mapRef.current.getBounds());
+      boundsInitialized.current = true;
     }
-  }, [filteredPermits, onPermitClick]);
+  }, [processedPermits, onPermitClick]);
+
+  const handleDateRangeChange = useCallback((values: number[]) => {
+    setDateRange([values[0], values[1]]);
+  }, []);
 
   return (
-    <div className="relative w-full h-full rounded-xl overflow-hidden border border-border">
-      {/* Filter Controls */}
-      {showFilters && (
-        <div className="absolute top-4 left-4 right-4 z-[1000] flex flex-wrap gap-2">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by operator, well name, or API..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-card/95 backdrop-blur-sm"
-              list="operators"
-            />
-            <datalist id="operators">
-              {operators.slice(0, 10).map(op => (
-                <option key={op} value={op} />
-              ))}
-            </datalist>
-          </div>
+    <div className="flex gap-4 w-full h-full">
+      {/* Operator Leaderboard - Left Panel */}
+      <Card className="w-64 shrink-0 flex flex-col">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Top Operators
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">In current view</p>
+        </CardHeader>
+        <CardContent className="flex-1 p-0">
+          <ScrollArea className="h-full px-4 pb-4">
+            {operatorLeaderboard.length > 0 ? (
+              <div className="space-y-2">
+                {operatorLeaderboard.map((item, index) => (
+                  <div
+                    key={item.operator}
+                    className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                  >
+                    <span className="text-xs font-bold text-muted-foreground w-5">
+                      #{index + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.operator}</p>
+                    </div>
+                    <Badge variant="secondary" className="shrink-0">
+                      {item.count}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No operators in view
+              </p>
+            )}
+          </ScrollArea>
+        </CardContent>
+      </Card>
 
-          <Select value={timeFilter} onValueChange={(v) => setTimeFilter(v as any)}>
-            <SelectTrigger className="w-[160px] bg-card/95 backdrop-blur-sm">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Permits</SelectItem>
-              <SelectItem value="new_this_week">New This Week</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Map Container */}
+      <div className="flex-1 flex flex-col relative rounded-xl overflow-hidden border border-border">
+        {/* Top Filter Bar */}
+        {showFilters && (
+          <div className="absolute top-4 left-4 right-4 z-[1000] flex flex-wrap gap-3 items-center">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[200px] max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by operator, well name, or API..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-card/95 backdrop-blur-sm"
+              />
+            </div>
 
-          <Select value={activeLayer} onValueChange={(v) => setActiveLayer(v as any)}>
-            <SelectTrigger className="w-[140px] bg-card/95 backdrop-blur-sm">
-              <Layers className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cartodb_light">Light Map</SelectItem>
-              <SelectItem value="cartodb_dark">Dark Map</SelectItem>
-              <SelectItem value="osm_street">Street View</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      <div ref={mapContainer} className="absolute inset-0" />
-      
-      {/* Legend */}
-      <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000]">
-        <div className="font-semibold mb-2">Location Source</div>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500 border border-white" />
-            <span>State GPS (Precise)</span>
+            {/* Satellite/Streets Toggle */}
+            <div className="flex items-center gap-2 bg-card/95 backdrop-blur-sm rounded-md px-3 py-2 border">
+              <MapIcon className="h-4 w-4 text-muted-foreground" />
+              <Switch
+                checked={isSatellite}
+                onCheckedChange={setIsSatellite}
+              />
+              <Satellite className="h-4 w-4 text-muted-foreground" />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-orange-500 border border-white" />
-            <span>County Estimate (TX)</span>
-          </div>
-        </div>
-        <div className="font-semibold mt-3 mb-2">Well Types</div>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500 border border-white" />
-            <span>Gas</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-amber-500 border border-white" />
-            <span>Injection</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500 border border-white" />
-            <span>Disposal</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats overlay */}
-      <div className="absolute top-4 right-4 bg-card/90 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000]" style={{ marginTop: showFilters ? '52px' : '0' }}>
-        <div className="font-semibold">{filteredPermits.filter(p => p.lat && p.lon).length} Permits Mapped</div>
-        <div className="text-muted-foreground">of {permits.length} total</div>
-        {timeFilter === 'new_this_week' && (
-          <div className="text-primary mt-1">Showing new this week</div>
         )}
+
+        {/* Map */}
+        <div ref={mapContainer} className="absolute inset-0" style={{ minHeight: '600px' }} />
+
+        {/* Time Slider - Bottom */}
+        <div className="absolute bottom-4 left-20 right-20 z-[1000]">
+          <div className="bg-card/95 backdrop-blur-sm rounded-lg p-4 border border-border">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Approval Date Range</span>
+              <span className="text-sm text-muted-foreground">
+                {dateRange[0]} — {dateRange[1]}
+              </span>
+            </div>
+            <Slider
+              value={dateRange}
+              onValueChange={handleDateRangeChange}
+              min={minYear}
+              max={maxYear}
+              step={1}
+              className="w-full"
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-xs text-muted-foreground">{minYear}</span>
+              <span className="text-xs text-muted-foreground">{maxYear}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Legend with Counts - Bottom Left */}
+        <div className="absolute bottom-24 left-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000]">
+          <div className="font-semibold mb-2 flex items-center gap-2">
+            <MapPin className="h-3 w-3" />
+            Well Types
+          </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-blue-500 border border-white" />
+                <span>Gas</span>
+              </div>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                {wellTypeCounts.gas}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-orange-500 border border-white" />
+                <span>Injection</span>
+              </div>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                {wellTypeCounts.injection}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500 border border-white" />
+                <span>Disposal</span>
+              </div>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                {wellTypeCounts.disposal}
+              </Badge>
+            </div>
+          </div>
+          <div className="border-t border-border mt-2 pt-2">
+            <div className="font-semibold mb-1">Location Source</div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
+                <span>GPS Precise</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-orange-500" />
+                <span>County Est.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats overlay - Top Right */}
+        <div className="absolute top-16 right-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000]">
+          <div className="font-semibold">{processedPermits.length} Permits Mapped</div>
+          <div className="text-muted-foreground">of {permits.length} total</div>
+        </div>
       </div>
     </div>
   );
