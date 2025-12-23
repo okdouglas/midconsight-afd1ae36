@@ -36,27 +36,31 @@ interface PermitMapAdvancedProps {
   defaultFilter?: 'all' | 'new_this_week';
 }
 
-// Tile layer configurations
+// Tile layer configurations - using reliable tile sources
 const TILE_LAYERS = {
   streets: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    name: 'Streets'
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    name: 'Streets',
+    subdomains: 'abcd'
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     attribution: 'Tiles &copy; Esri',
-    name: 'Satellite'
+    name: 'Satellite',
+    subdomains: ''
   },
   trd: {
     url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
     attribution: '&copy; OpenStreetMap &copy; CARTO',
-    name: 'TRD Grid'
+    name: 'TRD Grid',
+    subdomains: 'abcd'
   },
   county: {
     url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
     attribution: '&copy; OpenStreetMap &copy; CARTO',
-    name: 'County Borders'
+    name: 'County Borders',
+    subdomains: 'abcd'
   }
 };
 
@@ -234,7 +238,7 @@ export function PermitMapAdvanced({
     const layer = TILE_LAYERS[activeLayer];
     tileLayerRef.current = L.tileLayer(layer.url, {
       attribution: layer.attribution,
-      subdomains: 'abcd',
+      subdomains: layer.subdomains || 'abcd',
       maxZoom: 19,
     }).addTo(mapRef.current);
 
@@ -262,7 +266,14 @@ export function PermitMapAdvanced({
   useEffect(() => {
     if (!mapRef.current || !tileLayerRef.current) return;
     const layer = TILE_LAYERS[activeLayer];
-    tileLayerRef.current.setUrl(layer.url);
+    
+    // Remove old layer and add new one with correct subdomains
+    mapRef.current.removeLayer(tileLayerRef.current);
+    tileLayerRef.current = L.tileLayer(layer.url, {
+      attribution: layer.attribution,
+      subdomains: layer.subdomains || 'abcd',
+      maxZoom: 19,
+    }).addTo(mapRef.current);
   }, [activeLayer]);
 
   // Update viewport operators
@@ -412,11 +423,11 @@ export function PermitMapAdvanced({
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-200px)] min-h-[600px] rounded-xl overflow-hidden border border-border flex">
-      {/* Left Sidebar - Operation Dashboard */}
+    <div className="flex w-full h-[calc(100vh-180px)] min-h-[650px]">
+      {/* Left Sidebar - Operation Dashboard - OUTSIDE map */}
       <div 
-        className={`relative bg-card border-r border-border transition-all duration-300 flex flex-col ${
-          sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-80'
+        className={`bg-card border border-border rounded-l-xl transition-all duration-300 flex flex-col shrink-0 ${
+          sidebarCollapsed ? 'w-0 overflow-hidden border-0' : 'w-80'
         }`}
       >
         <div className="p-4 border-b border-border">
@@ -580,14 +591,13 @@ export function PermitMapAdvanced({
       {/* Sidebar Toggle */}
       <button
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        className="absolute left-0 top-1/2 -translate-y-1/2 z-[1001] bg-card border border-border rounded-r-lg p-1.5 hover:bg-muted transition-colors"
-        style={{ left: sidebarCollapsed ? 0 : '318px' }}
+        className="bg-card border-y border-r border-border p-1.5 hover:bg-muted transition-colors self-center shrink-0"
       >
         {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </button>
 
       {/* Map Container */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative rounded-r-xl overflow-hidden border border-l-0 border-border">
         {/* Layer Switcher - Top Right */}
         <div className="absolute top-4 right-4 z-[1000]">
           <Select value={activeLayer} onValueChange={(v) => setActiveLayer(v as keyof typeof TILE_LAYERS)}>
