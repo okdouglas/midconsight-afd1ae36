@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
 import { DatasetManager } from '@/components/DatasetManager';
 import { KPICards } from '@/components/KPICards';
+import { PermitMap } from '@/components/PermitMap';
 import { PermitMapAdvanced } from '@/components/PermitMapAdvanced';
 import { CompaniesTab } from '@/components/CompaniesTab';
 import { DealsTab } from '@/components/DealsTab';
@@ -113,7 +114,7 @@ const Index = () => {
                       New This Week ({newThisWeekPermits.length} permits)
                     </h3>
                     <div className="h-[calc(60vh-120px)] min-h-[400px] relative z-0">
-                      <PermitMapAdvanced permits={newThisWeekPermits} showFilters={false} />
+                      <PermitMap permits={newThisWeekPermits} />
                     </div>
                   </div>
                 )}
