@@ -1,15 +1,17 @@
 /**
  * Product Catalog Component
  * Displays selling options with pricing tiers based on GVERSE GeoGraphix price sheet
+ * Features: Nested product groups, feature badges, comparison mode, feature filtering
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Package, Tag, Upload, FileSpreadsheet, ArrowUpDown } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, ChevronRight, Package, Tag, Upload, FileSpreadsheet, ArrowUpDown, Check, X, Filter, Grid3X3 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
@@ -43,6 +45,116 @@ import {
 } from '@/lib/supabase-data';
 import * as XLSX from 'xlsx';
 
+// Static product data with features
+const PRODUCT_DATA = [
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Geology",
+    description: "GVERSE Geology",
+    type: "Network",
+    pricing: { perpetual: 28000, annual_rental: 12500, annual_ms: 5040 },
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Geology",
+    description: "GVERSE Geology",
+    type: "Standalone",
+    pricing: { perpetual: 17500, annual_rental: 8000, annual_ms: 3150 },
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE GeoInterp",
+    description: "GVERSE GeoInterp",
+    type: "Network",
+    pricing: { perpetual: 22500, annual_rental: 10000, annual_ms: 4050 },
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Geophysics"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE GeoInterp",
+    description: "GVERSE GeoInterp",
+    type: "Standalone",
+    pricing: { perpetual: 14000, annual_rental: 6250, annual_ms: 2520 },
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Geophysics"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Advanced Geology",
+    description: "GVERSE Advanced Geology",
+    type: "Network",
+    pricing: { perpetual: 49000, annual_rental: 22000, annual_ms: 8820 },
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics", "smartSTRAT", "Field Planner", "Connect"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Advanced Geology",
+    description: "GVERSE Advanced Geology",
+    type: "Standalone",
+    pricing: { perpetual: 30500, annual_rental: 13750, annual_ms: 5490 },
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics", "smartSTRAT", "Field Planner", "Connect"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Geophysics Package",
+    description: "GVERSE Geophysics Package",
+    type: "Network",
+    pricing: { perpetual: 28000, annual_rental: 12500, annual_ms: 5040 },
+    features: ["Data Manager", "Geophysics", "GeoPhy"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Geophysics Package",
+    description: "GVERSE Geophysics Package",
+    type: "Standalone",
+    pricing: { perpetual: 25500, annual_rental: 11500, annual_ms: 4590 },
+    features: ["Data Manager", "Geophysics", "GeoPhy"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Advanced Geophysics Package",
+    description: "GVERSE Advanced Geophysics Package",
+    type: "Network",
+    pricing: { perpetual: 43000, annual_rental: 19500, annual_ms: 7740 },
+    features: ["Data Manager", "Geophysics", "GeoPhy", "Attributes"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Advanced Geophysics Package",
+    description: "GVERSE Advanced Geophysics Package",
+    type: "Standalone",
+    pricing: { perpetual: 27000, annual_rental: 12000, annual_ms: 4860 },
+    features: ["Data Manager", "Geophysics", "GeoPhy", "Attributes"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Petrophysics Package",
+    description: "GVERSE Petrophysics Package",
+    type: "Network",
+    pricing: { perpetual: 12750, annual_rental: 5750, annual_ms: 2295 },
+    features: ["Data Manager", "Petrophysics"]
+  },
+  {
+    category: "Standard Packages",
+    product_group: "GVERSE Petrophysics Package",
+    description: "GVERSE Petrophysics Package",
+    type: "Standalone",
+    pricing: { perpetual: 8000, annual_rental: 3600, annual_ms: 1440 },
+    features: ["Data Manager", "Petrophysics"]
+  }
+];
+
+// Get all unique features
+const ALL_FEATURES = Array.from(
+  new Set(PRODUCT_DATA.flatMap(p => p.features))
+).sort();
+
+// Get all unique product groups
+const PRODUCT_GROUPS = Array.from(
+  new Set(PRODUCT_DATA.map(p => p.product_group))
+);
+
 export interface SellingOption {
   id: string;
   name: string;
@@ -73,6 +185,13 @@ const TRIGGER_TYPES = [
 type SortField = 'name' | 'default_price' | 'annual_rental' | 'annual_maintenance';
 type SortDirection = 'asc' | 'desc';
 
+interface ProductGroup {
+  name: string;
+  category: string;
+  products: typeof PRODUCT_DATA;
+  features: string[];
+}
+
 export function ProductCatalog() {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,7 +199,11 @@ export function ProductCatalog() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'Network' | 'Standalone'>('all');
+  const [featureFilter, setFeatureFilter] = useState<string>('');
+  const [compareMode, setCompareMode] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<Record<string, 'Network' | 'Standalone'>>({});
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     'Standard Packages': true,
     'GGX Add-on': true,
@@ -112,6 +235,15 @@ export function ProductCatalog() {
     loadOptions();
   }, []);
 
+  // Initialize selectedType with Network as default for all groups
+  useEffect(() => {
+    const initial: Record<string, 'Network' | 'Standalone'> = {};
+    PRODUCT_GROUPS.forEach(group => {
+      initial[group] = 'Network';
+    });
+    setSelectedType(initial);
+  }, []);
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -120,6 +252,50 @@ export function ProductCatalog() {
       setSortDirection('asc');
     }
   };
+
+  // Filter products by feature search
+  const filteredProductData = useMemo(() => {
+    if (!featureFilter.trim()) return PRODUCT_DATA;
+    const searchLower = featureFilter.toLowerCase();
+    return PRODUCT_DATA.filter(p => 
+      p.features.some(f => f.toLowerCase().includes(searchLower)) ||
+      p.product_group.toLowerCase().includes(searchLower) ||
+      p.description.toLowerCase().includes(searchLower)
+    );
+  }, [featureFilter]);
+
+  // Group products by product_group
+  const groupedProducts = useMemo(() => {
+    const groups: Record<string, ProductGroup> = {};
+    
+    filteredProductData.forEach(product => {
+      if (!groups[product.product_group]) {
+        groups[product.product_group] = {
+          name: product.product_group,
+          category: product.category,
+          products: [],
+          features: product.features,
+        };
+      }
+      groups[product.product_group].products.push(product);
+    });
+
+    // Sort groups by the minimum annual_rental within each group
+    const sortedGroups = Object.values(groups).sort((a, b) => {
+      const aMin = Math.min(...a.products.map(p => p.pricing.annual_rental));
+      const bMin = Math.min(...b.products.map(p => p.pricing.annual_rental));
+      return sortDirection === 'asc' ? aMin - bMin : bMin - aMin;
+    });
+
+    return sortedGroups;
+  }, [filteredProductData, sortDirection]);
+
+  // Get unique features for comparison matrix
+  const uniqueFeatures = useMemo(() => {
+    const features = new Set<string>();
+    filteredProductData.forEach(p => p.features.forEach(f => features.add(f)));
+    return Array.from(features).sort();
+  }, [filteredProductData]);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -137,20 +313,16 @@ export function ProductCatalog() {
       let currentCategory = 'Standard Packages';
 
       for (const row of jsonData) {
-        // Get the Type column - this can be "Network", "Standalone", or a category header
         const typeValue = String(row['Type'] || '').trim();
         
-        // Check if this row is a category header (e.g., "Standard Packages", "GGX Add-on")
         if (typeValue === 'Standard Packages' || typeValue === 'GGX Add-on') {
           currentCategory = typeValue;
-          continue; // Skip category header rows
+          continue;
         }
 
-        // Get product name from "Product Description" column
         const name = String(row['Product Description'] || row['Name'] || row['Product Name'] || row['Product'] || '').trim();
         if (!name) continue;
 
-        // Parse pricing - handle comma-formatted numbers
         const perpetual = row['Perpetual ($)'] || row['Perpetual'] || row['Price'] || row['Default Price'];
         const rental = row['Annual Rental ($)'] || row['Annual Rental'] || row['Rental'];
         const maintenance = row['Annual M&S ($)'] || row['Annual M&S'] || row['Maintenance'] || row['M&S'];
@@ -159,10 +331,8 @@ export function ProductCatalog() {
         const annualRental = parseFloat(String(rental || 0).replace(/[,$]/g, '')) || undefined;
         const annualMaintenance = parseFloat(String(maintenance || 0).replace(/[,$]/g, '')) || undefined;
         
-        // Determine type from Type column
         const type = typeValue.toLowerCase().includes('standalone') ? 'Standalone' : 'Network';
         
-        // Optional fields
         const triggerType = String(row['Trigger Type'] || row['Trigger'] || '').trim() || undefined;
         const description = String(row['Description'] || row['Notes'] || '').trim() || undefined;
 
@@ -255,60 +425,23 @@ export function ProductCatalog() {
     }
   };
 
-  // Filter and group options
-  const filteredOptions = options.filter((opt) => {
-    const matchesSearch = opt.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (opt.description?.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesType = typeFilter === 'all' || opt.type === typeFilter;
-    return matchesSearch && matchesType;
-  });
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
 
-  const groupedOptions = filteredOptions.reduce((acc, opt) => {
-    const category = opt.category || 'Standard Packages';
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(opt);
-    return acc;
-  }, {} as Record<string, DbSellingOption[]>);
+  const toggleType = (groupName: string) => {
+    setSelectedType(prev => ({
+      ...prev,
+      [groupName]: prev[groupName] === 'Network' ? 'Standalone' : 'Network'
+    }));
+  };
 
-  // Sort each category based on current sort settings
-  Object.keys(groupedOptions).forEach(category => {
-    groupedOptions[category].sort((a, b) => {
-      let aVal: number = 0;
-      let bVal: number = 0;
-      
-      switch (sortField) {
-        case 'name':
-          return sortDirection === 'asc' 
-            ? a.name.localeCompare(b.name) 
-            : b.name.localeCompare(a.name);
-        case 'default_price':
-          aVal = Number(a.default_price) || 0;
-          bVal = Number(b.default_price) || 0;
-          break;
-        case 'annual_rental':
-          aVal = Number(a.annual_rental) || 0;
-          bVal = Number(b.annual_rental) || 0;
-          break;
-        case 'annual_maintenance':
-          aVal = Number(a.annual_maintenance) || 0;
-          bVal = Number(b.annual_maintenance) || 0;
-          break;
-      }
-      
-      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-    });
-  });
-
-  // Define category order: Standard Packages first, then GGX Add-on
-  const CATEGORY_ORDER = ['Standard Packages', 'GGX Add-on'];
-  const sortedCategories = Object.keys(groupedOptions).sort((a, b) => {
-    const aIndex = CATEGORY_ORDER.indexOf(a);
-    const bIndex = CATEGORY_ORDER.indexOf(b);
-    if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-    if (aIndex === -1) return 1;
-    if (bIndex === -1) return -1;
-    return aIndex - bIndex;
-  });
+  const getProductForGroup = (group: ProductGroup, type: 'Network' | 'Standalone') => {
+    return group.products.find(p => p.type === type);
+  };
 
   const SortableHeader = ({ field, children, className = '' }: { field: SortField; children: React.ReactNode; className?: string }) => (
     <TableHead 
@@ -330,12 +463,234 @@ export function ProductCatalog() {
     </TableHead>
   );
 
-  const toggleCategory = (category: string) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [category]: !prev[category]
-    }));
-  };
+  // Feature Comparison Matrix Component
+  const FeatureComparisonMatrix = () => (
+    <div className="border border-border rounded-lg overflow-auto max-h-[600px]">
+      <Table>
+        <TableHeader className="sticky top-0 bg-background z-10">
+          <TableRow className="bg-muted/30">
+            <TableHead className="font-semibold min-w-[200px] sticky left-0 bg-muted/30 z-20">Product</TableHead>
+            <TableHead className="text-center min-w-[80px]">Type</TableHead>
+            {uniqueFeatures.map(feature => (
+              <TableHead key={feature} className="text-center min-w-[100px] text-xs">
+                {feature}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {groupedProducts.map((group, groupIdx) => {
+            const currentType = selectedType[group.name] || 'Network';
+            const product = getProductForGroup(group, currentType);
+            if (!product) return null;
+            
+            return (
+              <TableRow 
+                key={`${group.name}-${currentType}`}
+                className={groupIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}
+              >
+                <TableCell className="font-medium sticky left-0 bg-inherit">
+                  <div className="flex items-center gap-2">
+                    <span>{group.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge
+                    className={`cursor-pointer ${
+                      currentType === 'Network'
+                        ? 'bg-blue-500/20 text-blue-600 border-blue-500/30 hover:bg-blue-500/30'
+                        : 'bg-green-500/20 text-green-600 border-green-500/30 hover:bg-green-500/30'
+                    }`}
+                    onClick={() => toggleType(group.name)}
+                  >
+                    {currentType}
+                  </Badge>
+                </TableCell>
+                {uniqueFeatures.map(feature => (
+                  <TableCell key={feature} className="text-center">
+                    {product.features.includes(feature) ? (
+                      <Check className="h-4 w-4 text-green-600 mx-auto" />
+                    ) : (
+                      <X className="h-4 w-4 text-muted-foreground/30 mx-auto" />
+                    )}
+                  </TableCell>
+                ))}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  // Standard Product List View
+  const ProductListView = () => (
+    <div className="space-y-3">
+      {groupedProducts.map((group, groupIdx) => {
+        const isExpanded = expandedGroups[group.name];
+        const isSelected = selectedProduct === group.name;
+        const currentType = selectedType[group.name] || 'Network';
+        const currentProduct = getProductForGroup(group, currentType);
+        const networkProduct = getProductForGroup(group, 'Network');
+        const standaloneProduct = getProductForGroup(group, 'Standalone');
+        
+        if (!currentProduct) return null;
+
+        return (
+          <div 
+            key={group.name}
+            className={`border border-border rounded-lg overflow-hidden transition-all ${
+              isSelected ? 'ring-2 ring-primary' : ''
+            }`}
+          >
+            {/* Main Row - Collapsed View */}
+            <div 
+              className={`flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors ${
+                groupIdx % 2 === 0 ? 'bg-background' : 'bg-muted/10'
+              }`}
+              onClick={() => {
+                toggleGroup(group.name);
+                setSelectedProduct(isSelected ? null : group.name);
+              }}
+            >
+              <div className="flex items-center gap-3 flex-1">
+                <div className="p-1">
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{group.name}</span>
+                    <Badge
+                      variant="outline"
+                      className={`cursor-pointer text-xs ${
+                        currentType === 'Network'
+                          ? 'bg-blue-500/20 text-blue-600 border-blue-500/30'
+                          : 'bg-green-500/20 text-green-600 border-green-500/30'
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleType(group.name);
+                      }}
+                    >
+                      {currentType}
+                    </Badge>
+                  </div>
+                  {/* Feature Badges on Hover/Select */}
+                  {(isSelected || isExpanded) && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {currentProduct.features.map(feature => (
+                        <Badge key={feature} variant="secondary" className="text-xs">
+                          {feature}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Pricing Summary */}
+              <div className="flex items-center gap-6 text-right">
+                <div>
+                  <div className="text-xs text-muted-foreground">Perpetual</div>
+                  <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.perpetual)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Annual Rental</div>
+                  <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_rental)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Annual M&S</div>
+                  <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_ms)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Expanded View - Both Network and Standalone Options */}
+            {isExpanded && (
+              <div className="border-t border-border bg-muted/20 p-4">
+                <div className="text-sm font-medium mb-3 text-muted-foreground">Pricing Options</div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Network Option */}
+                  {networkProduct && (
+                    <div 
+                      className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                        currentType === 'Network' 
+                          ? 'border-blue-500 bg-blue-500/10' 
+                          : 'border-border hover:border-blue-500/50'
+                      }`}
+                      onClick={() => setSelectedType(prev => ({ ...prev, [group.name]: 'Network' }))}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">
+                          Network
+                        </Badge>
+                        {currentType === 'Network' && (
+                          <Check className="h-4 w-4 text-blue-600" />
+                        )}
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Perpetual:</span>
+                          <span className="font-mono">${formatCurrency(networkProduct.pricing.perpetual)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Annual Rental:</span>
+                          <span className="font-mono">${formatCurrency(networkProduct.pricing.annual_rental)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Annual M&S:</span>
+                          <span className="font-mono">${formatCurrency(networkProduct.pricing.annual_ms)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Standalone Option */}
+                  {standaloneProduct && (
+                    <div 
+                      className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                        currentType === 'Standalone' 
+                          ? 'border-green-500 bg-green-500/10' 
+                          : 'border-border hover:border-green-500/50'
+                      }`}
+                      onClick={() => setSelectedType(prev => ({ ...prev, [group.name]: 'Standalone' }))}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <Badge className="bg-green-500/20 text-green-600 border-green-500/30">
+                          Standalone
+                        </Badge>
+                        {currentType === 'Standalone' && (
+                          <Check className="h-4 w-4 text-green-600" />
+                        )}
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Perpetual:</span>
+                          <span className="font-mono">${formatCurrency(standaloneProduct.pricing.perpetual)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Annual Rental:</span>
+                          <span className="font-mono">${formatCurrency(standaloneProduct.pricing.annual_rental)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Annual M&S:</span>
+                          <span className="font-mono">${formatCurrency(standaloneProduct.pricing.annual_ms)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -367,138 +722,80 @@ export function ProductCatalog() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="flex gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px] relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search products..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Filter by feature (e.g., smartSTRAT, Petrophysics)..."
+                value={featureFilter}
+                onChange={(e) => setFeatureFilter(e.target.value)}
                 className="pl-9"
               />
             </div>
-            <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="Network">Network Only</SelectItem>
-                <SelectItem value="Standalone">Standalone Only</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="compare-mode"
+                checked={compareMode}
+                onCheckedChange={(checked) => setCompareMode(checked === true)}
+              />
+              <Label htmlFor="compare-mode" className="flex items-center gap-2 cursor-pointer">
+                <Grid3X3 className="h-4 w-4" />
+                Compare Features
+              </Label>
+            </div>
           </div>
 
-          {/* Product Categories */}
+          {/* Feature filter suggestions */}
+          {featureFilter && (
+            <div className="flex flex-wrap gap-2">
+              <span className="text-sm text-muted-foreground">Available features:</span>
+              {ALL_FEATURES.filter(f => 
+                f.toLowerCase().includes(featureFilter.toLowerCase())
+              ).map(feature => (
+                <Badge 
+                  key={feature} 
+                  variant="outline" 
+                  className="cursor-pointer hover:bg-primary/10"
+                  onClick={() => setFeatureFilter(feature)}
+                >
+                  {feature}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {/* Sort controls for list view */}
+          {!compareMode && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Sort by Annual Rental:</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                className="h-8"
+              >
+                {sortDirection === 'asc' ? (
+                  <>Lowest First <ChevronUp className="h-4 w-4 ml-1" /></>
+                ) : (
+                  <>Highest First <ChevronDown className="h-4 w-4 ml-1" /></>
+                )}
+              </Button>
+            </div>
+          )}
+
+          {/* Main Content */}
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading catalog...</div>
-          ) : Object.keys(groupedOptions).length === 0 ? (
+          ) : groupedProducts.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="mb-2">No products in catalog</p>
-              <p className="text-sm">Add your first product to start building deals</p>
+              <p className="mb-2">No products match your filter</p>
+              <p className="text-sm">Try a different feature name</p>
             </div>
+          ) : compareMode ? (
+            <FeatureComparisonMatrix />
           ) : (
-            <div className="space-y-4">
-              {sortedCategories.map(category => {
-                const categoryOptions = groupedOptions[category];
-                return (
-                <Collapsible
-                  key={category}
-                  open={expandedCategories[category]}
-                  onOpenChange={() => toggleCategory(category)}
-                >
-                  <CollapsibleTrigger asChild>
-                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted/70 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <Tag className="h-4 w-4 text-primary" />
-                        <span className="font-medium">{category}</span>
-                        <Badge variant="secondary">{categoryOptions.length}</Badge>
-                      </div>
-                      {expandedCategories[category] ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="border border-border rounded-lg mt-2 overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/30">
-                            <TableHead className="w-24">Type</TableHead>
-                            <SortableHeader field="name">Product Description</SortableHeader>
-                            <SortableHeader field="default_price" className="text-right">Perpetual ($)</SortableHeader>
-                            <SortableHeader field="annual_rental" className="text-right">Annual Rental ($)</SortableHeader>
-                            <SortableHeader field="annual_maintenance" className="text-right">Annual M&S ($)</SortableHeader>
-                            <TableHead className="w-24">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {categoryOptions.map((opt, idx) => (
-                            <TableRow 
-                              key={opt.id}
-                              className={idx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}
-                            >
-                              <TableCell>
-                                <Badge
-                                  className={
-                                    opt.type === 'Network'
-                                      ? 'bg-blue-500/20 text-blue-600 border-blue-500/30'
-                                      : 'bg-green-500/20 text-green-600 border-green-500/30'
-                                  }
-                                >
-                                  {opt.type}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div>
-                                  <span className="font-medium">{opt.name}</span>
-                                  {opt.trigger_type && (
-                                    <Badge variant="outline" className="ml-2 text-xs">
-                                      Trigger: {opt.trigger_type}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right font-mono">
-                                {formatCurrency(Number(opt.default_price))}
-                              </TableCell>
-                              <TableCell className="text-right font-mono">
-                                {formatCurrency(opt.annual_rental ? Number(opt.annual_rental) : undefined)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono">
-                                {formatCurrency(opt.annual_maintenance ? Number(opt.annual_maintenance) : undefined)}
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleEdit(opt)}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleDelete(opt.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              );
-              })}
-            </div>
+            <ProductListView />
           )}
         </CardContent>
       </Card>
