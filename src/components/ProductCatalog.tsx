@@ -53,7 +53,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Geology",
     type: "Network",
     pricing: { perpetual: 28000, annual_rental: 12500, annual_ms: 5040 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics"]
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics"]
   },
   {
     category: "Standard Packages",
@@ -61,7 +61,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Geology",
     type: "Standalone",
     pricing: { perpetual: 17500, annual_rental: 8000, annual_ms: 3150 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics"]
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics"]
   },
   {
     category: "Standard Packages",
@@ -69,7 +69,7 @@ const PRODUCT_DATA = [
     description: "GVERSE GeoInterp",
     type: "Network",
     pricing: { perpetual: 22500, annual_rental: 10000, annual_ms: 4050 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Geophysics"]
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Geophysics"]
   },
   {
     category: "Standard Packages",
@@ -77,7 +77,7 @@ const PRODUCT_DATA = [
     description: "GVERSE GeoInterp",
     type: "Standalone",
     pricing: { perpetual: 14000, annual_rental: 6250, annual_ms: 2520 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Geophysics"]
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Geophysics"]
   },
   {
     category: "Standard Packages",
@@ -85,7 +85,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Advanced Geology",
     type: "Network",
     pricing: { perpetual: 49000, annual_rental: 22000, annual_ms: 8820 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics", "smartSTRAT", "Field Planner", "Connect"]
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics", "SmartStrat", "Field Planner", "Connect"]
   },
   {
     category: "Standard Packages",
@@ -93,7 +93,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Advanced Geology",
     type: "Standalone",
     pricing: { perpetual: 30500, annual_rental: 13750, annual_ms: 5490 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "smartSECTION", "Petrophysics", "smartSTRAT", "Field Planner", "Connect"]
+    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics", "SmartStrat", "Field Planner", "Connect"]
   },
   {
     category: "Standard Packages",
@@ -101,7 +101,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Geophysics Package",
     type: "Network",
     pricing: { perpetual: 28000, annual_rental: 12500, annual_ms: 5040 },
-    features: ["Data Manager", "Geophysics", "GeoPhy"]
+    features: ["Data Manager", "Geophysics", "Geo+"]
   },
   {
     category: "Standard Packages",
@@ -109,7 +109,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Geophysics Package",
     type: "Standalone",
     pricing: { perpetual: 25500, annual_rental: 11500, annual_ms: 4590 },
-    features: ["Data Manager", "Geophysics", "GeoPhy"]
+    features: ["Data Manager", "Geophysics", "Geo+"]
   },
   {
     category: "Standard Packages",
@@ -117,7 +117,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Advanced Geophysics Package",
     type: "Network",
     pricing: { perpetual: 43000, annual_rental: 19500, annual_ms: 7740 },
-    features: ["Data Manager", "Geophysics", "GeoPhy", "Attributes"]
+    features: ["Data Manager", "Geophysics", "Geo+", "Attributes"]
   },
   {
     category: "Standard Packages",
@@ -125,7 +125,7 @@ const PRODUCT_DATA = [
     description: "GVERSE Advanced Geophysics Package",
     type: "Standalone",
     pricing: { perpetual: 27000, annual_rental: 12000, annual_ms: 4860 },
-    features: ["Data Manager", "Geophysics", "GeoPhy", "Attributes"]
+    features: ["Data Manager", "Geophysics", "Geo+", "Attributes"]
   },
   {
     category: "Standard Packages",
@@ -145,10 +145,23 @@ const PRODUCT_DATA = [
   }
 ];
 
-// Get all unique features
-const ALL_FEATURES = Array.from(
-  new Set(PRODUCT_DATA.flatMap(p => p.features))
-).sort();
+// Ordered features list (GeoPhy renamed to Geo+)
+const ORDERED_FEATURES = [
+  "Data Manager",
+  "GeoAtlas", 
+  "IsoMap",
+  "SmartSection",
+  "SmartStrat",
+  "Geo+",
+  "Geophysics",
+  "Petrophysics",
+  "Field Planner",
+  "Attributes",
+  "Connect"
+];
+
+// Get all unique features from data, normalized
+const ALL_FEATURES = ORDERED_FEATURES;
 
 // Get all unique product groups
 const PRODUCT_GROUPS = Array.from(
@@ -164,7 +177,7 @@ export interface SellingOption {
   defaultPrice: number;
   annualRental?: number;
   annualMaintenance?: number;
-  triggerType?: string;
+  features?: string[];
 }
 
 const formatCurrency = (value: number | undefined): string => {
@@ -172,15 +185,6 @@ const formatCurrency = (value: number | undefined): string => {
   return value.toLocaleString('en-US');
 };
 
-const TRIGGER_TYPES = [
-  'new_permit',
-  'horizontal_drill',
-  'vertical_drill',
-  'deep_well',
-  'shallow_well',
-  'formation_specific',
-  'high_value',
-];
 
 type SortField = 'name' | 'default_price' | 'annual_rental' | 'annual_maintenance';
 type SortDirection = 'asc' | 'desc';
@@ -213,6 +217,8 @@ export function ProductCatalog() {
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOption, setEditingOption] = useState<Partial<DbSellingOption> | null>(null);
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+  const [featuresDropdownOpen, setFeaturesDropdownOpen] = useState(false);
 
   const loadOptions = async () => {
     setLoading(true);
@@ -290,11 +296,11 @@ export function ProductCatalog() {
     return sortedGroups;
   }, [filteredProductData, sortDirection]);
 
-  // Get unique features for comparison matrix
+  // Get unique features for comparison matrix in ordered form
   const uniqueFeatures = useMemo(() => {
-    const features = new Set<string>();
-    filteredProductData.forEach(p => p.features.forEach(f => features.add(f)));
-    return Array.from(features).sort();
+    const usedFeatures = new Set<string>();
+    filteredProductData.forEach(p => p.features.forEach(f => usedFeatures.add(f)));
+    return ORDERED_FEATURES.filter(f => usedFeatures.has(f));
   }, [filteredProductData]);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -376,11 +382,17 @@ export function ProductCatalog() {
       type: 'Network',
       default_price: 0,
     });
+    setSelectedFeatures([]);
+    setFeaturesDropdownOpen(false);
     setShowEditModal(true);
   };
 
   const handleEdit = (option: DbSellingOption) => {
     setEditingOption(option);
+    // Parse features from description or trigger_type field (stored as comma-separated)
+    const storedFeatures = option.trigger_type ? option.trigger_type.split(',').map(f => f.trim()).filter(Boolean) : [];
+    setSelectedFeatures(storedFeatures);
+    setFeaturesDropdownOpen(false);
     setShowEditModal(true);
   };
 
@@ -400,9 +412,15 @@ export function ProductCatalog() {
       return;
     }
 
+    // Store selected features as comma-separated string in trigger_type field
+    const featuresString = selectedFeatures.length > 0 ? selectedFeatures.join(',') : undefined;
+
     try {
       if (editingOption.id) {
-        await updateSellingOption(editingOption.id, editingOption);
+        await updateSellingOption(editingOption.id, {
+          ...editingOption,
+          trigger_type: featuresString,
+        });
         toast({ title: 'Updated', description: 'Product updated successfully' });
       } else {
         await saveSellingOption({
@@ -413,12 +431,13 @@ export function ProductCatalog() {
           default_price: editingOption.default_price || 0,
           annual_rental: editingOption.annual_rental,
           annual_maintenance: editingOption.annual_maintenance,
-          trigger_type: editingOption.trigger_type,
+          trigger_type: featuresString,
         });
         toast({ title: 'Created', description: 'Product added to catalog' });
       }
       setShowEditModal(false);
       setEditingOption(null);
+      setSelectedFeatures([]);
       loadOptions();
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to save product', variant: 'destructive' });
@@ -801,7 +820,13 @@ export function ProductCatalog() {
       </Card>
 
       {/* Edit/Add Modal */}
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+      <Dialog open={showEditModal} onOpenChange={(open) => {
+        setShowEditModal(open);
+        if (!open) {
+          setSelectedFeatures([]);
+          setFeaturesDropdownOpen(false);
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -891,24 +916,60 @@ export function ProductCatalog() {
                 />
               </div>
 
-              <div>
-                <Label>Trigger Type</Label>
-                <Select
-                  value={editingOption?.trigger_type || 'none'}
-                  onValueChange={(v) => setEditingOption(prev => ({ ...prev, trigger_type: v === 'none' ? undefined : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select trigger..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {TRIGGER_TYPES.map(t => (
-                      <SelectItem key={t} value={t}>
-                        {t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="col-span-2">
+                <Label>Features</Label>
+                <div className="relative">
+                  <div
+                    className="flex flex-wrap gap-1 min-h-[40px] p-2 border border-input rounded-md cursor-pointer bg-background hover:bg-accent/50"
+                    onClick={() => setFeaturesDropdownOpen(!featuresDropdownOpen)}
+                  >
+                    {selectedFeatures.length === 0 ? (
+                      <span className="text-muted-foreground text-sm">Select features...</span>
+                    ) : (
+                      selectedFeatures.map(feature => (
+                        <Badge 
+                          key={feature} 
+                          variant="secondary"
+                          className="text-xs flex items-center gap-1"
+                        >
+                          {feature}
+                          <X 
+                            className="h-3 w-3 cursor-pointer hover:text-destructive" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedFeatures(prev => prev.filter(f => f !== feature));
+                            }}
+                          />
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                  {featuresDropdownOpen && (
+                    <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
+                      {ORDERED_FEATURES.map(feature => (
+                        <div
+                          key={feature}
+                          className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent ${
+                            selectedFeatures.includes(feature) ? 'bg-accent/50' : ''
+                          }`}
+                          onClick={() => {
+                            setSelectedFeatures(prev => 
+                              prev.includes(feature) 
+                                ? prev.filter(f => f !== feature)
+                                : [...prev, feature]
+                            );
+                          }}
+                        >
+                          <Checkbox 
+                            checked={selectedFeatures.includes(feature)}
+                            className="pointer-events-none"
+                          />
+                          <span className="text-sm">{feature}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="col-span-2">
