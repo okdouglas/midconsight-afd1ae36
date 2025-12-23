@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Database, BarChart3, Users, Map, FileSpreadsheet, DollarSign, LogOut, Package } from 'lucide-react';
+import { Database, BarChart3, Users, Map, FileSpreadsheet, DollarSign, LogOut, Package, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
@@ -10,6 +10,7 @@ import { PermitMapAdvanced } from '@/components/PermitMapAdvanced';
 import { CompaniesTab } from '@/components/CompaniesTab';
 import { DealsTab } from '@/components/DealsTab';
 import { ProductCatalog } from '@/components/ProductCatalog';
+import { ResearchDesk } from '@/components/ResearchDesk';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -59,10 +60,14 @@ const Index = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-4 min-h-[calc(100vh-73px)]">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 h-full">
-          <TabsList className="grid w-full max-w-3xl grid-cols-6">
+          <TabsList className="grid w-full max-w-4xl grid-cols-7">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="research" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Research
             </TabsTrigger>
             <TabsTrigger value="map" className="flex items-center gap-2">
               <Map className="h-4 w-4" />
@@ -171,6 +176,11 @@ const Index = () => {
                 </div>
               </>
             )}
+          </TabsContent>
+
+          {/* Research Desk Tab */}
+          <TabsContent value="research" className="space-y-6">
+            <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} />
           </TabsContent>
 
           {/* Map Tab - Full featured with filters */}
