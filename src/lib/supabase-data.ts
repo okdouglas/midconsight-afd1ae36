@@ -293,6 +293,27 @@ export async function saveContact(contact: Omit<DbContact, 'id' | 'user_id' | 'c
   return data as DbContact;
 }
 
+export async function updateContact(
+  id: string,
+  updates: Partial<Omit<DbContact, 'id' | 'user_id' | 'created_at'>>
+): Promise<void> {
+  const { error } = await supabase
+    .from('contacts')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+export async function deleteContact(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('contacts')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 export async function saveDeal(deal: Omit<DbDeal, 'id' | 'user_id' | 'created_at'>): Promise<DbDeal> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');

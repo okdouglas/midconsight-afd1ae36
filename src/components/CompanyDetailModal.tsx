@@ -37,6 +37,8 @@ import {
   getDealsByCompany,
   getSellingOptions,
   updateCompany,
+  updateContact,
+  deleteContact,
   getLicensePurchases,
   saveLicensePurchase,
   deleteLicensePurchase,
@@ -59,9 +61,11 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
   const [licensePurchases, setLicensePurchases] = useState<DbLicensePurchase[]>([]);
   const [showAddContact, setShowAddContact] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [showAddDeal, setShowAddDeal] = useState(false);
   const [showAddLicense, setShowAddLicense] = useState(false);
   const [newContact, setNewContact] = useState({ name: '', email: '', phone: '', role: '', notes: '' });
+  const [editContact, setEditContact] = useState({ name: '', email: '', phone: '', role: '', notes: '' });
   const [newDeal, setNewDeal] = useState({ 
     name: '', 
     value: '', 
@@ -158,6 +162,51 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
 
     setNewContact({ name: '', email: '', phone: '', role: '', notes: '' });
     setShowAddContact(false);
+    loadCompanyData();
+    onUpdate?.();
+  };
+
+  const handleStartEditContact = (contact: DbContact) => {
+    setEditingContactId(contact.id);
+    setEditContact({
+      name: contact.name,
+      email: contact.email || '',
+      phone: contact.phone || '',
+      role: contact.role || '',
+      notes: contact.notes || '',
+    });
+  };
+
+  const handleCancelEditContact = () => {
+    setEditingContactId(null);
+    setEditContact({ name: '', email: '', phone: '', role: '', notes: '' });
+  };
+
+  const handleSaveEditContact = async () => {
+    if (!editingContactId || !editContact.name.trim()) return;
+
+    await updateContact(editingContactId, {
+      name: editContact.name,
+      email: editContact.email || undefined,
+      phone: editContact.phone || undefined,
+      role: editContact.role || undefined,
+      notes: editContact.notes || undefined,
+    });
+
+    setEditingContactId(null);
+    setEditContact({ name: '', email: '', phone: '', role: '', notes: '' });
+    loadCompanyData();
+    onUpdate?.();
+  };
+
+  const handleDeleteContact = async (contactId: string) => {
+    // If deleting the primary contact, clear primary contact first
+    if (contactId === primaryContactId && company) {
+      await updateCompany(company.id, { primary_contact_id: null });
+      setPrimaryContactId(null);
+    }
+    
+    await deleteContact(contactId);
     loadCompanyData();
     onUpdate?.();
   };
@@ -615,44 +664,123 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
             ) : (
               <div className="space-y-2">
                 {contacts.map(contact => (
-                  <div key={contact.id} className="border border-border rounded-lg p-4 hover:bg-muted/30 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-medium flex items-center gap-2">
-                          <User className="h-4 w-4 text-primary" />
-                          {contact.name}
-                          {contact.id === primaryContactId && (
-                            <Badge variant="outline" className="text-xs">Primary</Badge>
-                          )}
+                  editingContactId === contact.id ? (
+                    // Edit mode
+                    <div key={contact.id} className="border border-primary rounded-lg p-4 space-y-4 bg-muted/30">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Name *</Label>
+                          <Input 
+                            value={editContact.name} 
+                            onChange={(e) => setEditContact({ ...editContact, name: e.target.value })}
+                            placeholder="John Smith"
+                          />
                         </div>
-                        {contact.role && (
-                          <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                            <Briefcase className="h-3 w-3" />
-                            {contact.role}
-                          </div>
-                        )}
+                        <div>
+                          <Label>Role</Label>
+                          <Input 
+                            value={editContact.role} 
+                            onChange={(e) => setEditContact({ ...editContact, role: e.target.value })}
+                            placeholder="Land Manager"
+                          />
+                        </div>
+                        <div>
+                          <Label>Email</Label>
+                          <Input 
+                            type="email"
+                            value={editContact.email} 
+                            onChange={(e) => setEditContact({ ...editContact, email: e.target.value })}
+                            placeholder="john@company.com"
+                          />
+                        </div>
+                        <div>
+                          <Label>Phone</Label>
+                          <Input 
+                            value={editContact.phone} 
+                            onChange={(e) => setEditContact({ ...editContact, phone: e.target.value })}
+                            placeholder="(405) 555-1234"
+                          />
+                        </div>
                       </div>
-                      <div className="text-right text-sm">
-                        {contact.email && (
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Mail className="h-3 w-3" />
-                            {contact.email}
-                          </div>
-                        )}
-                        {contact.phone && (
-                          <div className="flex items-center gap-1 text-muted-foreground mt-1">
-                            <Phone className="h-3 w-3" />
-                            {contact.phone}
-                          </div>
-                        )}
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea 
+                          value={editContact.notes} 
+                          onChange={(e) => setEditContact({ ...editContact, notes: e.target.value })}
+                          placeholder="Additional notes about this contact..."
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={handleCancelEditContact}>
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleSaveEditContact}>
+                          Save Changes
+                        </Button>
                       </div>
                     </div>
-                    {contact.notes && (
-                      <p className="text-sm text-muted-foreground mt-2 border-t border-border pt-2">
-                        {contact.notes}
-                      </p>
-                    )}
-                  </div>
+                  ) : (
+                    // View mode
+                    <div key={contact.id} className="border border-border rounded-lg p-4 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium flex items-center gap-2">
+                            <User className="h-4 w-4 text-primary" />
+                            {contact.name}
+                            {contact.id === primaryContactId && (
+                              <Badge variant="outline" className="text-xs">Primary</Badge>
+                            )}
+                          </div>
+                          {contact.role && (
+                            <div className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                              <Briefcase className="h-3 w-3" />
+                              {contact.role}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <div className="text-right text-sm">
+                            {contact.email && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Mail className="h-3 w-3" />
+                                {contact.email}
+                              </div>
+                            )}
+                            {contact.phone && (
+                              <div className="flex items-center gap-1 text-muted-foreground mt-1">
+                                <Phone className="h-3 w-3" />
+                                {contact.phone}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-1 ml-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleStartEditContact(contact)}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteContact(contact.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      {contact.notes && (
+                        <p className="text-sm text-muted-foreground mt-2 border-t border-border pt-2">
+                          {contact.notes}
+                        </p>
+                      )}
+                    </div>
+                  )
                 ))}
               </div>
             )}
