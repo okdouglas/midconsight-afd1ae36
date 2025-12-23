@@ -65,10 +65,6 @@ const Index = () => {
               <BarChart3 className="h-4 w-4" />
               Dashboard
             </TabsTrigger>
-            <TabsTrigger value="research" className="flex items-center gap-2">
-              <Search className="h-4 w-4" />
-              Research
-            </TabsTrigger>
             <TabsTrigger value="map" className="flex items-center gap-2">
               <Map className="h-4 w-4" />
               Map
@@ -76,6 +72,10 @@ const Index = () => {
             <TabsTrigger value="companies" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Companies
+            </TabsTrigger>
+            <TabsTrigger value="research" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Lead Research
             </TabsTrigger>
             <TabsTrigger value="deals" className="flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
