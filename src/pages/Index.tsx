@@ -172,9 +172,9 @@ const Index = () => {
             )}
           </TabsContent>
 
-          {/* Map Tab - Full featured with filters - 30% larger */}
+          {/* Map Tab - Full featured with filters */}
           <TabsContent value="map" className="space-y-6">
-            <div className="h-[calc(100vh-160px)] min-h-[700px]">
+            <div className="h-[700px]">
               <PermitMapAdvanced permits={permits} showFilters={true} />
             </div>
           </TabsContent>
