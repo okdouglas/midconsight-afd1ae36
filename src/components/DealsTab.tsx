@@ -184,6 +184,9 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
     acc[stage] = deals.filter(d => d.stage === stage);
     return acc;
   }, {} as Record<DealStage, Deal[]>);
+
+  if (deals.length === 0) {
+    return (
       <div className="text-center py-12">
         <DollarSign className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
         <h2 className="text-xl font-semibold mb-2">No Deals Yet</h2>
