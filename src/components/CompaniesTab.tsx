@@ -45,7 +45,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
   const [contacts, setContacts] = useState<Record<string, DbContact[]>>({});
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [activeView, setActiveView] = useState<'prospects' | 'clients'>('prospects');
+  const [activeView, setActiveView] = useState<'all' | 'prospects' | 'clients'>('all');
 
   // Load contacts for all companies
   useEffect(() => {
@@ -96,7 +96,11 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
 
   // Compute company details with deals and contacts
   const companiesWithDetails = useMemo<CompanyWithDetails[]>(() => {
-    const baseCompanies = activeView === 'clients' ? currentClients : prospects;
+    const baseCompanies = activeView === 'clients' 
+      ? currentClients 
+      : activeView === 'prospects' 
+        ? prospects 
+        : companies;
     
     return baseCompanies.map(company => {
       const companyDeals = deals.filter(d => d.companyId === company.id && d.status === 'open');
@@ -113,7 +117,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
         weightedRevenue
       };
     });
-  }, [activeView, currentClients, prospects, deals, contacts]);
+  }, [activeView, companies, currentClients, prospects, deals, contacts]);
 
   // Handle sorting
   const handleSort = (field: SortField) => {
@@ -205,19 +209,32 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
       {/* Summary Stats */}
       <div className="grid gap-4 md:grid-cols-6">
         <div className="rounded-xl border border-border bg-card p-4">
-          <div className="text-sm text-muted-foreground">Total Companies</div>
+          <div className="text-sm text-muted-foreground">Total Permits</div>
+          <div className="text-2xl font-bold mt-1">{totalPermits}</div>
+        </div>
+        <div 
+          className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+            activeView === 'all' ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/50'
+          }`}
+          onClick={() => setActiveView('all')}
+        >
+          <div className="text-sm text-muted-foreground flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-primary" />
+            Total Companies
+          </div>
           <div className="text-2xl font-bold mt-1">{companies.length}</div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div 
+          className={`rounded-xl border p-4 cursor-pointer transition-colors ${
+            activeView === 'clients' ? 'border-purple-500 bg-purple-500/10' : 'border-border bg-card hover:border-purple-500/50'
+          }`}
+          onClick={() => setActiveView('clients')}
+        >
           <div className="text-sm text-muted-foreground flex items-center gap-2">
             <UserCheck className="h-4 w-4 text-purple-500" />
             Current Clients
           </div>
           <div className="text-2xl font-bold text-purple-500 mt-1">{currentClients.length}</div>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="text-sm text-muted-foreground">Total Permits</div>
-          <div className="text-2xl font-bold mt-1">{totalPermits}</div>
         </div>
         <div 
           className={`rounded-xl border p-4 cursor-pointer transition-colors ${
@@ -258,8 +275,12 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
       </div>
 
       {/* View Toggle */}
-      <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'prospects' | 'clients')}>
+      <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'all' | 'prospects' | 'clients')}>
         <TabsList>
+          <TabsTrigger value="all" className="flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            All Companies ({companies.length})
+          </TabsTrigger>
           <TabsTrigger value="prospects" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Prospects ({prospects.length})
@@ -288,10 +309,10 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="p-4 border-b border-border bg-muted/30">
           <h3 className="font-semibold">
-            {activeView === 'clients' ? 'Current Clients' : 'All-Time Companies'}
+            {activeView === 'clients' ? 'Current Clients' : activeView === 'prospects' ? 'Prospects' : 'All Companies'}
           </h3>
           <p className="text-sm text-muted-foreground">
-            Showing {filteredCompanies.length} of {activeView === 'clients' ? currentClients.length : prospects.length} {activeView === 'clients' ? 'clients' : 'companies'} • Click to view details and add contacts
+            Showing {filteredCompanies.length} of {activeView === 'clients' ? currentClients.length : activeView === 'prospects' ? prospects.length : companies.length} {activeView === 'clients' ? 'clients' : 'companies'} • Click to view details and add contacts
           </p>
         </div>
         
@@ -315,7 +336,9 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
                   <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                     {activeView === 'clients' 
                       ? 'No current clients. Mark companies as clients from the Lead Research tab.'
-                      : 'No companies found. Import permit data or adjust filters.'
+                      : activeView === 'prospects'
+                        ? 'No prospects found. Import permit data or adjust filters.'
+                        : 'No companies found. Import permit data or adjust filters.'
                     }
                   </TableCell>
                 </TableRow>
