@@ -399,7 +399,7 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">
                         <MapPin className="h-3 w-3 text-muted-foreground" />
-                        {lead.county}, {lead.state}
+                        {lead.county}
                       </div>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
