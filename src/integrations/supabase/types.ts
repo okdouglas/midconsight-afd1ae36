@@ -53,11 +53,14 @@ export type Database = {
         Row: {
           city: string | null
           created_at: string
+          hq_address: string | null
           id: string
+          is_current_client: boolean | null
           last_permit_date: string | null
           name: string
           operator_number: string | null
           permit_count: number | null
+          primary_contact_id: string | null
           score: string | null
           state: string | null
           total_value: number | null
@@ -67,11 +70,14 @@ export type Database = {
         Insert: {
           city?: string | null
           created_at?: string
+          hq_address?: string | null
           id?: string
+          is_current_client?: boolean | null
           last_permit_date?: string | null
           name: string
           operator_number?: string | null
           permit_count?: number | null
+          primary_contact_id?: string | null
           score?: string | null
           state?: string | null
           total_value?: number | null
@@ -81,18 +87,29 @@ export type Database = {
         Update: {
           city?: string | null
           created_at?: string
+          hq_address?: string | null
           id?: string
+          is_current_client?: boolean | null
           last_permit_date?: string | null
           name?: string
           operator_number?: string | null
           permit_count?: number | null
+          primary_contact_id?: string | null
           score?: string | null
           state?: string | null
           total_value?: number | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "companies_primary_contact_id_fkey"
+            columns: ["primary_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contacts: {
         Row: {
@@ -230,6 +247,54 @@ export type Database = {
           },
           {
             foreignKeyName: "deals_selling_option_id_fkey"
+            columns: ["selling_option_id"]
+            isOneToOne: false
+            referencedRelation: "selling_options"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      license_purchases: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          purchase_date: string
+          selling_option_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          purchase_date: string
+          selling_option_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          purchase_date?: string
+          selling_option_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "license_purchases_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "license_purchases_selling_option_id_fkey"
             columns: ["selling_option_id"]
             isOneToOne: false
             referencedRelation: "selling_options"
