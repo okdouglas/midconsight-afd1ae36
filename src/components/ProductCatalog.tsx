@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, ChevronRight, Package, Tag, Upload, FileSpreadsheet, ArrowUpDown, Check, X, Filter, Grid3X3 } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, ChevronRight, Package, Tag, Upload, FileSpreadsheet, ArrowUpDown, Check, X, Filter, Grid3X3, Download, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -611,20 +611,45 @@ export function ProductCatalog() {
                 </div>
               </div>
               
-              {/* Pricing Summary */}
-              <div className="flex items-center gap-6 text-right">
-                <div>
-                  <div className="text-xs text-muted-foreground">Perpetual</div>
-                  <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.perpetual)}</div>
+              {/* Pricing Summary and Edit Button */}
+              <div className="flex items-center gap-4 text-right">
+                <div className="flex items-center gap-6">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Perpetual</div>
+                    <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.perpetual)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Annual Rental</div>
+                    <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_rental)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Annual M&S</div>
+                    <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_ms)}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Annual Rental</div>
-                  <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_rental)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Annual M&S</div>
-                  <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_ms)}</div>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Create a DB-like option from the static product data for editing
+                    const editOption: Partial<DbSellingOption> = {
+                      name: `${currentProduct.product_group} ${currentProduct.type}`,
+                      category: currentProduct.category,
+                      type: currentProduct.type,
+                      default_price: currentProduct.pricing.perpetual,
+                      annual_rental: currentProduct.pricing.annual_rental,
+                      annual_maintenance: currentProduct.pricing.annual_ms,
+                    };
+                    setEditingOption(editOption);
+                    setSelectedFeatures(currentProduct.features);
+                    setFeaturesDropdownOpen(false);
+                    setShowEditModal(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
               </div>
             </div>
 
@@ -711,34 +736,67 @@ export function ProductCatalog() {
     </div>
   );
 
+  const generateTemplateDownload = () => {
+    const templateData = [
+      {
+        'Product Name': 'GVERSE Example',
+        'Category': 'Standard Packages',
+        'Type': 'Network',
+        'Perpetual ($)': 28000,
+        'Annual Rental ($)': 12500,
+        'Annual M&S ($)': 5040,
+        'Features': 'Data Manager,GeoAtlas,IsoMap',
+        'Description': 'Example product description'
+      },
+      {
+        'Product Name': 'GVERSE Example',
+        'Category': 'Standard Packages',
+        'Type': 'Standalone',
+        'Perpetual ($)': 17500,
+        'Annual Rental ($)': 8000,
+        'Annual M&S ($)': 3150,
+        'Features': 'Data Manager,GeoAtlas,IsoMap',
+        'Description': 'Example product description'
+      }
+    ];
+    
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Products');
+    XLSX.writeFile(wb, 'product_catalog_template.xlsx');
+  };
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-primary" />
-              <CardTitle>Product Catalog</CardTitle>
-            </div>
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleImportFile}
-                className="hidden"
-              />
-              <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                {importing ? 'Importing...' : 'Import'}
-              </Button>
-              <Button onClick={handleAddNew}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Product
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Main Product Catalog - 3 columns */}
+        <div className="lg:col-span-3">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Package className="h-5 w-5 text-primary" />
+                  <CardTitle>Product Catalog</CardTitle>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleImportFile}
+                    className="hidden"
+                  />
+                  <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    {importing ? 'Importing...' : 'Import'}
+                  </Button>
+                  <Button onClick={handleAddNew}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Product
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}
           <div className="flex gap-4 flex-wrap">
@@ -816,8 +874,56 @@ export function ProductCatalog() {
           ) : (
             <ProductListView />
           )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Import Guide - 1 column */}
+        <div className="lg:col-span-1">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Info className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base">Import Guide</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-sm text-muted-foreground space-y-3">
+                <p>Import products from an Excel or CSV file. Your file should include:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  <li>Product Name</li>
+                  <li>Category (Standard Packages / GGX Add-on)</li>
+                  <li>Type (Network / Standalone)</li>
+                  <li>Perpetual ($)</li>
+                  <li>Annual Rental ($)</li>
+                  <li>Annual M&S ($)</li>
+                  <li>Features (comma-separated)</li>
+                  <li>Description (optional)</li>
+                </ul>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={generateTemplateDownload}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download Template
+              </Button>
+              <div className="text-xs text-muted-foreground border-t border-border pt-3">
+                <p className="font-medium mb-1">Available Features:</p>
+                <div className="flex flex-wrap gap-1">
+                  {ORDERED_FEATURES.map(f => (
+                    <Badge key={f} variant="outline" className="text-[10px] px-1.5 py-0">
+                      {f}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {/* Edit/Add Modal */}
       <Dialog open={showEditModal} onOpenChange={(open) => {
@@ -945,28 +1051,43 @@ export function ProductCatalog() {
                     )}
                   </div>
                   {featuresDropdownOpen && (
-                    <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-md shadow-lg max-h-[200px] overflow-y-auto">
-                      {ORDERED_FEATURES.map(feature => (
-                        <div
-                          key={feature}
-                          className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent ${
-                            selectedFeatures.includes(feature) ? 'bg-accent/50' : ''
-                          }`}
-                          onClick={() => {
-                            setSelectedFeatures(prev => 
-                              prev.includes(feature) 
-                                ? prev.filter(f => f !== feature)
-                                : [...prev, feature]
-                            );
+                    <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-md shadow-lg">
+                      <div className="max-h-[200px] overflow-y-auto">
+                        {ORDERED_FEATURES.map(feature => (
+                          <div
+                            key={feature}
+                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent ${
+                              selectedFeatures.includes(feature) ? 'bg-accent/50' : ''
+                            }`}
+                            onClick={() => {
+                              setSelectedFeatures(prev => 
+                                prev.includes(feature) 
+                                  ? prev.filter(f => f !== feature)
+                                  : [...prev, feature]
+                              );
+                            }}
+                          >
+                            <Checkbox 
+                              checked={selectedFeatures.includes(feature)}
+                              className="pointer-events-none"
+                            />
+                            <span className="text-sm">{feature}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t border-border p-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFeaturesDropdownOpen(false);
                           }}
                         >
-                          <Checkbox 
-                            checked={selectedFeatures.includes(feature)}
-                            className="pointer-events-none"
-                          />
-                          <span className="text-sm">{feature}</span>
-                        </div>
-                      ))}
+                          Done
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
