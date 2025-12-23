@@ -3,7 +3,7 @@
  * CRM for managing deal flow from companies
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, 
   ArrowRight, 
@@ -13,7 +13,8 @@ import {
   Calendar,
   ChevronRight,
   Percent,
-  TrendingUp
+  TrendingUp,
+  CalendarDays
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -36,6 +37,7 @@ interface DealsTabProps {
 }
 
 type DealStage = Deal['stage'];
+type ReportingPeriod = 'weekly' | 'monthly' | 'quarterly';
 
 const STAGE_ORDER: DealStage[] = ['new_lead', 'contacted', 'qualified', 'proposal', 'closed_won', 'closed_lost'];
 
@@ -67,8 +69,34 @@ const PROBABILITY_COLORS: Record<number, string> = {
   100: 'text-green-500',
 };
 
+const PERIOD_CONFIG: Record<ReportingPeriod, { label: string; description: string }> = {
+  weekly: { label: 'Weekly', description: 'Moved to Proposal this week' },
+  monthly: { label: 'Monthly', description: 'Expected to close this month' },
+  quarterly: { label: 'Quarterly', description: 'Closed Won this quarter' },
+};
+
+// Helper functions for date filtering
+function getWeekStart(): Date {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(now.setDate(diff));
+}
+
+function getMonthStart(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+function getQuarterStart(): Date {
+  const now = new Date();
+  const quarter = Math.floor(now.getMonth() / 3);
+  return new Date(now.getFullYear(), quarter * 3, 1);
+}
+
 export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
   const [view, setView] = useState<'pipeline' | 'list'>('pipeline');
+  const [reportingPeriod, setReportingPeriod] = useState<ReportingPeriod>('weekly');
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
 
@@ -104,6 +132,47 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
     onRefresh();
   };
 
+  // Period-based metrics
+  const periodMetrics = useMemo(() => {
+    const weekStart = getWeekStart();
+    const monthStart = getMonthStart();
+    const quarterStart = getQuarterStart();
+
+    // Weekly: Deals moved to Proposal this week
+    const movedToProposalThisWeek = deals.filter(d => 
+      d.stage === 'proposal' && new Date(d.createdDate) >= weekStart
+    );
+
+    // Monthly: Deals expected to close this month
+    const closingThisMonth = deals.filter(d => {
+      const closeDate = new Date(d.expectedCloseDate);
+      return d.status === 'open' && closeDate >= monthStart && closeDate < new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    });
+
+    // Quarterly: Closed Won this quarter
+    const closedWonThisQuarter = deals.filter(d => 
+      d.stage === 'closed_won' && new Date(d.createdDate) >= quarterStart
+    );
+
+    return {
+      weekly: {
+        deals: movedToProposalThisWeek,
+        value: movedToProposalThisWeek.reduce((sum, d) => sum + d.value, 0),
+        weighted: movedToProposalThisWeek.reduce((sum, d) => sum + Math.round(d.value * (d.probability / 100)), 0),
+      },
+      monthly: {
+        deals: closingThisMonth,
+        value: closingThisMonth.reduce((sum, d) => sum + d.value, 0),
+        weighted: closingThisMonth.reduce((sum, d) => sum + Math.round(d.value * (d.probability / 100)), 0),
+      },
+      quarterly: {
+        deals: closedWonThisQuarter,
+        value: closedWonThisQuarter.reduce((sum, d) => sum + d.value, 0),
+        weighted: closedWonThisQuarter.reduce((sum, d) => sum + d.value, 0), // 100% for closed won
+      },
+    };
+  }, [deals]);
+
   const openDeals = deals.filter(d => d.status === 'open');
   const closedDeals = deals.filter(d => d.status === 'closed');
   const totalPipeline = openDeals.reduce((sum, d) => sum + d.value, 0);
@@ -115,9 +184,6 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
     acc[stage] = deals.filter(d => d.stage === stage);
     return acc;
   }, {} as Record<DealStage, Deal[]>);
-
-  if (deals.length === 0) {
-    return (
       <div className="text-center py-12">
         <DollarSign className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
         <h2 className="text-xl font-semibold mb-2">No Deals Yet</h2>
