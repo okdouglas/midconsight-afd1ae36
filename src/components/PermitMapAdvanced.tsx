@@ -54,12 +54,6 @@ const TILE_LAYERS = {
     name: 'Satellite',
     subdomains: ''
   },
-  trd: {
-    url: 'https://gis.blm.gov/arcgis/rest/services/Cadastral/BLM_Natl_PLSS_CadNSDI/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'BLM PLSS Cadastral Data',
-    name: 'TRD Grid',
-    subdomains: ''
-  },
   county: {
     url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
     attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -443,7 +437,7 @@ export function PermitMapAdvanced({
   };
 
   return (
-    <div className="flex w-[70vw] mx-auto h-[calc(100vh-120px)] min-h-[750px]">
+    <div className="flex w-full px-4 h-[calc(100vh-120px)] min-h-[750px]">
       {/* Left Sidebar - Operation Dashboard with 16px right margin */}
       <div 
         className={cn(
@@ -666,7 +660,6 @@ export function PermitMapAdvanced({
             <SelectContent className="bg-card border-border z-[1100]">
               <SelectItem value="streets">Streetview</SelectItem>
               <SelectItem value="satellite">Satellite</SelectItem>
-              <SelectItem value="trd">TRD Grid</SelectItem>
               <SelectItem value="county">County Borders Only</SelectItem>
             </SelectContent>
           </Select>
