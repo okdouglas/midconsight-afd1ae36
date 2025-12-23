@@ -45,7 +45,7 @@ const TILE_LAYERS = {
   streets: {
     url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    name: 'Streets',
+    name: 'Streetview',
     subdomains: 'abcd'
   },
   satellite: {
@@ -55,9 +55,9 @@ const TILE_LAYERS = {
     subdomains: ''
   },
   trd: {
-    url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'USGS The National Map',
-    name: 'TRD (PLSS)',
+    url: 'https://gis.blm.gov/arcgis/rest/services/Cadastral/BLM_Natl_PLSS_CadNSDI/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'BLM PLSS Cadastral Data',
+    name: 'TRD Grid',
     subdomains: ''
   },
   county: {
@@ -290,6 +290,11 @@ export function PermitMapAdvanced({
     // Update viewport operators on move
     mapRef.current.on('moveend', updateViewportOperators);
 
+    // Fix viewport initialization - ensure map tiles render properly
+    setTimeout(() => {
+      mapRef.current?.invalidateSize();
+    }, 100);
+
     return () => {
       mapRef.current?.remove();
       mapRef.current = null;
@@ -438,7 +443,7 @@ export function PermitMapAdvanced({
   };
 
   return (
-    <div className="flex w-full h-[calc(100vh-120px)] min-h-[750px]">
+    <div className="flex w-[70vw] mx-auto h-[calc(100vh-120px)] min-h-[750px]">
       {/* Left Sidebar - Operation Dashboard with 16px right margin */}
       <div 
         className={cn(
@@ -661,7 +666,7 @@ export function PermitMapAdvanced({
             <SelectContent className="bg-card border-border z-[1100]">
               <SelectItem value="streets">Streetview</SelectItem>
               <SelectItem value="satellite">Satellite</SelectItem>
-              <SelectItem value="trd">TRD (PLSS Grid)</SelectItem>
+              <SelectItem value="trd">TRD Grid</SelectItem>
               <SelectItem value="county">County Borders Only</SelectItem>
             </SelectContent>
           </Select>
