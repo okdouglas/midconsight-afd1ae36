@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { format, parse, isValid } from 'date-fns';
 import type { Permit } from '@/lib/schema-mapping';
 import { getTexasCountyCoordinates } from '@/lib/texas-counties';
 import { Input } from '@/components/ui/input';
@@ -16,10 +17,13 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
-  Search, Layers, Filter, Download, MapPin, Calendar, Users, 
-  Target, ChevronLeft, ChevronRight, FileSpreadsheet
+  Search, Layers, Filter, Download, MapPin, Calendar as CalendarIcon, Users, 
+  ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Fix default marker icons for Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -36,7 +40,7 @@ interface PermitMapAdvancedProps {
   defaultFilter?: 'all' | 'new_this_week';
 }
 
-// Tile layer configurations - using reliable tile sources
+// Tile layer configurations with proper sources
 const TILE_LAYERS = {
   streets: {
     url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
@@ -51,10 +55,10 @@ const TILE_LAYERS = {
     subdomains: ''
   },
   trd: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
-    name: 'TRD Grid',
-    subdomains: 'abcd'
+    url: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'USGS The National Map',
+    name: 'TRD (PLSS)',
+    subdomains: ''
   },
   county: {
     url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
@@ -70,13 +74,6 @@ const WELL_STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'completed', label: 'Completed' },
   { value: 'abandoned', label: 'Abandoned' }
-];
-
-// Radius options in miles
-const RADIUS_OPTIONS = [
-  { value: 1, label: '1 mi' },
-  { value: 3, label: '3 mi' },
-  { value: 5, label: '5 mi' }
 ];
 
 // Well type colors
@@ -119,6 +116,10 @@ const getMarkerIcon = (wellType: string, isCentroidMapped: boolean = false): L.D
   });
 };
 
+// Date range bounds
+const MIN_YEAR = 2015;
+const MAX_YEAR = 2025;
+
 export function PermitMapAdvanced({ 
   permits, 
   onPermitClick, 
@@ -129,18 +130,62 @@ export function PermitMapAdvanced({
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
-  const radiusCircleRef = useRef<L.Circle | null>(null);
 
   // State
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeLayer, setActiveLayer] = useState<keyof typeof TILE_LAYERS>('streets');
   const [dateRange, setDateRange] = useState<[number, number]>([2020, 2025]);
+  const [startDate, setStartDate] = useState<Date | undefined>(new Date(2020, 0, 1));
+  const [endDate, setEndDate] = useState<Date | undefined>(new Date(2025, 11, 31));
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
-  const [radiusSearch, setRadiusSearch] = useState<number | null>(null);
-  const [radiusCenter, setRadiusCenter] = useState<[number, number] | null>(null);
   const [cursorPosition, setCursorPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [viewportOperators, setViewportOperators] = useState<{ name: string; count: number }[]>([]);
+
+  // Sync date inputs with slider
+  const handleSliderChange = (values: [number, number]) => {
+    setDateRange(values);
+    setStartDate(new Date(values[0], 0, 1));
+    setEndDate(new Date(values[1], 11, 31));
+  };
+
+  // Handle start date input change
+  const handleStartDateChange = (date: Date | undefined) => {
+    if (date && isValid(date)) {
+      setStartDate(date);
+      const year = date.getFullYear();
+      if (year >= MIN_YEAR && year <= MAX_YEAR) {
+        setDateRange([year, dateRange[1]]);
+      }
+    }
+  };
+
+  // Handle end date input change
+  const handleEndDateChange = (date: Date | undefined) => {
+    if (date && isValid(date)) {
+      setEndDate(date);
+      const year = date.getFullYear();
+      if (year >= MIN_YEAR && year <= MAX_YEAR) {
+        setDateRange([dateRange[0], year]);
+      }
+    }
+  };
+
+  // Handle text input for start date
+  const handleStartDateText = (value: string) => {
+    const parsed = parse(value, 'MM/dd/yyyy', new Date());
+    if (isValid(parsed)) {
+      handleStartDateChange(parsed);
+    }
+  };
+
+  // Handle text input for end date
+  const handleEndDateText = (value: string) => {
+    const parsed = parse(value, 'MM/dd/yyyy', new Date());
+    if (isValid(parsed)) {
+      handleEndDateChange(parsed);
+    }
+  };
 
   // Process permits with coordinates
   const processedPermits = useMemo(() => {
@@ -190,19 +235,8 @@ export function PermitMapAdvanced({
       });
     }
 
-    // Radius filter
-    if (radiusSearch && radiusCenter) {
-      const centerLatLng = L.latLng(radiusCenter[0], radiusCenter[1]);
-      const radiusMeters = radiusSearch * 1609.34; // miles to meters
-      filtered = filtered.filter(p => {
-        if (!p.lat || !p.lon) return false;
-        const permitLatLng = L.latLng(p.lat, p.lon);
-        return centerLatLng.distanceTo(permitLatLng) <= radiusMeters;
-      });
-    }
-
     return filtered;
-  }, [processedPermits, dateRange, searchQuery, selectedStatuses, radiusSearch, radiusCenter]);
+  }, [processedPermits, dateRange, searchQuery, selectedStatuses]);
 
   // Valid permits (with coordinates)
   const validPermits = useMemo(() => 
@@ -238,7 +272,7 @@ export function PermitMapAdvanced({
     const layer = TILE_LAYERS[activeLayer];
     tileLayerRef.current = L.tileLayer(layer.url, {
       attribution: layer.attribution,
-      subdomains: layer.subdomains || 'abcd',
+      subdomains: layer.subdomains || undefined,
       maxZoom: 19,
     }).addTo(mapRef.current);
 
@@ -264,16 +298,27 @@ export function PermitMapAdvanced({
 
   // Update tile layer when changed
   useEffect(() => {
-    if (!mapRef.current || !tileLayerRef.current) return;
+    if (!mapRef.current) return;
+    
     const layer = TILE_LAYERS[activeLayer];
     
-    // Remove old layer and add new one with correct subdomains
-    mapRef.current.removeLayer(tileLayerRef.current);
-    tileLayerRef.current = L.tileLayer(layer.url, {
+    // Remove old layer if it exists
+    if (tileLayerRef.current) {
+      mapRef.current.removeLayer(tileLayerRef.current);
+    }
+    
+    // Create new layer with proper configuration
+    const tileOptions: L.TileLayerOptions = {
       attribution: layer.attribution,
-      subdomains: layer.subdomains || 'abcd',
       maxZoom: 19,
-    }).addTo(mapRef.current);
+    };
+    
+    // Only add subdomains if they exist
+    if (layer.subdomains) {
+      tileOptions.subdomains = layer.subdomains;
+    }
+    
+    tileLayerRef.current = L.tileLayer(layer.url, tileOptions).addTo(mapRef.current);
   }, [activeLayer]);
 
   // Update viewport operators
@@ -350,41 +395,6 @@ export function PermitMapAdvanced({
     updateViewportOperators();
   }, [validPermits, onPermitClick, updateViewportOperators]);
 
-  // Radius circle update
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    if (radiusCircleRef.current) {
-      mapRef.current.removeLayer(radiusCircleRef.current);
-      radiusCircleRef.current = null;
-    }
-
-    if (radiusSearch && radiusCenter) {
-      radiusCircleRef.current = L.circle(radiusCenter, {
-        radius: radiusSearch * 1609.34, // miles to meters
-        color: '#3b82f6',
-        fillColor: '#3b82f6',
-        fillOpacity: 0.1,
-        weight: 2
-      }).addTo(mapRef.current);
-    }
-  }, [radiusSearch, radiusCenter]);
-
-  // Handle radius search click
-  const handleRadiusSearch = (miles: number) => {
-    if (!mapRef.current) return;
-    
-    if (radiusSearch === miles) {
-      // Clear radius
-      setRadiusSearch(null);
-      setRadiusCenter(null);
-    } else {
-      setRadiusSearch(miles);
-      const center = mapRef.current.getCenter();
-      setRadiusCenter([center.lat, center.lng]);
-    }
-  };
-
   // Export current view
   const handleExport = (format: 'csv' | 'excel') => {
     const headers = ['API', 'Well Name', 'Operator', 'County', 'State', 'Well Type', 'Status', 'Approval Date', 'Lat', 'Lon'];
@@ -422,13 +432,19 @@ export function PermitMapAdvanced({
     );
   };
 
+  // Handle layer change
+  const handleLayerChange = (value: string) => {
+    setActiveLayer(value as keyof typeof TILE_LAYERS);
+  };
+
   return (
-    <div className="flex w-full h-[calc(100vh-180px)] min-h-[650px]">
-      {/* Left Sidebar - Operation Dashboard - OUTSIDE map */}
+    <div className="flex w-full h-[calc(100vh-120px)] min-h-[750px]">
+      {/* Left Sidebar - Operation Dashboard with 16px right margin */}
       <div 
-        className={`bg-card border border-border rounded-l-xl transition-all duration-300 flex flex-col shrink-0 ${
-          sidebarCollapsed ? 'w-0 overflow-hidden border-0' : 'w-80'
-        }`}
+        className={cn(
+          "bg-card border border-border rounded-l-xl transition-all duration-300 flex flex-col shrink-0",
+          sidebarCollapsed ? 'w-0 overflow-hidden border-0' : 'w-80 mr-4'
+        )}
       >
         <div className="p-4 border-b border-border">
           <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -439,18 +455,81 @@ export function PermitMapAdvanced({
 
         <ScrollArea className="flex-1">
           <div className="p-4 space-y-6">
-            {/* A. Temporal Control */}
+            {/* A. Enhanced Temporal Control with Date Pickers */}
             <div className="space-y-3">
               <Label className="text-xs font-medium flex items-center gap-2">
-                <Calendar className="h-3.5 w-3.5" />
+                <CalendarIcon className="h-3.5 w-3.5" />
                 Issue Date Range
               </Label>
-              <div className="px-2">
+              
+              {/* Date Input Fields */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* Start Date */}
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Start Date</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-8 text-xs",
+                          !startDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-1.5 h-3 w-3" />
+                        {startDate ? format(startDate, "MM/dd/yyyy") : "Start"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-card z-[1100]" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={startDate}
+                        onSelect={handleStartDateChange}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* End Date */}
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">End Date</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "w-full justify-start text-left font-normal h-8 text-xs",
+                          !endDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-1.5 h-3 w-3" />
+                        {endDate ? format(endDate, "MM/dd/yyyy") : "End"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-card z-[1100]" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={handleEndDateChange}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              {/* Slider */}
+              <div className="px-2 pt-2">
                 <Slider
                   value={dateRange}
-                  onValueChange={(v) => setDateRange(v as [number, number])}
-                  min={2020}
-                  max={2025}
+                  onValueChange={(v) => handleSliderChange(v as [number, number])}
+                  min={MIN_YEAR}
+                  max={MAX_YEAR}
                   step={1}
                   className="w-full"
                 />
@@ -516,33 +595,7 @@ export function PermitMapAdvanced({
               </div>
             </div>
 
-            {/* D. Proximity Analysis */}
-            <div className="space-y-3">
-              <Label className="text-xs font-medium flex items-center gap-2">
-                <Target className="h-3.5 w-3.5" />
-                Radius Search (from center)
-              </Label>
-              <div className="flex gap-2">
-                {RADIUS_OPTIONS.map(opt => (
-                  <Button
-                    key={opt.value}
-                    variant={radiusSearch === opt.value ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => handleRadiusSearch(opt.value)}
-                  >
-                    {opt.label}
-                  </Button>
-                ))}
-              </div>
-              {radiusSearch && (
-                <p className="text-xs text-muted-foreground">
-                  {validPermits.length} wells within {radiusSearch}mi
-                </p>
-              )}
-            </div>
-
-            {/* E. Export Engine */}
+            {/* D. Export Engine */}
             <div className="space-y-3">
               <Label className="text-xs font-medium flex items-center gap-2">
                 <Download className="h-3.5 w-3.5" />
@@ -572,7 +625,7 @@ export function PermitMapAdvanced({
           </div>
         </ScrollArea>
 
-        {/* F. Coordinate Readout */}
+        {/* E. Coordinate Readout */}
         <div className="p-3 border-t border-border bg-muted/30">
           <div className="flex items-center gap-2 text-xs">
             <MapPin className="h-3.5 w-3.5 text-primary" />
@@ -591,25 +644,25 @@ export function PermitMapAdvanced({
       {/* Sidebar Toggle */}
       <button
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        className="bg-card border-y border-r border-border p-1.5 hover:bg-muted transition-colors self-center shrink-0"
+        className="bg-card border-y border-r border-border p-1.5 hover:bg-muted transition-colors self-center shrink-0 rounded-r"
       >
         {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </button>
 
-      {/* Map Container */}
-      <div className="flex-1 relative rounded-r-xl overflow-hidden border border-l-0 border-border">
+      {/* Map Container - Fluid width to fill remaining space */}
+      <div className="flex-1 relative rounded-xl overflow-hidden border border-border ml-2">
         {/* Layer Switcher - Top Right */}
         <div className="absolute top-4 right-4 z-[1000]">
-          <Select value={activeLayer} onValueChange={(v) => setActiveLayer(v as keyof typeof TILE_LAYERS)}>
-            <SelectTrigger className="w-[160px] bg-card/95 backdrop-blur-sm shadow-lg">
+          <Select value={activeLayer} onValueChange={handleLayerChange}>
+            <SelectTrigger className="w-[180px] bg-card/95 backdrop-blur-sm shadow-lg border-border">
               <Layers className="h-4 w-4 mr-2" />
-              <SelectValue />
+              <SelectValue placeholder="Select layer" />
             </SelectTrigger>
-            <SelectContent className="bg-card">
-              <SelectItem value="streets">Streets</SelectItem>
+            <SelectContent className="bg-card border-border z-[1100]">
+              <SelectItem value="streets">Streetview</SelectItem>
               <SelectItem value="satellite">Satellite</SelectItem>
-              <SelectItem value="trd">TRD Grid</SelectItem>
-              <SelectItem value="county">County Borders</SelectItem>
+              <SelectItem value="trd">TRD (PLSS Grid)</SelectItem>
+              <SelectItem value="county">County Borders Only</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -617,7 +670,7 @@ export function PermitMapAdvanced({
         {/* Map */}
         <div ref={mapContainer} className="absolute inset-0" />
 
-        {/* Dynamic Legend with Counts */}
+        {/* Dynamic Legend with Counts - Always Visible */}
         <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-sm rounded-lg p-4 border border-border text-xs z-[1000] shadow-lg">
           <div className="font-semibold mb-3">Well Types</div>
           <div className="space-y-2">
@@ -656,7 +709,7 @@ export function PermitMapAdvanced({
         <div className="absolute top-16 right-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000] shadow-lg">
           <div className="font-semibold">{validPermits.length} Permits Mapped</div>
           <div className="text-muted-foreground">of {permits.length} total</div>
-          {(selectedStatuses.length > 0 || searchQuery || radiusSearch) && (
+          {(selectedStatuses.length > 0 || searchQuery) && (
             <div className="text-primary mt-1 text-xs">Filters active</div>
           )}
         </div>
