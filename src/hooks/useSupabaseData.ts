@@ -24,6 +24,9 @@ export interface Company {
   createdDate: string;
   city?: string;
   state?: string;
+  isCurrentClient?: boolean;
+  hqAddress?: string;
+  primaryContactId?: string;
 }
 
 export interface Deal {
@@ -65,6 +68,9 @@ function mapDbCompanyToCompany(db: DbCompany): Company {
     createdDate: db.created_at,
     city: db.city,
     state: db.state,
+    isCurrentClient: db.is_current_client,
+    hqAddress: db.hq_address,
+    primaryContactId: db.primary_contact_id,
   };
 }
 

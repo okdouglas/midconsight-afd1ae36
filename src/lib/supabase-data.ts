@@ -75,6 +75,20 @@ export interface DbCompany {
   state?: string;
   created_at: string;
   updated_at: string;
+  is_current_client?: boolean;
+  hq_address?: string;
+  primary_contact_id?: string;
+}
+
+export interface DbLicensePurchase {
+  id: string;
+  user_id: string;
+  company_id: string;
+  selling_option_id?: string;
+  purchase_date: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DbContact {
@@ -739,4 +753,59 @@ export async function getSellingOptionById(id: string): Promise<DbSellingOption 
     throw error;
   }
   return data as DbSellingOption;
+}
+
+// ============ COMPANY UPDATES ============
+
+export async function updateCompany(
+  id: string,
+  updates: Partial<Pick<DbCompany, 'is_current_client' | 'hq_address' | 'primary_contact_id'>>
+): Promise<void> {
+  const { error } = await supabase
+    .from('companies')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+// ============ LICENSE PURCHASES ============
+
+export async function getLicensePurchases(companyId: string): Promise<DbLicensePurchase[]> {
+  const { data, error } = await supabase
+    .from('license_purchases')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('purchase_date', { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as DbLicensePurchase[];
+}
+
+export async function saveLicensePurchase(
+  license: Omit<DbLicensePurchase, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+): Promise<DbLicensePurchase> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('license_purchases')
+    .insert({
+      ...license,
+      user_id: user.id
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbLicensePurchase;
+}
+
+export async function deleteLicensePurchase(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('license_purchases')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
 }
