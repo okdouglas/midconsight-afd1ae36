@@ -49,11 +49,12 @@ interface DealDetailModalProps {
 }
 
 const PROBABILITY_OPTIONS = [
+  { value: 0, label: '0%', description: 'Closed Lost' },
   { value: 10, label: '10%', description: 'Early stage' },
   { value: 30, label: '30%', description: 'Qualified' },
   { value: 60, label: '60%', description: 'Proposal sent' },
   { value: 90, label: '90%', description: 'Verbal commit' },
-  { value: 100, label: '100%', description: 'Won/Lost' },
+  { value: 100, label: '100%', description: 'Closed Won' },
 ];
 
 const formatCurrency = (value: number): string => {
