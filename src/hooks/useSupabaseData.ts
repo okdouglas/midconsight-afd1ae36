@@ -156,14 +156,14 @@ export function useSupabaseData() {
   const warmLeads = companies.filter(c => c.score === 'warm').length;
   const pipelineValue = deals.filter(d => d.status === 'open').reduce((sum, d) => sum + d.value, 0);
 
-  // New this week based on date_imported
+  // New this week based on approval_date (last 7 days)
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
-  const newThisWeek = permits.filter(p => p.dateImported >= sevenDaysAgoStr).length;
+  const newThisWeek = permits.filter(p => p.approvalDate && p.approvalDate >= sevenDaysAgoStr).length;
 
-  // Get new this week permits for dashboard map
-  const newThisWeekPermits = permits.filter(p => p.dateImported >= sevenDaysAgoStr);
+  // Get new this week permits for dashboard map (based on approval_date)
+  const newThisWeekPermits = permits.filter(p => p.approvalDate && p.approvalDate >= sevenDaysAgoStr);
 
   return {
     datasets,

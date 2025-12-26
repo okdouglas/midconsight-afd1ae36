@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Slider } from '@/components/ui/slider';
+
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -117,8 +117,12 @@ const getMarkerIcon = (wellType: string, isCentroidMapped: boolean = false): L.D
 };
 
 // Date range bounds
-const MIN_YEAR = 2015;
-const MAX_YEAR = 2025;
+const getDefaultStartDate = () => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return d;
+};
+const getDefaultEndDate = () => new Date();
 
 export function PermitMapAdvanced({ 
   permits, 
@@ -135,28 +139,16 @@ export function PermitMapAdvanced({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeLayer, setActiveLayer] = useState<keyof typeof TILE_LAYERS>('streets');
-  const [dateRange, setDateRange] = useState<[number, number]>([2020, 2025]);
-  const [startDate, setStartDate] = useState<Date | undefined>(new Date(2020, 0, 1));
-  const [endDate, setEndDate] = useState<Date | undefined>(new Date(2025, 11, 31));
+  const [startDate, setStartDate] = useState<Date | undefined>(getDefaultStartDate());
+  const [endDate, setEndDate] = useState<Date | undefined>(getDefaultEndDate());
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [cursorPosition, setCursorPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [viewportOperators, setViewportOperators] = useState<{ name: string; count: number }[]>([]);
-
-  // Sync date inputs with slider
-  const handleSliderChange = (values: [number, number]) => {
-    setDateRange(values);
-    setStartDate(new Date(values[0], 0, 1));
-    setEndDate(new Date(values[1], 11, 31));
-  };
 
   // Handle start date input change
   const handleStartDateChange = (date: Date | undefined) => {
     if (date && isValid(date)) {
       setStartDate(date);
-      const year = date.getFullYear();
-      if (year >= MIN_YEAR && year <= MAX_YEAR) {
-        setDateRange([year, dateRange[1]]);
-      }
     }
   };
 
@@ -164,10 +156,6 @@ export function PermitMapAdvanced({
   const handleEndDateChange = (date: Date | undefined) => {
     if (date && isValid(date)) {
       setEndDate(date);
-      const year = date.getFullYear();
-      if (year >= MIN_YEAR && year <= MAX_YEAR) {
-        setDateRange([dateRange[0], year]);
-      }
     }
   };
 
@@ -210,11 +198,13 @@ export function PermitMapAdvanced({
   const filteredPermits = useMemo(() => {
     let filtered = processedPermits;
 
-    // Date range filter (based on approval date year)
+    // Date range filter (based on approval date)
     filtered = filtered.filter(p => {
-      if (!p.approvalDate) return true;
-      const year = new Date(p.approvalDate).getFullYear();
-      return year >= dateRange[0] && year <= dateRange[1];
+      if (!p.approvalDate) return false; // Exclude permits without approval date
+      const approvalDateObj = new Date(p.approvalDate);
+      const startOk = !startDate || approvalDateObj >= startDate;
+      const endOk = !endDate || approvalDateObj <= endDate;
+      return startOk && endOk;
     });
 
     // Search filter
@@ -236,7 +226,7 @@ export function PermitMapAdvanced({
     }
 
     return filtered;
-  }, [processedPermits, dateRange, searchQuery, selectedStatuses]);
+  }, [processedPermits, startDate, endDate, searchQuery, selectedStatuses]);
 
   // Valid permits (with coordinates)
   const validPermits = useMemo(() => 
@@ -528,19 +518,12 @@ export function PermitMapAdvanced({
                 </div>
               </div>
 
-              {/* Slider */}
+              {/* Date range summary */}
               <div className="px-2 pt-2">
-                <Slider
-                  value={dateRange}
-                  onValueChange={(v) => handleSliderChange(v as [number, number])}
-                  min={MIN_YEAR}
-                  max={MAX_YEAR}
-                  step={1}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground mt-2">
-                  <span>{dateRange[0]}</span>
-                  <span>{dateRange[1]}</span>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>{startDate ? format(startDate, 'MMM d, yyyy') : 'Start'}</span>
+                  <span>to</span>
+                  <span>{endDate ? format(endDate, 'MMM d, yyyy') : 'End'}</span>
                 </div>
               </div>
             </div>
