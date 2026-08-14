@@ -956,26 +956,27 @@ export async function getProfile(): Promise<DbProfile | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data, error } = await supabase
+  // `profiles` isn't in the generated types yet, so go through an untyped client.
+  const { data, error } = await (supabase as any)
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .maybeSingle();
 
   if (error) throw error;
-  return data as DbProfile | null;
+  return (data as DbProfile | null) ?? null;
 }
 
 /** Call when a free-plan user clicks into a gated tab. Returns the new count. */
 export async function incrementPaywallHits(): Promise<number> {
-  const { data, error } = await supabase.rpc('increment_paywall_hits');
+  const { data, error } = await (supabase as any).rpc('increment_paywall_hits');
   if (error) throw error;
   return data as number;
 }
 
 /** Call the first time a user views a permit. Safe to call repeatedly — no-ops after the first time. */
 export async function markActivated(): Promise<void> {
-  const { error } = await supabase.rpc('mark_activated');
+  const { error } = await (supabase as any).rpc('mark_activated');
   if (error) throw error;
 }
 
