@@ -17,7 +17,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
@@ -519,7 +518,7 @@ export function PermitMapAdvanced({
           </h3>
         </div>
 
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto min-w-0">
           <div className="p-4 space-y-6">
             {/* A. Enhanced Temporal Control with Date Pickers */}
             <div className="space-y-3">
@@ -615,8 +614,8 @@ export function PermitMapAdvanced({
                       className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1.5 cursor-pointer hover:bg-muted transition-colors"
                       onClick={() => setSearchQuery(op.name)}
                     >
-                      <span className="truncate flex-1">{idx + 1}. {op.name}</span>
-                      <Badge variant="secondary" className="ml-2 text-xs">{op.count}</Badge>
+                      <span className="truncate flex-1 min-w-0">{idx + 1}. {op.name}</span>
+                      <Badge variant="secondary" className="ml-2 text-xs shrink-0">{op.count}</Badge>
                     </div>
                   ))
                 )}
@@ -689,7 +688,7 @@ export function PermitMapAdvanced({
               </div>
             </div>
           </div>
-        </ScrollArea>
+        </div>
 
         {/* E. Coordinate Readout */}
         <div className="p-3 border-t border-border bg-muted/30">
