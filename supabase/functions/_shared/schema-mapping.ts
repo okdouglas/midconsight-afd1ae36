@@ -11,7 +11,7 @@
  * manual imports.
  */
 
-import { getTexasCountyCoordinates } from './texas-counties';
+import { getTexasCountyCoordinates } from './texas-counties.ts';
 
 // ITD Excel column names → Internal field names (Oklahoma)
 export const ITD_COLUMN_MAP: Record<string, string> = {
