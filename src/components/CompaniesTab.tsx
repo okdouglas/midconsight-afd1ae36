@@ -12,7 +12,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import { type Permit } from '@/lib/schema-mapping';
 import { CompanyDetailModal } from './CompanyDetailModal';
-import { getContactsByCompany, getAllDeals, type DbContact, type DbDeal } from '@/lib/supabase-data';
+import { getContactsByCompany, getAllDeals, promoteCompanyPreview, type DbContact, type DbDeal } from '@/lib/supabase-data';
+import { toast } from 'sonner';
 import {
   Table,
   TableBody,
@@ -40,6 +41,48 @@ interface CompanyWithDetails extends Company {
 
 export function CompaniesTab({ companies, permits, deals, onRefresh }: CompaniesTabProps) {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [promoting, setPromoting] = useState(false);
+
+  const handleSelectCompany = async (company: Company) => {
+    if (!company.isPreview) {
+      setSelectedCompany(company);
+      return;
+    }
+    // Turn the preview into a real record before opening the modal, since
+    // the modal's contacts/deals/client-toggle actions all need a real
+    // company_id to write against.
+    setPromoting(true);
+    try {
+      const real = await promoteCompanyPreview({
+        name: company.name,
+        operatorNumber: company.operatorNumber,
+        permitCount: company.permitCount,
+        totalValue: company.totalValue,
+        score: company.score,
+        lastPermitDate: company.lastPermitDate,
+        city: company.city,
+        state: company.state,
+      });
+      setSelectedCompany({
+        id: real.id,
+        name: real.name,
+        operatorNumber: real.operator_number,
+        permitCount: real.permit_count || 0,
+        totalValue: Number(real.total_value) || 0,
+        score: real.score as 'hot' | 'warm' | 'cold',
+        lastPermitDate: real.last_permit_date || real.created_at,
+        createdDate: real.created_at,
+        city: real.city,
+        state: real.state,
+        isCurrentClient: real.is_current_client,
+      });
+      onRefresh?.();
+    } catch {
+      toast.error(`Couldn't open ${company.name} — please try again`);
+    } finally {
+      setPromoting(false);
+    }
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [scoreFilter, setScoreFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
   const [contacts, setContacts] = useState<Record<string, DbContact[]>>({});
@@ -347,7 +390,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
                   <TableRow 
                     key={company.id} 
                     className="hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => setSelectedCompany(company)}
+                    onClick={() => handleSelectCompany(company)}
                   >
                     <TableCell className="text-sm font-medium text-muted-foreground">
                       {index + 1}
@@ -369,6 +412,11 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
                             {company.isCurrentClient && (
                               <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
                                 Client
+                              </Badge>
+                            )}
+                            {company.isPreview && (
+                              <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                                From recent permits
                               </Badge>
                             )}
                           </div>

@@ -3,7 +3,7 @@
  * Pre-pipeline staging area for new permits - merged by operator
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Archive, 
@@ -41,7 +41,7 @@ import { ResearchSidebar } from './ResearchSidebar';
 import { type Permit } from '@/lib/schema-mapping';
 import { type Company } from '@/hooks/useSupabaseData';
 import { toast } from 'sonner';
-import { updateCompany } from '@/lib/supabase-data';
+import { updateCompany, getAllResearchStatuses, setResearchStatus as persistResearchStatus } from '@/lib/supabase-data';
 
 type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
 type Priority = 'hot' | 'warm' | 'cold';
@@ -95,15 +95,8 @@ function calculatePriority(permits: Permit[], company?: Company): Priority {
   return 'cold';
 }
 
-// Get research status from localStorage (temporary persistence)
-function getResearchStatus(operator: string): ResearchStatus {
-  const stored = localStorage.getItem(`research_status_operator_${operator}`);
-  return (stored as ResearchStatus) || 'new';
-}
-
-function setResearchStatusLocal(operator: string, status: ResearchStatus) {
-  localStorage.setItem(`research_status_operator_${operator}`, status);
-}
+// Research status now persists server-side via Supabase (operator_research_status
+// table) instead of localStorage, so it syncs across devices and team members.
 
 export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProps) {
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
@@ -111,6 +104,37 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ResearchStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all');
+  const [statusMap, setStatusMap] = useState<Record<string, ResearchStatus>>({});
+  const [statusLoaded, setStatusLoaded] = useState(false);
+
+  // Load research statuses from Supabase on mount
+  useEffect(() => {
+    let cancelled = false;
+    getAllResearchStatuses()
+      .then((map) => {
+        if (!cancelled) setStatusMap(map as Record<string, ResearchStatus>);
+      })
+      .catch(() => {
+        toast.error('Failed to load research status — showing defaults');
+      })
+      .finally(() => {
+        if (!cancelled) setStatusLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Optimistically update local state, then persist; revert on failure.
+  const updateStatus = async (operator: string, status: ResearchStatus) => {
+    const previous = statusMap[operator] ?? 'new';
+    setStatusMap((prev) => ({ ...prev, [operator]: status }));
+    try {
+      await persistResearchStatus(operator, status);
+    } catch {
+      setStatusMap((prev) => ({ ...prev, [operator]: previous }));
+      toast.error(`Failed to save status for ${operator}`);
+      throw new Error('persist-failed');
+    }
+  };
 
   // Get current client operators to filter out
   const currentClientOperators = useMemo(() => {
@@ -149,12 +173,12 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
         latestPermitDate: latestPermit.approvalDate || latestPermit.dateImported,
         county: latestPermit.county || 'Unknown',
         state: latestPermit.state || 'Unknown',
-        researchStatus: getResearchStatus(operator),
+        researchStatus: statusMap[operator] ?? 'new',
         priority: calculatePriority(opPermits, company),
         company,
       };
     });
-  }, [permits, companies, currentClientOperators]);
+  }, [permits, companies, currentClientOperators, statusMap]);
 
   // Filter and sort leads
   const filteredLeads = useMemo(() => {
@@ -213,18 +237,26 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
     setSelectedOperators(newSelected);
   };
 
-  const handleBulkArchive = () => {
-    selectedOperators.forEach(op => {
-      setResearchStatusLocal(op, 'archived');
-    });
+  const handleBulkArchive = async () => {
+    const operators = Array.from(selectedOperators);
     setSelectedOperators(new Set());
-    toast.success(`Archived ${selectedOperators.size} leads`);
+    const results = await Promise.allSettled(operators.map((op) => updateStatus(op, 'archived')));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed > 0) {
+      toast.error(`Archived ${operators.length - failed} of ${operators.length} leads — ${failed} failed`);
+    } else {
+      toast.success(`Archived ${operators.length} leads`);
+    }
     onRefresh();
   };
 
   const handleStatusChange = async (operator: string, status: ResearchStatus) => {
-    setResearchStatusLocal(operator, status);
-    
+    try {
+      await updateStatus(operator, status);
+    } catch {
+      return; // error toast already shown by updateStatus
+    }
+
     // If marking as current client, update the company record
     if (status === 'current_client') {
       const lead = operatorLeads.find(l => l.operator === operator);
@@ -237,13 +269,17 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
         }
       }
     }
-    
+
     onRefresh();
   };
 
-  const handleDealCreated = () => {
+  const handleDealCreated = async () => {
     if (selectedOperator) {
-      setResearchStatusLocal(selectedOperator, 'verified');
+      try {
+        await updateStatus(selectedOperator, 'verified');
+      } catch {
+        // error toast already shown
+      }
     }
     setSelectedOperator(null);
     onRefresh();
@@ -255,6 +291,14 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
   const currentClientCount = companies.filter(c => c.isCurrentClient).length;
   const researchingCount = operatorLeads.filter(l => l.researchStatus === 'researching').length;
   const verifiedCount = operatorLeads.filter(l => l.researchStatus === 'verified').length;
+
+  if (!statusLoaded) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-200px)] text-sm text-muted-foreground">
+        Loading research status…
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-200px)]">

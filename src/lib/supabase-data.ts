@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 import { processExcelData, generateId, type Permit, type ImportResult } from './schema-mapping';
 import type { ImportMetadata, SkippedRow } from '@/components/ImportAddendum';
 
-const AVG_PERMIT_VALUE = 5000; // Updated to $5k per permit
+export const AVG_PERMIT_VALUE = 5000; // Updated to $5k per permit
 
 // Extended import result with metadata for UI
 export interface ExtendedImportResult {
@@ -369,7 +369,7 @@ export async function deleteDataset(datasetId: string): Promise<void> {
 
 // ============ IMPORT OPERATIONS ============
 
-function calculateScore(permitCount: number, recentPermits: number): 'hot' | 'warm' | 'cold' {
+export function calculateScore(permitCount: number, recentPermits: number): 'hot' | 'warm' | 'cold' {
   if (permitCount >= 5 || recentPermits >= 3) return 'hot';
   if (permitCount >= 3 || recentPermits >= 2) return 'warm';
   return 'cold';
@@ -799,6 +799,51 @@ export async function updateCompany(
   if (error) throw error;
 }
 
+/**
+ * Turns a preview company (id like `preview-OperatorName`, computed
+ * client-side from the shared permit feed — see useSupabaseData's
+ * buildCompanyRollups) into a real row in the `companies` table.
+ *
+ * Call this before any write that needs a real company_id foreign key
+ * (creating a deal, marking as a client) if the company you're acting on
+ * has `isPreview: true`. Returns the real company with its new UUID.
+ */
+export async function promoteCompanyPreview(preview: {
+  name: string;
+  operatorNumber?: string;
+  permitCount: number;
+  totalValue: number;
+  score: 'hot' | 'warm' | 'cold';
+  lastPermitDate: string;
+  city?: string;
+  state?: string;
+}): Promise<DbCompany> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('companies')
+    .upsert(
+      {
+        user_id: user.id,
+        name: preview.name,
+        operator_number: preview.operatorNumber,
+        permit_count: preview.permitCount,
+        total_value: preview.totalValue,
+        score: preview.score,
+        last_permit_date: preview.lastPermitDate,
+        city: preview.city,
+        state: preview.state,
+      },
+      { onConflict: 'user_id,name' }
+    )
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as DbCompany;
+}
+
 // ============ LICENSE PURCHASES ============
 
 export async function getLicensePurchases(companyId: string): Promise<DbLicensePurchase[]> {
@@ -839,3 +884,98 @@ export async function deleteLicensePurchase(id: string): Promise<void> {
 
   if (error) throw error;
 }
+
+// ============ OPERATOR RESEARCH STATUS ============
+// Replaces the old localStorage-based persistence (device-local, not
+// synced across team members). Statuses now live in Supabase, scoped
+// per-user via RLS just like everything else in this file.
+
+export type OperatorResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
+
+export interface DbOperatorResearchStatus {
+  id: string;
+  user_id: string;
+  operator: string;
+  status: OperatorResearchStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Fetch all research statuses for the current user, keyed by operator name. */
+export async function getAllResearchStatuses(): Promise<Record<string, OperatorResearchStatus>> {
+  const { data, error } = await supabase
+    .from('operator_research_status')
+    .select('operator, status');
+
+  if (error) throw error;
+
+  const map: Record<string, OperatorResearchStatus> = {};
+  for (const row of data || []) {
+    map[row.operator] = row.status as OperatorResearchStatus;
+  }
+  return map;
+}
+
+/** Upsert a single operator's research status. */
+export async function setResearchStatus(
+  operator: string,
+  status: OperatorResearchStatus
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('operator_research_status')
+    .upsert(
+      { user_id: user.id, operator, status },
+      { onConflict: 'user_id,operator' }
+    );
+
+  if (error) throw error;
+}
+
+// ============ PROFILE / PLAN ============
+
+export interface DbProfile {
+  id: string;
+  plan: 'free' | 'paid';
+  full_name: string | null;
+  company_name: string | null;
+  marketing_consent: boolean;
+  trial_ends_at: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  activated_at: string | null;
+  paywall_hits: number;
+  last_digest_sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getProfile(): Promise<DbProfile | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as DbProfile | null;
+}
+
+/** Call when a free-plan user clicks into a gated tab. Returns the new count. */
+export async function incrementPaywallHits(): Promise<number> {
+  const { data, error } = await supabase.rpc('increment_paywall_hits');
+  if (error) throw error;
+  return data as number;
+}
+
+/** Call the first time a user views a permit. Safe to call repeatedly — no-ops after the first time. */
+export async function markActivated(): Promise<void> {
+  const { error } = await supabase.rpc('mark_activated');
+  if (error) throw error;
+}
+

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { format, parse, isValid } from 'date-fns';
+import * as XLSX from 'xlsx';
 import type { Permit } from '@/lib/schema-mapping';
 import { getTexasCountyCoordinates } from '@/lib/texas-counties';
 import { Input } from '@/components/ui/input';
@@ -406,6 +407,16 @@ export function PermitMapAdvanced({
       p.lon?.toString() || ''
     ]);
 
+    const dateStamp = new Date().toISOString().split('T')[0];
+
+    if (format === 'excel') {
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Permits');
+      XLSX.writeFile(workbook, `permits_export_${dateStamp}.xlsx`);
+      return;
+    }
+
     const csvContent = [
       headers.join(','),
       ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
@@ -414,7 +425,7 @@ export function PermitMapAdvanced({
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `permits_export_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `permits_export_${dateStamp}.csv`;
     link.click();
   };
 

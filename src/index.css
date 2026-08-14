@@ -2,116 +2,119 @@
 @tailwind components;
 @tailwind utilities;
 
-/* MidconSight Design System */
+/* MidconSight Design System — "Type Log"
+   Palette drawn from the Midcontinent field: plat paper, drill-pipe rust,
+   gas-flare amber, core-sample slate, shale sage. Ink-slate replaces
+   pure black; rust replaces the generic SaaS blue as primary. */
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 45 25% 90.6%;        /* plat paper */
+    --foreground: 218.2 19.3% 11.2%;   /* ink */
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 218.2 19.3% 11.2%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 218.2 19.3% 11.2%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 14.8 58.8% 44.7%;       /* rust */
+    --primary-foreground: 45 25% 96%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 45 22.2% 85.9%;       /* paper-2 */
+    --secondary-foreground: 218.2 19.3% 11.2%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 45 18% 88%;
+    --muted-foreground: 213.8 12% 40%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 213.8 21.1% 29.8%;       /* slate */
+    --accent-foreground: 45 25% 96%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 65% 42%;
+    --destructive-foreground: 45 25% 96%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 217 91% 60%;
+    --border: 43.6 21.2% 79.6%;        /* line */
+    --input: 43.6 21.2% 79.6%;
+    --ring: 14.8 58.8% 44.7%;
 
-    --radius: 0.5rem;
+    --radius: 0.375rem;
 
     /* MidconSight custom colors */
-    --score-hot: 0 72% 51%;
-    --score-hot-foreground: 0 0% 100%;
-    --score-warm: 25 95% 53%;
-    --score-warm-foreground: 0 0% 100%;
-    --score-cold: 217 91% 60%;
-    --score-cold-foreground: 0 0% 100%;
+    --score-hot: 14.8 58.8% 44.7%;     /* rust */
+    --score-hot-foreground: 45 25% 96%;
+    --score-warm: 39.1 66.7% 55.3%;    /* flare */
+    --score-warm-foreground: 218.2 19.3% 11.2%;
+    --score-cold: 213.8 21.1% 29.8%;   /* slate */
+    --score-cold-foreground: 45 25% 96%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
-    
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    --success: 90 22% 33%;             /* sage, deepened for contrast */
+    --success-foreground: 45 25% 96%;
 
-    --info: 199 89% 48%;
-    --info-foreground: 0 0% 100%;
+    --warning: 39.1 66.7% 55.3%;
+    --warning-foreground: 218.2 19.3% 11.2%;
+
+    --info: 213.0 18.2% 43.1%;
+    --info-foreground: 45 25% 96%;
 
     /* Sidebar */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 218.2 19.3% 11.2%;
+    --sidebar-foreground: 45 15% 88%;
+    --sidebar-primary: 14.8 58.8% 44.7%;
+    --sidebar-primary-foreground: 45 25% 96%;
+    --sidebar-accent: 216.0 19.5% 15.1%;
+    --sidebar-accent-foreground: 45 15% 92%;
+    --sidebar-border: 216.0 19.5% 18%;
+    --sidebar-ring: 14.8 58.8% 44.7%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 218.2 19.3% 11.2%;   /* ink */
+    --foreground: 45 20% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 216.0 19.5% 15.1%;         /* ink-2 */
+    --card-foreground: 45 20% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 216.0 19.5% 15.1%;
+    --popover-foreground: 45 20% 92%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 14.8 58.8% 52%;         /* rust, lifted for dark bg */
+    --primary-foreground: 45 25% 96%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 216.0 19.5% 19%;
+    --secondary-foreground: 45 20% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 216.0 19.5% 19%;
+    --muted-foreground: 45 10% 65%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 213.0 18.2% 43.1%;       /* slate-lt */
+    --accent-foreground: 45 25% 96%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 60% 48%;
+    --destructive-foreground: 45 25% 96%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 216.0 19.5% 22%;
+    --input: 216.0 19.5% 22%;
+    --ring: 14.8 58.8% 52%;
 
     /* MidconSight custom colors - dark */
-    --score-hot: 0 72% 51%;
-    --score-hot-foreground: 0 0% 100%;
-    --score-warm: 25 95% 53%;
-    --score-warm-foreground: 0 0% 100%;
-    --score-cold: 217 91% 60%;
-    --score-cold-foreground: 0 0% 100%;
+    --score-hot: 14.8 58.8% 52%;
+    --score-hot-foreground: 45 25% 96%;
+    --score-warm: 39.1 66.7% 58%;
+    --score-warm-foreground: 218.2 19.3% 11.2%;
+    --score-cold: 213.0 18.2% 50%;
+    --score-cold-foreground: 218.2 19.3% 11.2%;
 
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    --success: 90 18% 45%;
+    --success-foreground: 218.2 19.3% 11.2%;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 218.2 19.3% 8%;
+    --sidebar-foreground: 45 15% 85%;
+    --sidebar-primary: 14.8 58.8% 52%;
+    --sidebar-primary-foreground: 45 25% 96%;
+    --sidebar-accent: 216.0 19.5% 15.1%;
+    --sidebar-accent-foreground: 45 15% 92%;
+    --sidebar-border: 216.0 19.5% 18%;
+    --sidebar-ring: 14.8 58.8% 52%;
   }
 }
 
@@ -121,8 +124,25 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
   }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+
+  .font-mono, code, kbd {
+    font-feature-settings: "tnum" 1, "zero" 1;
+  }
+}
+
+/* Plat-grid: hairline survey-grid texture, literal to land-plat maps.
+   Use sparingly — one section per page, not a global background. */
+.bg-plat-grid {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.6) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.6) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 /* Leaflet map container styling */

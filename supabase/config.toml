@@ -1,1 +1,17 @@
 project_id = "ijglazuuudcqclafomai"
+
+[functions.import-itd-weekly]
+# Called by pg_cron with a shared secret, not a logged-in user's JWT —
+# so JWT verification must be off for this function specifically.
+# The x-cron-secret header check inside the function is what guards it.
+verify_jwt = false
+
+[functions.send-welcome-email]
+# Called by a Postgres trigger (via pg_net) with a shared secret, same
+# reasoning as import-itd-weekly above.
+verify_jwt = false
+
+[functions.subscribe]
+# Called by anonymous visitors from the landing page's newsletter form —
+# they have no Supabase session/JWT at all.
+verify_jwt = false
