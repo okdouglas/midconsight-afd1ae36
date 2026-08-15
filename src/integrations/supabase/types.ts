@@ -348,6 +348,7 @@ export type Database = {
           formation_name: string | null
           id: string
           image_url: string | null
+          is_shared: boolean
           lat: number
           lon: number
           measured_total_depth: number | null
@@ -356,6 +357,10 @@ export type Database = {
           permit_status: string | null
           permit_type: string | null
           range: string | null
+          rbdms_enriched_at: string | null
+          rbdms_legal_description: string | null
+          rbdms_well_records_url: string | null
+          rbdms_well_status: string | null
           remarks: string | null
           section: string | null
           sign_name: string | null
@@ -390,6 +395,7 @@ export type Database = {
           formation_name?: string | null
           id?: string
           image_url?: string | null
+          is_shared?: boolean
           lat: number
           lon: number
           measured_total_depth?: number | null
@@ -398,6 +404,10 @@ export type Database = {
           permit_status?: string | null
           permit_type?: string | null
           range?: string | null
+          rbdms_enriched_at?: string | null
+          rbdms_legal_description?: string | null
+          rbdms_well_records_url?: string | null
+          rbdms_well_status?: string | null
           remarks?: string | null
           section?: string | null
           sign_name?: string | null
@@ -432,6 +442,7 @@ export type Database = {
           formation_name?: string | null
           id?: string
           image_url?: string | null
+          is_shared?: boolean
           lat?: number
           lon?: number
           measured_total_depth?: number | null
@@ -440,6 +451,10 @@ export type Database = {
           permit_status?: string | null
           permit_type?: string | null
           range?: string | null
+          rbdms_enriched_at?: string | null
+          rbdms_legal_description?: string | null
+          rbdms_well_records_url?: string | null
+          rbdms_well_status?: string | null
           remarks?: string | null
           section?: string | null
           sign_name?: string | null
@@ -458,16 +473,95 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          activated_at: string | null
+          company_name: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          last_digest_sent_at: string | null
+          marketing_consent: boolean
+          paywall_hits: number
+          plan: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          company_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          last_digest_sent_at?: string | null
+          marketing_consent?: boolean
+          paywall_hits?: number
+          plan?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          company_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          last_digest_sent_at?: string | null
+          marketing_consent?: boolean
+          paywall_hits?: number
+          plan?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduled_emails: {
+        Row: {
+          created_at: string
+          id: string
+          send_after: string
+          sent_at: string | null
+          template: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          send_after: string
+          sent_at?: string | null
+          template: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          send_after?: string
+          sent_at?: string | null
+          template?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       selling_options: {
         Row: {
           annual_maintenance: number | null
           annual_rental: number | null
+          applicable_well_types: string[] | null
           category: string
           created_at: string
           default_price: number
           description: string | null
           id: string
+          max_depth: number | null
+          min_depth: number | null
           name: string
+          target_formations: string[] | null
           trigger_type: string | null
           type: string
           updated_at: string
@@ -476,12 +570,16 @@ export type Database = {
         Insert: {
           annual_maintenance?: number | null
           annual_rental?: number | null
+          applicable_well_types?: string[] | null
           category?: string
           created_at?: string
           default_price?: number
           description?: string | null
           id?: string
+          max_depth?: number | null
+          min_depth?: number | null
           name: string
+          target_formations?: string[] | null
           trigger_type?: string | null
           type?: string
           updated_at?: string
@@ -490,15 +588,61 @@ export type Database = {
         Update: {
           annual_maintenance?: number | null
           annual_rental?: number | null
+          applicable_well_types?: string[] | null
           category?: string
           created_at?: string
           default_price?: number
           description?: string | null
           id?: string
+          max_depth?: number | null
+          min_depth?: number | null
           name?: string
+          target_formations?: string[] | null
           trigger_type?: string | null
           type?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscribers: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
+      upgrade_requests: {
+        Row: {
+          created_at: string
+          id: string
+          source: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source?: string | null
           user_id?: string
         }
         Relationships: []
@@ -508,7 +652,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_paywall_hits: { Args: never; Returns: number }
+      mark_activated: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
