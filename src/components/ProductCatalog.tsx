@@ -1,18 +1,21 @@
 /**
  * Product Catalog Component
- * Displays selling options with pricing tiers based on GVERSE GeoGraphix price sheet
- * Features: Nested product groups, feature badges, comparison mode, feature filtering
+ *
+ * Each account's own catalog of what they sell — starts empty for every
+ * new customer. Products carry optional matching criteria (target
+ * formations, applicable well types, depth range) that connect this
+ * catalog to real permit/well data elsewhere in the app (see
+ * matchProductsToPermit / suggestBestProduct in lib/supabase-data.ts) —
+ * that connection is the actual point of the feature, not just a price list.
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Plus, Pencil, Trash2, ChevronDown, ChevronUp, ChevronRight, Package, Tag, Upload, FileSpreadsheet, ArrowUpDown, Check, X, Filter, Grid3X3, Download, Info } from 'lucide-react';
+import { Search, Plus, Pencil, Trash2, FileSpreadsheet, ArrowUpDown, ChevronUp, ChevronDown, Package, Upload, Download, Info, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Dialog,
   DialogContent,
@@ -20,13 +23,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -45,156 +41,17 @@ import {
 } from '@/lib/supabase-data';
 import * as XLSX from 'xlsx';
 
-// Static product data with features
-const PRODUCT_DATA = [
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Geology",
-    description: "GVERSE Geology",
-    type: "Network",
-    pricing: { perpetual: 28000, annual_rental: 12500, annual_ms: 5040 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Geology",
-    description: "GVERSE Geology",
-    type: "Standalone",
-    pricing: { perpetual: 17500, annual_rental: 8000, annual_ms: 3150 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE GeoInterp",
-    description: "GVERSE GeoInterp",
-    type: "Network",
-    pricing: { perpetual: 22500, annual_rental: 10000, annual_ms: 4050 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Geophysics"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE GeoInterp",
-    description: "GVERSE GeoInterp",
-    type: "Standalone",
-    pricing: { perpetual: 14000, annual_rental: 6250, annual_ms: 2520 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Geophysics"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Advanced Geology",
-    description: "GVERSE Advanced Geology",
-    type: "Network",
-    pricing: { perpetual: 49000, annual_rental: 22000, annual_ms: 8820 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics", "SmartStrat", "Field Planner", "Connect"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Advanced Geology",
-    description: "GVERSE Advanced Geology",
-    type: "Standalone",
-    pricing: { perpetual: 30500, annual_rental: 13750, annual_ms: 5490 },
-    features: ["Data Manager", "GeoAtlas", "IsoMap", "SmartSection", "Petrophysics", "SmartStrat", "Field Planner", "Connect"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Geophysics Package",
-    description: "GVERSE Geophysics Package",
-    type: "Network",
-    pricing: { perpetual: 28000, annual_rental: 12500, annual_ms: 5040 },
-    features: ["Data Manager", "Geophysics", "Geo+"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Geophysics Package",
-    description: "GVERSE Geophysics Package",
-    type: "Standalone",
-    pricing: { perpetual: 25500, annual_rental: 11500, annual_ms: 4590 },
-    features: ["Data Manager", "Geophysics", "Geo+"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Advanced Geophysics Package",
-    description: "GVERSE Advanced Geophysics Package",
-    type: "Network",
-    pricing: { perpetual: 43000, annual_rental: 19500, annual_ms: 7740 },
-    features: ["Data Manager", "Geophysics", "Geo+", "Attributes"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Advanced Geophysics Package",
-    description: "GVERSE Advanced Geophysics Package",
-    type: "Standalone",
-    pricing: { perpetual: 27000, annual_rental: 12000, annual_ms: 4860 },
-    features: ["Data Manager", "Geophysics", "Geo+", "Attributes"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Petrophysics Package",
-    description: "GVERSE Petrophysics Package",
-    type: "Network",
-    pricing: { perpetual: 12750, annual_rental: 5750, annual_ms: 2295 },
-    features: ["Data Manager", "Petrophysics"]
-  },
-  {
-    category: "Standard Packages",
-    product_group: "GVERSE Petrophysics Package",
-    description: "GVERSE Petrophysics Package",
-    type: "Standalone",
-    pricing: { perpetual: 8000, annual_rental: 3600, annual_ms: 1440 },
-    features: ["Data Manager", "Petrophysics"]
-  }
-];
-
-// Ordered features list (GeoPhy renamed to Geo+)
-const ORDERED_FEATURES = [
-  "Data Manager",
-  "GeoAtlas", 
-  "IsoMap",
-  "SmartSection",
-  "SmartStrat",
-  "Geo+",
-  "Geophysics",
-  "Petrophysics",
-  "Field Planner",
-  "Attributes",
-  "Connect"
-];
-
-// Get all unique features from data, normalized
-const ALL_FEATURES = ORDERED_FEATURES;
-
-// Get all unique product groups
-const PRODUCT_GROUPS = Array.from(
-  new Set(PRODUCT_DATA.map(p => p.product_group))
-);
-
-export interface SellingOption {
-  id: string;
-  name: string;
-  category: 'Standard Packages' | 'GGX Add-on';
-  type: 'Network' | 'Standalone';
-  description?: string;
-  defaultPrice: number;
-  annualRental?: number;
-  annualMaintenance?: number;
-  features?: string[];
-}
-
-const formatCurrency = (value: number | undefined): string => {
-  if (value === undefined || value === null) return '-';
-  return value.toLocaleString('en-US');
+const formatCurrency = (value: number | undefined | null): string => {
+  if (value === undefined || value === null) return '—';
+  return `$${value.toLocaleString('en-US')}`;
 };
 
+/** Parses a comma-separated input into a clean string array. */
+const parseList = (value: string): string[] =>
+  value.split(',').map((v) => v.trim()).filter(Boolean);
 
-type SortField = 'name' | 'default_price' | 'annual_rental' | 'annual_maintenance';
+type SortField = 'name' | 'default_price' | 'annual_rental';
 type SortDirection = 'asc' | 'desc';
-
-interface ProductGroup {
-  name: string;
-  category: string;
-  products: typeof PRODUCT_DATA;
-  features: string[];
-}
 
 export function ProductCatalog() {
   const { toast } = useToast();
@@ -203,22 +60,15 @@ export function ProductCatalog() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [featureFilter, setFeatureFilter] = useState<string>('');
-  const [compareMode, setCompareMode] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<Record<string, 'Network' | 'Standalone'>>({});
-  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
-    'Standard Packages': true,
-    'GGX Add-on': true,
-  });
-  const [sortField, setSortField] = useState<SortField>('annual_rental');
+  const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOption, setEditingOption] = useState<Partial<DbSellingOption> | null>(null);
-  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
-  const [featuresDropdownOpen, setFeaturesDropdownOpen] = useState(false);
+  // Comma-separated text working copies for the array fields, so the
+  // person can type freely without the input fighting them mid-edit.
+  const [formationsText, setFormationsText] = useState('');
+  const [wellTypesText, setWellTypesText] = useState('');
 
   const loadOptions = async () => {
     setLoading(true);
@@ -241,67 +91,34 @@ export function ProductCatalog() {
     loadOptions();
   }, []);
 
-  // Initialize selectedType with Network as default for all groups
-  useEffect(() => {
-    const initial: Record<string, 'Network' | 'Standalone'> = {};
-    PRODUCT_GROUPS.forEach(group => {
-      initial[group] = 'Network';
+  const filteredOptions = useMemo(() => {
+    let result = options;
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      result = result.filter(
+        (o) =>
+          o.name.toLowerCase().includes(q) ||
+          (o.category || '').toLowerCase().includes(q) ||
+          (o.description || '').toLowerCase().includes(q) ||
+          (o.target_formations || []).some((f) => f.toLowerCase().includes(q))
+      );
+    }
+    return [...result].sort((a, b) => {
+      const aVal = sortField === 'name' ? a.name : (a[sortField] ?? 0);
+      const bVal = sortField === 'name' ? b.name : (b[sortField] ?? 0);
+      const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      return sortDirection === 'asc' ? cmp : -cmp;
     });
-    setSelectedType(initial);
-  }, []);
+  }, [options, searchTerm, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
       setSortDirection('asc');
     }
   };
-
-  // Filter products by feature search
-  const filteredProductData = useMemo(() => {
-    if (!featureFilter.trim()) return PRODUCT_DATA;
-    const searchLower = featureFilter.toLowerCase();
-    return PRODUCT_DATA.filter(p => 
-      p.features.some(f => f.toLowerCase().includes(searchLower)) ||
-      p.product_group.toLowerCase().includes(searchLower) ||
-      p.description.toLowerCase().includes(searchLower)
-    );
-  }, [featureFilter]);
-
-  // Group products by product_group
-  const groupedProducts = useMemo(() => {
-    const groups: Record<string, ProductGroup> = {};
-    
-    filteredProductData.forEach(product => {
-      if (!groups[product.product_group]) {
-        groups[product.product_group] = {
-          name: product.product_group,
-          category: product.category,
-          products: [],
-          features: product.features,
-        };
-      }
-      groups[product.product_group].products.push(product);
-    });
-
-    // Sort groups by the minimum annual_rental within each group
-    const sortedGroups = Object.values(groups).sort((a, b) => {
-      const aMin = Math.min(...a.products.map(p => p.pricing.annual_rental));
-      const bMin = Math.min(...b.products.map(p => p.pricing.annual_rental));
-      return sortDirection === 'asc' ? aMin - bMin : bMin - aMin;
-    });
-
-    return sortedGroups;
-  }, [filteredProductData, sortDirection]);
-
-  // Get unique features for comparison matrix in ordered form
-  const uniqueFeatures = useMemo(() => {
-    const usedFeatures = new Set<string>();
-    filteredProductData.forEach(p => p.features.forEach(f => usedFeatures.add(f)));
-    return ORDERED_FEATURES.filter(f => usedFeatures.has(f));
-  }, [filteredProductData]);
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -316,83 +133,67 @@ export function ProductCatalog() {
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
       let imported = 0;
-      let currentCategory = 'Standard Packages';
-
       for (const row of jsonData) {
-        const typeValue = String(row['Type'] || '').trim();
-        
-        if (typeValue === 'Standard Packages' || typeValue === 'GGX Add-on') {
-          currentCategory = typeValue;
-          continue;
-        }
-
-        const name = String(row['Product Description'] || row['Name'] || row['Product Name'] || row['Product'] || '').trim();
+        const name = String(row['Product Name'] || row['Name'] || row['Product'] || '').trim();
         if (!name) continue;
 
-        const perpetual = row['Perpetual ($)'] || row['Perpetual'] || row['Price'] || row['Default Price'];
-        const rental = row['Annual Rental ($)'] || row['Annual Rental'] || row['Rental'];
-        const maintenance = row['Annual M&S ($)'] || row['Annual M&S'] || row['Maintenance'] || row['M&S'];
+        const price = row['Price ($)'] || row['Price'] || row['Default Price'];
+        const rental = row['Annual Rental ($)'] || row['Annual Rental'];
+        const maintenance = row['Annual Maintenance ($)'] || row['Annual Maintenance'] || row['M&S'];
 
-        const defaultPrice = parseFloat(String(perpetual || 0).replace(/[,$]/g, '')) || 0;
+        const defaultPrice = parseFloat(String(price || 0).replace(/[,$]/g, '')) || 0;
         const annualRental = parseFloat(String(rental || 0).replace(/[,$]/g, '')) || undefined;
         const annualMaintenance = parseFloat(String(maintenance || 0).replace(/[,$]/g, '')) || undefined;
-        
-        const type = typeValue.toLowerCase().includes('standalone') ? 'Standalone' : 'Network';
-        
-        const triggerType = String(row['Trigger Type'] || row['Trigger'] || '').trim() || undefined;
-        const description = String(row['Description'] || row['Notes'] || '').trim() || undefined;
+
+        const category = String(row['Category'] || '').trim() || undefined;
+        const description = String(row['Description'] || '').trim() || undefined;
+        const formations = parseList(String(row['Target Formations'] || ''));
+        const wellTypes = parseList(String(row['Applicable Well Types'] || ''));
+        const minDepth = row['Min Depth (ft)'] ? parseFloat(String(row['Min Depth (ft)'])) : undefined;
+        const maxDepth = row['Max Depth (ft)'] ? parseFloat(String(row['Max Depth (ft)'])) : undefined;
 
         await saveSellingOption({
           name,
-          category: currentCategory,
-          type,
+          category: category || 'General',
+          type: String(row['Type'] || '').trim() || 'Standard',
           default_price: defaultPrice,
           annual_rental: annualRental,
           annual_maintenance: annualMaintenance,
-          trigger_type: triggerType,
           description,
+          target_formations: formations,
+          applicable_well_types: wellTypes,
+          min_depth: minDepth,
+          max_depth: maxDepth,
         });
         imported++;
       }
 
-      toast({ 
-        title: 'Import Complete', 
-        description: `Imported ${imported} products from spreadsheet` 
-      });
+      toast({ title: 'Import complete', description: `Imported ${imported} products from spreadsheet` });
       loadOptions();
     } catch (error) {
       console.error('Import failed:', error);
-      toast({ 
-        title: 'Import Failed', 
-        description: 'Could not parse the spreadsheet. Check format and try again.', 
-        variant: 'destructive' 
+      toast({
+        title: 'Import failed',
+        description: 'Could not parse the spreadsheet. Check the format and try again.',
+        variant: 'destructive',
       });
     } finally {
       setImporting(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleAddNew = () => {
-    setEditingOption({
-      name: '',
-      category: 'Standard Packages',
-      type: 'Network',
-      default_price: 0,
-    });
-    setSelectedFeatures([]);
-    setFeaturesDropdownOpen(false);
+    setEditingOption({ name: '', category: '', type: '', default_price: 0 });
+    setFormationsText('');
+    setWellTypesText('');
     setShowEditModal(true);
   };
 
   const handleEdit = (option: DbSellingOption) => {
     setEditingOption(option);
-    // Parse features from description or trigger_type field (stored as comma-separated)
-    const storedFeatures = option.trigger_type ? option.trigger_type.split(',').map(f => f.trim()).filter(Boolean) : [];
-    setSelectedFeatures(storedFeatures);
-    setFeaturesDropdownOpen(false);
+    setFormationsText((option.target_formations || []).join(', '));
+    setWellTypesText((option.applicable_well_types || []).join(', '));
     setShowEditModal(true);
   };
 
@@ -401,716 +202,353 @@ export function ProductCatalog() {
       await deleteSellingOption(id);
       toast({ title: 'Deleted', description: 'Product removed from catalog' });
       loadOptions();
-    } catch (error) {
+    } catch {
       toast({ title: 'Error', description: 'Failed to delete product', variant: 'destructive' });
     }
   };
 
   const handleSave = async () => {
-    if (!editingOption?.name) {
+    if (!editingOption?.name?.trim()) {
       toast({ title: 'Error', description: 'Product name is required', variant: 'destructive' });
       return;
     }
 
-    // Store selected features as comma-separated string in trigger_type field
-    const featuresString = selectedFeatures.length > 0 ? selectedFeatures.join(',') : undefined;
+    const payload = {
+      name: editingOption.name.trim(),
+      category: editingOption.category?.trim() || 'General',
+      type: editingOption.type?.trim() || 'Standard',
+      description: editingOption.description,
+      default_price: editingOption.default_price || 0,
+      annual_rental: editingOption.annual_rental,
+      annual_maintenance: editingOption.annual_maintenance,
+      target_formations: parseList(formationsText),
+      applicable_well_types: parseList(wellTypesText),
+      min_depth: editingOption.min_depth,
+      max_depth: editingOption.max_depth,
+    };
 
     try {
       if (editingOption.id) {
-        await updateSellingOption(editingOption.id, {
-          ...editingOption,
-          trigger_type: featuresString,
-        });
-        toast({ title: 'Updated', description: 'Product updated successfully' });
+        await updateSellingOption(editingOption.id, payload);
+        toast({ title: 'Updated', description: 'Product updated' });
       } else {
-        await saveSellingOption({
-          name: editingOption.name,
-          category: editingOption.category || 'Standard Packages',
-          type: editingOption.type || 'Network',
-          description: editingOption.description,
-          default_price: editingOption.default_price || 0,
-          annual_rental: editingOption.annual_rental,
-          annual_maintenance: editingOption.annual_maintenance,
-          trigger_type: featuresString,
-        });
-        toast({ title: 'Created', description: 'Product added to catalog' });
+        await saveSellingOption(payload);
+        toast({ title: 'Added', description: 'Product added to your catalog' });
       }
       setShowEditModal(false);
       setEditingOption(null);
-      setSelectedFeatures([]);
       loadOptions();
-    } catch (error) {
+    } catch {
       toast({ title: 'Error', description: 'Failed to save product', variant: 'destructive' });
     }
   };
 
-  const toggleGroup = (groupName: string) => {
-    setExpandedGroups(prev => ({
-      ...prev,
-      [groupName]: !prev[groupName]
-    }));
-  };
-
-  const toggleType = (groupName: string) => {
-    setSelectedType(prev => ({
-      ...prev,
-      [groupName]: prev[groupName] === 'Network' ? 'Standalone' : 'Network'
-    }));
-  };
-
-  const getProductForGroup = (group: ProductGroup, type: 'Network' | 'Standalone') => {
-    return group.products.find(p => p.type === type);
-  };
-
-  const SortableHeader = ({ field, children, className = '' }: { field: SortField; children: React.ReactNode; className?: string }) => (
-    <TableHead 
-      className={`cursor-pointer hover:bg-muted/50 select-none ${className}`}
-      onClick={() => handleSort(field)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        {sortField === field ? (
-          sortDirection === 'asc' ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )
-        ) : (
-          <ArrowUpDown className="h-4 w-4 opacity-30" />
-        )}
-      </div>
-    </TableHead>
-  );
-
-  // Feature Comparison Matrix Component
-  const FeatureComparisonMatrix = () => (
-    <div className="border border-border rounded-lg overflow-auto max-h-[600px]">
-      <Table>
-        <TableHeader className="sticky top-0 bg-background z-10">
-          <TableRow className="bg-muted/30">
-            <TableHead className="font-semibold min-w-[200px] sticky left-0 bg-muted/30 z-20">Product</TableHead>
-            <TableHead className="text-center min-w-[80px]">Type</TableHead>
-            {uniqueFeatures.map(feature => (
-              <TableHead key={feature} className="text-center min-w-[100px] text-xs">
-                {feature}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {groupedProducts.map((group, groupIdx) => {
-            const currentType = selectedType[group.name] || 'Network';
-            const product = getProductForGroup(group, currentType);
-            if (!product) return null;
-            
-            return (
-              <TableRow 
-                key={`${group.name}-${currentType}`}
-                className={groupIdx % 2 === 0 ? 'bg-background' : 'bg-muted/20'}
-              >
-                <TableCell className="font-medium sticky left-0 bg-inherit">
-                  <div className="flex items-center gap-2">
-                    <span>{group.name}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center">
-                  <Badge
-                    className={`cursor-pointer ${
-                      currentType === 'Network'
-                        ? 'bg-blue-500/20 text-blue-600 border-blue-500/30 hover:bg-blue-500/30'
-                        : 'bg-green-500/20 text-green-600 border-green-500/30 hover:bg-green-500/30'
-                    }`}
-                    onClick={() => toggleType(group.name)}
-                  >
-                    {currentType}
-                  </Badge>
-                </TableCell>
-                {uniqueFeatures.map(feature => (
-                  <TableCell key={feature} className="text-center">
-                    {product.features.includes(feature) ? (
-                      <Check className="h-4 w-4 text-green-600 mx-auto" />
-                    ) : (
-                      <X className="h-4 w-4 text-muted-foreground/30 mx-auto" />
-                    )}
-                  </TableCell>
-                ))}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-
-  // Standard Product List View
-  const ProductListView = () => (
-    <div className="space-y-3">
-      {groupedProducts.map((group, groupIdx) => {
-        const isExpanded = expandedGroups[group.name];
-        const isSelected = selectedProduct === group.name;
-        const currentType = selectedType[group.name] || 'Network';
-        const currentProduct = getProductForGroup(group, currentType);
-        const networkProduct = getProductForGroup(group, 'Network');
-        const standaloneProduct = getProductForGroup(group, 'Standalone');
-        
-        if (!currentProduct) return null;
-
-        return (
-          <div 
-            key={group.name}
-            className={`border border-border rounded-lg overflow-hidden transition-all ${
-              isSelected ? 'ring-2 ring-primary' : ''
-            }`}
-          >
-            {/* Main Row - Collapsed View */}
-            <div 
-              className={`flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors ${
-                groupIdx % 2 === 0 ? 'bg-background' : 'bg-muted/10'
-              }`}
-              onClick={() => {
-                toggleGroup(group.name);
-                setSelectedProduct(isSelected ? null : group.name);
-              }}
-            >
-              <div className="flex items-center gap-3 flex-1">
-                <div className="p-1">
-                  {isExpanded ? (
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{group.name}</span>
-                    <Badge
-                      variant="outline"
-                      className={`cursor-pointer text-xs ${
-                        currentType === 'Network'
-                          ? 'bg-blue-500/20 text-blue-600 border-blue-500/30'
-                          : 'bg-green-500/20 text-green-600 border-green-500/30'
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleType(group.name);
-                      }}
-                    >
-                      {currentType}
-                    </Badge>
-                  </div>
-                  {/* Feature Badges on Hover/Select */}
-                  {(isSelected || isExpanded) && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {currentProduct.features.map(feature => (
-                        <Badge key={feature} variant="secondary" className="text-xs">
-                          {feature}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Pricing Summary and Edit Button */}
-              <div className="flex items-center gap-4 text-right">
-                <div className="flex items-center gap-6">
-                  <div>
-                    <div className="text-xs text-muted-foreground">Perpetual</div>
-                    <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.perpetual)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Annual Rental</div>
-                    <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_rental)}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Annual M&S</div>
-                    <div className="font-mono font-medium">${formatCurrency(currentProduct.pricing.annual_ms)}</div>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Create a DB-like option from the static product data for editing
-                    const editOption: Partial<DbSellingOption> = {
-                      name: `${currentProduct.product_group} ${currentProduct.type}`,
-                      category: currentProduct.category,
-                      type: currentProduct.type,
-                      default_price: currentProduct.pricing.perpetual,
-                      annual_rental: currentProduct.pricing.annual_rental,
-                      annual_maintenance: currentProduct.pricing.annual_ms,
-                    };
-                    setEditingOption(editOption);
-                    setSelectedFeatures(currentProduct.features);
-                    setFeaturesDropdownOpen(false);
-                    setShowEditModal(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Expanded View - Both Network and Standalone Options */}
-            {isExpanded && (
-              <div className="border-t border-border bg-muted/20 p-4">
-                <div className="text-sm font-medium mb-3 text-muted-foreground">Pricing Options</div>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Network Option */}
-                  {networkProduct && (
-                    <div 
-                      className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                        currentType === 'Network' 
-                          ? 'border-blue-500 bg-blue-500/10' 
-                          : 'border-border hover:border-blue-500/50'
-                      }`}
-                      onClick={() => setSelectedType(prev => ({ ...prev, [group.name]: 'Network' }))}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30">
-                          Network
-                        </Badge>
-                        {currentType === 'Network' && (
-                          <Check className="h-4 w-4 text-blue-600" />
-                        )}
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Perpetual:</span>
-                          <span className="font-mono">${formatCurrency(networkProduct.pricing.perpetual)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Annual Rental:</span>
-                          <span className="font-mono">${formatCurrency(networkProduct.pricing.annual_rental)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Annual M&S:</span>
-                          <span className="font-mono">${formatCurrency(networkProduct.pricing.annual_ms)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Standalone Option */}
-                  {standaloneProduct && (
-                    <div 
-                      className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                        currentType === 'Standalone' 
-                          ? 'border-green-500 bg-green-500/10' 
-                          : 'border-border hover:border-green-500/50'
-                      }`}
-                      onClick={() => setSelectedType(prev => ({ ...prev, [group.name]: 'Standalone' }))}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <Badge className="bg-green-500/20 text-green-600 border-green-500/30">
-                          Standalone
-                        </Badge>
-                        {currentType === 'Standalone' && (
-                          <Check className="h-4 w-4 text-green-600" />
-                        )}
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Perpetual:</span>
-                          <span className="font-mono">${formatCurrency(standaloneProduct.pricing.perpetual)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Annual Rental:</span>
-                          <span className="font-mono">${formatCurrency(standaloneProduct.pricing.annual_rental)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Annual M&S:</span>
-                          <span className="font-mono">${formatCurrency(standaloneProduct.pricing.annual_ms)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-
   const generateTemplateDownload = () => {
     const templateData = [
       {
-        'Product Name': 'GVERSE Example',
-        'Category': 'Standard Packages',
-        'Type': 'Network',
-        'Perpetual ($)': 28000,
-        'Annual Rental ($)': 12500,
-        'Annual M&S ($)': 5040,
-        'Features': 'Data Manager,GeoAtlas,IsoMap',
-        'Description': 'Example product description'
+        'Product Name': 'Premium cementing package',
+        Category: 'Cementing',
+        Type: 'Service',
+        'Price ($)': 18500,
+        'Annual Rental ($)': '',
+        'Annual Maintenance ($)': '',
+        'Target Formations': 'Woodford, Meramec',
+        'Applicable Well Types': 'Horizontal, Directional',
+        'Min Depth (ft)': 8000,
+        'Max Depth (ft)': 15000,
+        Description: 'Example product — edit or delete this row',
       },
-      {
-        'Product Name': 'GVERSE Example',
-        'Category': 'Standard Packages',
-        'Type': 'Standalone',
-        'Perpetual ($)': 17500,
-        'Annual Rental ($)': 8000,
-        'Annual M&S ($)': 3150,
-        'Features': 'Data Manager,GeoAtlas,IsoMap',
-        'Description': 'Example product description'
-      }
     ];
-    
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Products');
     XLSX.writeFile(wb, 'product_catalog_template.xlsx');
   };
 
+  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <TableHead className="cursor-pointer hover:bg-muted/50 select-none" onClick={() => handleSort(field)}>
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field ? (
+          sortDirection === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-30" />
+        )}
+      </div>
+    </TableHead>
+  );
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Product Catalog - 3 columns */}
         <div className="lg:col-span-3">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Package className="h-5 w-5 text-primary" />
-                  <CardTitle>Product Catalog</CardTitle>
+                  <CardTitle>Product catalog</CardTitle>
                 </div>
                 <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    onChange={handleImportFile}
-                    className="hidden"
-                  />
+                  <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
                   <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
                     <FileSpreadsheet className="h-4 w-4 mr-2" />
-                    {importing ? 'Importing...' : 'Import'}
+                    {importing ? 'Importing…' : 'Import'}
                   </Button>
                   <Button onClick={handleAddNew}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Product
+                    Add product
                   </Button>
                 </div>
               </div>
             </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="flex gap-4 flex-wrap">
-            <div className="flex-1 min-w-[200px] relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Filter by feature (e.g., smartSTRAT, Petrophysics)..."
-                value={featureFilter}
-                onChange={(e) => setFeatureFilter(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="compare-mode"
-                checked={compareMode}
-                onCheckedChange={(checked) => setCompareMode(checked === true)}
-              />
-              <Label htmlFor="compare-mode" className="flex items-center gap-2 cursor-pointer">
-                <Grid3X3 className="h-4 w-4" />
-                Compare Features
-              </Label>
-            </div>
-          </div>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search products, categories, formations…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
 
-          {/* Feature filter suggestions */}
-          {featureFilter && (
-            <div className="flex flex-wrap gap-2">
-              <span className="text-sm text-muted-foreground">Available features:</span>
-              {ALL_FEATURES.filter(f => 
-                f.toLowerCase().includes(featureFilter.toLowerCase())
-              ).map(feature => (
-                <Badge 
-                  key={feature} 
-                  variant="outline" 
-                  className="cursor-pointer hover:bg-primary/10"
-                  onClick={() => setFeatureFilter(feature)}
-                >
-                  {feature}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          {/* Sort controls for list view */}
-          {!compareMode && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Sort by Annual Rental:</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
-                className="h-8"
-              >
-                {sortDirection === 'asc' ? (
-                  <>Lowest First <ChevronUp className="h-4 w-4 ml-1" /></>
-                ) : (
-                  <>Highest First <ChevronDown className="h-4 w-4 ml-1" /></>
-                )}
-              </Button>
-            </div>
-          )}
-
-          {/* Main Content */}
-          {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading catalog...</div>
-          ) : groupedProducts.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="mb-2">No products match your filter</p>
-              <p className="text-sm">Try a different feature name</p>
-            </div>
-          ) : compareMode ? (
-            <FeatureComparisonMatrix />
-          ) : (
-            <ProductListView />
-          )}
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading catalog…</div>
+              ) : options.length === 0 ? (
+                <div className="text-center py-12">
+                  <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <h3 className="font-semibold mb-1">Start your catalog</h3>
+                  <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+                    Add what you sell, and MidconSight matches it against active drilling
+                    to surface the leads worth calling.
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <Button onClick={handleAddNew}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add your first product
+                    </Button>
+                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Import a spreadsheet
+                    </Button>
+                  </div>
+                </div>
+              ) : filteredOptions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No products match your search.</div>
+              ) : (
+                <div className="border border-border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        <SortableHeader field="name">Product</SortableHeader>
+                        <TableHead>Category</TableHead>
+                        <TableHead>Matches</TableHead>
+                        <SortableHeader field="default_price">Price</SortableHeader>
+                        <SortableHeader field="annual_rental">Annual rental</SortableHeader>
+                        <TableHead className="w-20"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredOptions.map((option) => {
+                        const hasCriteria =
+                          (option.target_formations?.length || 0) > 0 ||
+                          (option.applicable_well_types?.length || 0) > 0 ||
+                          option.min_depth != null ||
+                          option.max_depth != null;
+                        return (
+                          <TableRow key={option.id}>
+                            <TableCell>
+                              <div className="font-medium">{option.name}</div>
+                              {option.description && (
+                                <div className="text-xs text-muted-foreground line-clamp-1">{option.description}</div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{option.category}</TableCell>
+                            <TableCell>
+                              {hasCriteria ? (
+                                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                  {(option.target_formations || []).slice(0, 2).map((f) => (
+                                    <Badge key={f} variant="secondary" className="text-[10px]">{f}</Badge>
+                                  ))}
+                                  {(option.applicable_well_types || []).slice(0, 2).map((t) => (
+                                    <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">General — no criteria set</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">{formatCurrency(option.default_price)}</TableCell>
+                            <TableCell className="font-mono text-sm">{formatCurrency(option.annual_rental)}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(option)}>
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(option.id)}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Import Guide - 1 column */}
         <div className="lg:col-span-1">
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Info className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base">Import Guide</CardTitle>
+                <CardTitle className="text-base">Import guide</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-sm text-muted-foreground space-y-3">
-                <p>Import products from an Excel or CSV file. Your file should include:</p>
+                <p>Import products from a spreadsheet. Columns recognized:</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li>Product Name</li>
-                  <li>Category (Standard Packages / GGX Add-on)</li>
-                  <li>Type (Network / Standalone)</li>
-                  <li>Perpetual ($)</li>
-                  <li>Annual Rental ($)</li>
-                  <li>Annual M&S ($)</li>
-                  <li>Features (comma-separated)</li>
+                  <li>Category, Type</li>
+                  <li>Price ($), Annual Rental ($), Annual Maintenance ($)</li>
+                  <li>Target Formations (comma-separated)</li>
+                  <li>Applicable Well Types (comma-separated)</li>
+                  <li>Min Depth (ft), Max Depth (ft)</li>
                   <li>Description (optional)</li>
                 </ul>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full"
-                onClick={generateTemplateDownload}
-              >
+              <Button variant="outline" size="sm" className="w-full" onClick={generateTemplateDownload}>
                 <Download className="h-4 w-4 mr-2" />
-                Download Template
+                Download template
               </Button>
-              <div className="text-xs text-muted-foreground border-t border-border pt-3">
-                <p className="font-medium mb-1">Available Features:</p>
-                <div className="flex flex-wrap gap-1">
-                  {ORDERED_FEATURES.map(f => (
-                    <Badge key={f} variant="outline" className="text-[10px] px-1.5 py-0">
-                      {f}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                Target Formations and Applicable Well Types are what let MidconSight match your
+                catalog against active permits — leave them blank for a general-purpose product.
+              </p>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Edit/Add Modal */}
-      <Dialog open={showEditModal} onOpenChange={(open) => {
-        setShowEditModal(open);
-        if (!open) {
-          setSelectedFeatures([]);
-          setFeaturesDropdownOpen(false);
-        }
-      }}>
+      <Dialog open={showEditModal} onOpenChange={(open) => { setShowEditModal(open); if (!open) setEditingOption(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              {editingOption?.id ? 'Edit Product' : 'Add New Product'}
-            </DialogTitle>
+            <DialogTitle>{editingOption?.id ? 'Edit product' : 'Add product'}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <Label>Product Name *</Label>
+                <Label>Product name *</Label>
                 <Input
                   value={editingOption?.name || ''}
-                  onChange={(e) => setEditingOption(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="GVERSE Geology Network"
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Premium cementing package"
                 />
               </div>
-              
+
               <div>
                 <Label>Category</Label>
-                <Select
-                  value={editingOption?.category || 'Standard Packages'}
-                  onValueChange={(v) => setEditingOption(prev => ({ ...prev, category: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Standard Packages">Standard Packages</SelectItem>
-                    <SelectItem value="GGX Add-on">GGX Add-on</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={editingOption?.category || ''}
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, category: e.target.value }))}
+                  placeholder="Cementing"
+                />
               </div>
 
               <div>
                 <Label>Type</Label>
-                <Select
-                  value={editingOption?.type || 'Network'}
-                  onValueChange={(v) => setEditingOption(prev => ({ ...prev, type: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Network">Network</SelectItem>
-                    <SelectItem value="Standalone">Standalone</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={editingOption?.type || ''}
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, type: e.target.value }))}
+                  placeholder="Service, Equipment, ..."
+                />
               </div>
 
               <div>
-                <Label>Perpetual Price ($)</Label>
+                <Label>Price ($)</Label>
                 <Input
                   type="number"
                   value={editingOption?.default_price || ''}
-                  onChange={(e) => setEditingOption(prev => ({ 
-                    ...prev, 
-                    default_price: parseFloat(e.target.value) || 0 
-                  }))}
-                  placeholder="28000"
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, default_price: parseFloat(e.target.value) || 0 }))}
+                  placeholder="18500"
                 />
               </div>
 
               <div>
-                <Label>Annual Rental ($)</Label>
+                <Label>Annual rental ($)</Label>
                 <Input
                   type="number"
                   value={editingOption?.annual_rental || ''}
-                  onChange={(e) => setEditingOption(prev => ({ 
-                    ...prev, 
-                    annual_rental: parseFloat(e.target.value) || undefined 
-                  }))}
-                  placeholder="12500"
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, annual_rental: parseFloat(e.target.value) || undefined }))}
+                  placeholder="Optional"
                 />
-              </div>
-
-              <div>
-                <Label>Annual M&S ($)</Label>
-                <Input
-                  type="number"
-                  value={editingOption?.annual_maintenance || ''}
-                  onChange={(e) => setEditingOption(prev => ({ 
-                    ...prev, 
-                    annual_maintenance: parseFloat(e.target.value) || undefined 
-                  }))}
-                  placeholder="5040"
-                />
-              </div>
-
-              <div className="col-span-2">
-                <Label>Features</Label>
-                <div className="relative">
-                  <div
-                    className="flex flex-wrap gap-1 min-h-[40px] p-2 border border-input rounded-md cursor-pointer bg-background hover:bg-accent/50"
-                    onClick={() => setFeaturesDropdownOpen(!featuresDropdownOpen)}
-                  >
-                    {selectedFeatures.length === 0 ? (
-                      <span className="text-muted-foreground text-sm">Select features...</span>
-                    ) : (
-                      selectedFeatures.map(feature => (
-                        <Badge 
-                          key={feature} 
-                          variant="secondary"
-                          className="text-xs flex items-center gap-1"
-                        >
-                          {feature}
-                          <X 
-                            className="h-3 w-3 cursor-pointer hover:text-destructive" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedFeatures(prev => prev.filter(f => f !== feature));
-                            }}
-                          />
-                        </Badge>
-                      ))
-                    )}
-                  </div>
-                  {featuresDropdownOpen && (
-                    <div className="absolute z-50 mt-1 w-full bg-background border border-border rounded-md shadow-lg">
-                      <div className="max-h-[200px] overflow-y-auto">
-                        {ORDERED_FEATURES.map(feature => (
-                          <div
-                            key={feature}
-                            className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-accent ${
-                              selectedFeatures.includes(feature) ? 'bg-accent/50' : ''
-                            }`}
-                            onClick={() => {
-                              setSelectedFeatures(prev => 
-                                prev.includes(feature) 
-                                  ? prev.filter(f => f !== feature)
-                                  : [...prev, feature]
-                              );
-                            }}
-                          >
-                            <Checkbox 
-                              checked={selectedFeatures.includes(feature)}
-                              className="pointer-events-none"
-                            />
-                            <span className="text-sm">{feature}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="border-t border-border p-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="w-full"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFeaturesDropdownOpen(false);
-                          }}
-                        >
-                          Done
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="col-span-2">
                 <Label>Description</Label>
                 <Input
                   value={editingOption?.description || ''}
-                  onChange={(e) => setEditingOption(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Product description..."
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Product description…"
+                />
+              </div>
+
+              <div className="col-span-2 border-t border-border pt-3 mt-1">
+                <p className="text-xs font-medium text-muted-foreground mb-3">
+                  Matching criteria — connects this product to real permit activity. Leave blank for a general-purpose product.
+                </p>
+              </div>
+
+              <div className="col-span-2">
+                <Label>Target formations</Label>
+                <Input
+                  value={formationsText}
+                  onChange={(e) => setFormationsText(e.target.value)}
+                  placeholder="Woodford, Meramec, SCOOP"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <Label>Applicable well types</Label>
+                <Input
+                  value={wellTypesText}
+                  onChange={(e) => setWellTypesText(e.target.value)}
+                  placeholder="Horizontal, Directional, Oil, Gas"
+                />
+              </div>
+
+              <div>
+                <Label>Min depth (ft)</Label>
+                <Input
+                  type="number"
+                  value={editingOption?.min_depth ?? ''}
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, min_depth: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                  placeholder="8000"
+                />
+              </div>
+
+              <div>
+                <Label>Max depth (ft)</Label>
+                <Input
+                  type="number"
+                  value={editingOption?.max_depth ?? ''}
+                  onChange={(e) => setEditingOption((prev) => ({ ...prev, max_depth: e.target.value ? parseFloat(e.target.value) : undefined }))}
+                  placeholder="15000"
                 />
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditModal(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave}>
-              {editingOption?.id ? 'Update' : 'Add Product'}
-            </Button>
+            <Button variant="outline" onClick={() => setShowEditModal(false)}>Cancel</Button>
+            <Button onClick={handleSave}>{editingOption?.id ? 'Update' : 'Add product'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

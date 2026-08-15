@@ -174,6 +174,14 @@ export interface Permit {
   
   // Flag for centroid-mapped coordinates (Texas permits without exact location)
   isCentroidMapped?: boolean;
+
+  // Map v2.0 — RBDMS enrichment (see docs/map-v2-data-sourcing.md).
+  // Present only once a permit has been matched against OCC's live well
+  // feed; null/undefined means "still ITD-only, not yet resolved."
+  rbdmsWellStatus?: string;
+  rbdmsLegalDescription?: string;
+  rbdmsWellRecordsUrl?: string;
+  rbdmsEnrichedAt?: string;
 }
 
 export interface ValidationError {

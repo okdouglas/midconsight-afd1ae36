@@ -15,3 +15,7 @@ verify_jwt = false
 # Called by anonymous visitors from the landing page's newsletter form —
 # they have no Supabase session/JWT at all.
 verify_jwt = false
+
+[functions.enrich-permits-rbdms]
+# Called by pg_cron with a shared secret, same reasoning as import-itd-weekly.
+verify_jwt = false

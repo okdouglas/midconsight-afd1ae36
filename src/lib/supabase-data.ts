@@ -60,6 +60,11 @@ export interface DbPermit {
   dataset_id?: string;
   estimated_value: number;
   created_at: string;
+  // Map v2.0 — RBDMS enrichment
+  rbdms_well_status?: string;
+  rbdms_legal_description?: string;
+  rbdms_well_records_url?: string;
+  rbdms_enriched_at?: string;
 }
 
 export interface DbCompany {
@@ -130,6 +135,12 @@ export interface DbSellingOption {
   annual_rental?: number;
   annual_maintenance?: number;
   trigger_type?: string;
+  /** Product-fit matching criteria — which permits/wells this product applies to.
+   *  Empty/null on any field means "no constraint on this dimension." */
+  target_formations?: string[];
+  applicable_well_types?: string[];
+  min_depth?: number;
+  max_depth?: number;
   created_at: string;
   updated_at: string;
 }
@@ -206,7 +217,11 @@ function dbPermitToApp(p: DbPermit): Permit {
     dateImported: p.date_imported,
     datasetId: p.dataset_id || '',
     estimatedValue: Number(p.estimated_value),
-    isCentroidMapped
+    isCentroidMapped,
+    rbdmsWellStatus: p.rbdms_well_status,
+    rbdmsLegalDescription: p.rbdms_legal_description,
+    rbdmsWellRecordsUrl: p.rbdms_well_records_url,
+    rbdmsEnrichedAt: p.rbdms_enriched_at,
   };
 }
 
@@ -785,6 +800,81 @@ export async function getSellingOptionById(id: string): Promise<DbSellingOption 
   return data as DbSellingOption;
 }
 
+// ============ PRODUCT-FIT MATCHING ============
+// The connective tissue between "what's this operator drilling" (real
+// permit fields already captured on import) and "what do I sell" (the
+// catalog above). Single source of truth — used by Research Desk today,
+// and the Map/Company views once they surface product fit too.
+
+export interface ProductFitMatch {
+  product: DbSellingOption;
+  /** 0 = no signal either way (product has no criteria set, or nothing to compare).
+   *  Higher = more criteria matched. Never negative — a mismatch on one
+   *  dimension doesn't disqualify a product that matches on others. */
+  score: number;
+  reasons: string[];
+}
+
+/**
+ * Scores every product in the catalog against a permit's actual
+ * characteristics (formation, well type, depth). Returns matches sorted
+ * best-first. A product with zero criteria set on every field is treated
+ * as "general purpose" and included with score 0, not excluded — an
+ * empty catalog shouldn't silently show nothing.
+ */
+export function matchProductsToPermit(
+  permit: { formationName?: string; wellType?: string; totalDepth?: number },
+  catalog: DbSellingOption[]
+): ProductFitMatch[] {
+  const permitFormation = (permit.formationName || '').toLowerCase().trim();
+  const permitWellType = (permit.wellType || '').toLowerCase().trim();
+  const permitDepth = permit.totalDepth;
+
+  const matches = catalog.map((product) => {
+    let score = 0;
+    const reasons: string[] = [];
+
+    const formations = (product.target_formations || []).map((f) => f.toLowerCase().trim());
+    if (formations.length > 0 && permitFormation) {
+      if (formations.some((f) => permitFormation.includes(f) || f.includes(permitFormation))) {
+        score += 2;
+        reasons.push(`Targets ${permit.formationName}`);
+      }
+    }
+
+    const wellTypes = (product.applicable_well_types || []).map((t) => t.toLowerCase().trim());
+    if (wellTypes.length > 0 && permitWellType) {
+      if (wellTypes.some((t) => permitWellType.includes(t) || t.includes(permitWellType))) {
+        score += 1;
+        reasons.push(`Applies to ${permit.wellType} wells`);
+      }
+    }
+
+    if (permitDepth && (product.min_depth || product.max_depth)) {
+      const min = product.min_depth ?? -Infinity;
+      const max = product.max_depth ?? Infinity;
+      if (permitDepth >= min && permitDepth <= max) {
+        score += 1;
+        reasons.push(`Fits ${permitDepth.toLocaleString()} ft depth range`);
+      }
+    }
+
+    return { product, score, reasons };
+  });
+
+  return matches.sort((a, b) => b.score - a.score);
+}
+
+/** Convenience wrapper: best single match, or null if the catalog is empty. */
+export function suggestBestProduct(
+  permit: { formationName?: string; wellType?: string; totalDepth?: number },
+  catalog: DbSellingOption[]
+): ProductFitMatch | null {
+  if (catalog.length === 0) return null;
+  const matches = matchProductsToPermit(permit, catalog);
+  return matches[0] || null;
+}
+
 // ============ COMPANY UPDATES ============
 
 export async function updateCompany(
@@ -976,6 +1066,18 @@ export async function incrementPaywallHits(): Promise<number> {
 /** Call the first time a user views a permit. Safe to call repeatedly — no-ops after the first time. */
 export async function markActivated(): Promise<void> {
   const { error } = await supabase.rpc('mark_activated');
+  if (error) throw error;
+}
+
+/** Records upgrade intent (Stripe checkout doesn't exist yet — this is the honest interim). */
+export async function requestUpgrade(source: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('upgrade_requests')
+    .insert({ user_id: user.id, source });
+
   if (error) throw error;
 }
 

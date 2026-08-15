@@ -1,0 +1,161 @@
+// Map v2.0 enrichment — matches permits against OCC's live RBDMS_WELLS
+// feed by API number, and fills in real well status, precise coordinates,
+// legal description, and a link to the scanned well file. See
+// docs/map-v2-data-sourcing.md for the field reference and
+// docs/map-v2-ui-design.md for how this drives the marker symbol system.
+//
+// Re-checks permits older than 30 days too (not just unmatched ones) —
+// a well's RBDMS status changes over its life (permitted → drilled →
+// producing/dry → eventually plugged), so this is genuinely ongoing
+// lifecycle tracking, not a one-time lookup.
+//
+// ⚠️ Not live-tested against the real RBDMS endpoint from the sandbox
+// this was built in (network-restricted). Built against standard,
+// documented ArcGIS REST API conventions — verify against real data via
+// the Edge Function logs after first deploy, particularly whether the
+// `api` number format in our `permits` table actually matches RBDMS's
+// numeric `api` field once normalized.
+
+import { createClient } from 'npm:@supabase/supabase-js@2.89.0';
+
+const RBDMS_QUERY_URL = 'https://gis.occ.ok.gov/server/rest/services/Hosted/RBDMS_WELLS/FeatureServer/2/query';
+const BATCH_SIZE = 100; // permits per RBDMS query, keeps the IN-clause URL reasonably short
+const PERMITS_PER_RUN = 500; // caps total work per invocation
+
+/** Strips everything but digits — our stored api is free-text, RBDMS's is numeric. */
+function normalizeApi(raw: string): string {
+  return raw.replace(/\D/g, '');
+}
+
+function buildLegalDescription(row: Record<string, unknown>): string | null {
+  const section = row.section;
+  const township = row.township;
+  const range = row.range;
+  if (!section && !township && !range) return null;
+  const qtrs = [row.qtr1, row.qtr2, row.qtr3, row.qtr4].filter(Boolean).join('');
+  const qtrPrefix = qtrs ? `${qtrs} ` : '';
+  return `${qtrPrefix}Sec ${section ?? '?'}-${township ?? '?'}-${range ?? '?'}`.trim();
+}
+
+Deno.serve(async (req) => {
+  try {
+    const sharedSecret = Deno.env.get('CRON_SHARED_SECRET');
+    if (sharedSecret && req.headers.get('x-cron-secret') !== sharedSecret) {
+      return new Response('Unauthorized', { status: 401 });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // Permits due for a (re-)lookup: never enriched, or checked 30+ days ago.
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: duePermits, error: fetchError } = await supabase
+      .from('permits')
+      .select('id, api')
+      .or(`rbdms_enriched_at.is.null,rbdms_enriched_at.lt.${thirtyDaysAgo.toISOString()}`)
+      .limit(PERMITS_PER_RUN);
+
+    if (fetchError) throw fetchError;
+    if (!duePermits || duePermits.length === 0) {
+      return new Response(JSON.stringify({ success: true, checked: 0, matched: 0 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // api -> [permit ids] — a normalized API can theoretically map to more
+    // than one row if duplicates exist, so update all of them.
+    const apiToPermitIds = new Map<string, string[]>();
+    for (const p of duePermits) {
+      const normalized = normalizeApi(p.api);
+      if (!normalized) continue; // nothing usable to match on
+      const existing = apiToPermitIds.get(normalized) || [];
+      existing.push(p.id);
+      apiToPermitIds.set(normalized, existing);
+    }
+
+    const allApis = Array.from(apiToPermitIds.keys());
+    let matched = 0;
+    const updatedPermitIds = new Set<string>();
+
+    for (let i = 0; i < allApis.length; i += BATCH_SIZE) {
+      const batch = allApis.slice(i, i + BATCH_SIZE);
+      const whereClause = `api IN (${batch.join(',')})`;
+
+      const url = new URL(RBDMS_QUERY_URL);
+      url.searchParams.set('where', whereClause);
+      url.searchParams.set(
+        'outFields',
+        'api,wellstatus,sh_lat,sh_lon,county,section,township,range,qtr1,qtr2,qtr3,qtr4,pm,well_records_docs'
+      );
+      url.searchParams.set('f', 'json');
+
+      const resp = await fetch(url.toString());
+      if (!resp.ok) {
+        console.error(`RBDMS query failed for batch starting at ${i}: ${resp.status}`);
+        continue; // don't let one bad batch stop the rest
+      }
+
+      const json = await resp.json();
+      const features: Array<{ attributes: Record<string, unknown> }> = json.features || [];
+
+      for (const feature of features) {
+        const attrs = feature.attributes;
+        const apiKey = String(attrs.api ?? '').replace(/\.0$/, ''); // ArcGIS doubles sometimes stringify as "123.0"
+        const permitIds = apiToPermitIds.get(apiKey);
+        if (!permitIds) continue;
+
+        const updates: Record<string, unknown> = {
+          rbdms_well_status: attrs.wellstatus || null,
+          rbdms_legal_description: buildLegalDescription(attrs),
+          rbdms_well_records_url: attrs.well_records_docs || null,
+          rbdms_enriched_at: new Date().toISOString(),
+        };
+
+        // Only overwrite coordinates with RBDMS's precise surface-hole
+        // location if it actually returned usable ones.
+        if (typeof attrs.sh_lat === 'number' && typeof attrs.sh_lon === 'number' && attrs.sh_lat !== 0) {
+          updates.lat = attrs.sh_lat;
+          updates.lon = attrs.sh_lon;
+        }
+
+        const { error: updateError } = await supabase
+          .from('permits')
+          .update(updates)
+          .in('id', permitIds);
+
+        if (updateError) {
+          console.error(`Failed to update permits for api ${apiKey}:`, updateError);
+        } else {
+          matched += permitIds.length;
+          permitIds.forEach((id) => updatedPermitIds.add(id));
+        }
+      }
+    }
+
+    // Mark everything we attempted but didn't get a match for as checked
+    // too, so unmatched permits aren't retried every single run — they'll
+    // come up again naturally after the 30-day re-check window.
+    const unmatchedIds = duePermits.map((p) => p.id).filter((id) => !updatedPermitIds.has(id));
+    if (unmatchedIds.length > 0) {
+      await supabase
+        .from('permits')
+        .update({ rbdms_enriched_at: new Date().toISOString() })
+        .in('id', unmatchedIds);
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, checked: duePermits.length, matched }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  } catch (err) {
+    console.error('enrich-permits-rbdms failed:', err);
+    return new Response(JSON.stringify({ success: false, error: String(err) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+});

@@ -34,6 +34,7 @@ import {
   saveDeal, 
   saveContact,
   getContactsByCompany,
+  suggestBestProduct,
   type DbSellingOption,
   type DbContact 
 } from '@/lib/supabase-data';
@@ -84,11 +85,13 @@ export function ResearchSidebar({
   useEffect(() => {
     getSellingOptions().then(opts => {
       setSellingOptions(opts);
-      // Auto-suggest product based on well type
-      const suggested = suggestProduct(permit, opts);
-      if (suggested) {
-        setSelectedProductId(suggested.id);
-        setDealValue(suggested.default_price);
+      // Auto-suggest the best-fit product based on the permit's actual
+      // formation/well type/depth — matched against whatever criteria
+      // this account's own catalog has set, not hardcoded product names.
+      const match = suggestBestProduct(permit, opts);
+      if (match) {
+        setSelectedProductId(match.product.id);
+        setDealValue(match.product.default_price);
       }
     });
 
@@ -96,20 +99,6 @@ export function ResearchSidebar({
       getContactsByCompany(company.id).then(setExistingContacts);
     }
   }, [permit, company]);
-
-  // Suggest product based on well type
-  const suggestProduct = (permit: Permit, options: DbSellingOption[]): DbSellingOption | null => {
-    const wellType = (permit.wellType || permit.drillType || '').toLowerCase();
-    
-    if (wellType.includes('disposal') || wellType.includes('injection')) {
-      return options.find(o => o.name.includes('Petrophysics')) || null;
-    }
-    if (wellType.includes('horizontal') || wellType.includes('directional')) {
-      return options.find(o => o.name.includes('Geophysics')) || options.find(o => o.name.includes('Geology')) || null;
-    }
-    // Default to Geology for standard wells
-    return options.find(o => o.name.includes('Geology')) || options[0] || null;
-  };
 
   const handleProductChange = (productId: string) => {
     setSelectedProductId(productId);

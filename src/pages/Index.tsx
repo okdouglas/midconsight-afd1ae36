@@ -16,6 +16,7 @@ import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { incrementPaywallHits, markActivated } from '@/lib/supabase-data';
+import { UpgradeDialog } from '@/components/UpgradeDialog';
 
 const NAV_ITEMS = [
   { value: 'dashboard', label: 'Dashboard', icon: BarChart3, gated: false },
@@ -27,7 +28,7 @@ const NAV_ITEMS = [
   { value: 'data', label: 'Data', icon: Database, gated: true },
 ] as const;
 
-function UpgradePrompt({ label }: { label: string }) {
+function UpgradePrompt({ label, onUpgradeClick }: { label: string; onUpgradeClick: () => void }) {
   return (
     <div className="text-center py-16">
       <Lock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -35,7 +36,7 @@ function UpgradePrompt({ label }: { label: string }) {
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
         Upgrade to unlock company tracking, deal pipelines, product catalog, and full data import.
       </p>
-      <Button>Upgrade to paid</Button>
+      <Button onClick={onUpgradeClick}>Upgrade to paid</Button>
     </div>
   );
 }
@@ -56,6 +57,13 @@ const Index = () => {
   } = useSupabaseData();
 
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
+  const [upgradeSource, setUpgradeSource] = useState('');
+
+  const openUpgradeDialog = (source: string) => {
+    setUpgradeSource(source);
+    setUpgradeDialogOpen(true);
+  };
   const activeItem = NAV_ITEMS.find((n) => n.value === activeTab);
   const activeLabel = activeItem?.label ?? 'Dashboard';
   const isGatedTab = !!activeItem?.gated && !isPaid;
@@ -151,17 +159,29 @@ const Index = () => {
               {!isPaid && (
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-4 py-2.5 text-sm text-muted-foreground">
                   <Clock className="h-4 w-4 shrink-0 text-primary" />
-                  Free plan shows permits 30+ days old. <button className="text-primary font-medium hover:underline">Upgrade</button> to see this week's filings live.
+                  Free plan shows permits 30+ days old. <button onClick={() => openUpgradeDialog('dashboard_banner')} className="text-primary font-medium hover:underline">Upgrade</button> to see this week's filings live.
                 </div>
               )}
               {permits.length === 0 ? (
                 <div className="text-center py-12">
                   <Database className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
                   <h2 className="text-xl font-semibold mb-2">No Data Loaded</h2>
-                  <p className="text-muted-foreground mb-6">
-                    Import your ITD wells/formations data to get started with permit intelligence.
-                  </p>
-                  <DataImport onImportComplete={refresh} />
+                  {isPaid ? (
+                    <>
+                      <p className="text-muted-foreground mb-6">
+                        Import your ITD wells/formations data to get started with permit intelligence.
+                      </p>
+                      <DataImport onImportComplete={refresh} />
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground mb-6">
+                      The shared permit feed hasn't populated yet — check back soon, or{' '}
+                      <button onClick={() => openUpgradeDialog('dashboard_empty_state')} className="text-primary font-medium hover:underline">
+                        upgrade
+                      </button>{' '}
+                      for full access once it does.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>
@@ -244,7 +264,7 @@ const Index = () => {
               {isPaid ? (
                 <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} />
               ) : (
-                <UpgradePrompt label="Lead Research" />
+                <UpgradePrompt label="Lead Research" onUpgradeClick={() => openUpgradeDialog('research_tab')} />
               )}
             </TabsContent>
 
@@ -260,7 +280,7 @@ const Index = () => {
               {isPaid ? (
                 <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} />
               ) : (
-                <UpgradePrompt label="Companies" />
+                <UpgradePrompt label="Companies" onUpgradeClick={() => openUpgradeDialog('companies_tab')} />
               )}
             </TabsContent>
 
@@ -269,13 +289,13 @@ const Index = () => {
               {isPaid ? (
                 <DealsTab deals={deals} companies={companies} onRefresh={refresh} />
               ) : (
-                <UpgradePrompt label="Deals" />
+                <UpgradePrompt label="Deals" onUpgradeClick={() => openUpgradeDialog('deals_tab')} />
               )}
             </TabsContent>
 
             {/* Products Tab */}
             <TabsContent value="products" className="space-y-6 mt-0">
-              {isPaid ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" />}
+              {isPaid ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
             </TabsContent>
 
             {/* Data Management Tab */}
@@ -289,12 +309,18 @@ const Index = () => {
                   />
                 </>
               ) : (
-                <UpgradePrompt label="Data import" />
+                <UpgradePrompt label="Data import" onUpgradeClick={() => openUpgradeDialog('data_tab')} />
               )}
             </TabsContent>
           </Tabs>
         </main>
       </div>
+
+      <UpgradeDialog
+        open={upgradeDialogOpen}
+        onOpenChange={setUpgradeDialogOpen}
+        source={upgradeSource}
+      />
     </div>
   );
 };

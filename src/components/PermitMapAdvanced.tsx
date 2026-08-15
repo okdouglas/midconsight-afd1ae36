@@ -72,47 +72,92 @@ const TRS_OVERLAY = {
   name: 'Township/Range/Section Grid',
 };
 
-// Note: well status filter options are computed live from the actual data
-// (see statusOptions below), not hardcoded — Oklahoma's raw Well_Status /
-// Permit_Status fields are agency codes, not predictable words, so a fixed
-// guessed list silently matches nothing when the real codes differ.
+// Note: filter options (stage, product type) are computed live from the
+// actual data (see stageFilterOptions/productTypeFilterOptions below),
+// not hardcoded — Oklahoma's raw status fields are agency codes, not
+// predictable words, so a fixed guessed list silently matches nothing
+// when the real codes differ.
 
 // Well type colors
-const WELL_TYPE_COLORS = {
-  gas: '#3b82f6',      // Blue
-  injection: '#f59e0b', // Orange/Amber
-  disposal: '#ef4444',  // Red
-  oil: '#22c55e',       // Green
-  default: '#10b981'    // Teal/Green
+// Map v2.0 — lifecycle stage, not raw well type (see docs/map-v2-ui-design.md).
+// RBDMS's real wellstatus values split into two questions: what stage of
+// life is this well in, and what does it produce if active. This function
+// answers only the first — the primary, always-visible signal.
+export type LifecycleStage =
+  | 'permitted' | 'active' | 'injection' | 'dry'
+  | 'temp_abandoned' | 'plugged' | 'orphan' | 'other';
+
+const STAGE_COLORS: Record<LifecycleStage, string> = {
+  permitted: '#888780',       // neutral gray — filed, not yet resolved
+  active: '#639922',          // green — producing
+  injection: '#378ADD',       // blue — injection/water
+  dry: '#E24B4A',             // red — non-productive
+  temp_abandoned: '#BA7517',  // amber — inactive, unresolved
+  plugged: '#5F5E5A',         // dark gray — end of life
+  orphan: '#D85A30',          // coral — kept distinct from dry: regulatory/liability signal, not just "didn't produce"
+  other: '#888780',
 };
 
-// Custom marker icon based on well type
-const getMarkerIcon = (wellType: string, isCentroidMapped: boolean = false): L.DivIcon => {
-  const raw = (wellType || '').toLowerCase().trim();
-  let color = WELL_TYPE_COLORS.default;
+export const STAGE_LABELS: Record<LifecycleStage, string> = {
+  permitted: 'Permitted',
+  active: 'Active producer',
+  injection: 'Injection / water',
+  dry: 'Dry hole',
+  temp_abandoned: 'Temporarily abandoned',
+  plugged: 'Plugged / terminated',
+  orphan: 'Orphan',
+  other: 'Other/Unclassified',
+};
 
-  if (/^(gw|gas)/.test(raw) || raw.includes('gas')) {
-    color = WELL_TYPE_COLORS.gas;
-  } else if (/^(inj|iw)/.test(raw) || raw.includes('injection')) {
-    color = WELL_TYPE_COLORS.injection;
-  } else if (/^(swd|sw|dw)/.test(raw) || raw.includes('disposal') || raw.includes('saltwater')) {
-    color = WELL_TYPE_COLORS.disposal;
-  } else if (/^ow$/.test(raw) || raw.includes('oil')) {
-    color = WELL_TYPE_COLORS.oil;
+/** Classifies a permit's real lifecycle stage from RBDMS wellstatus if
+ *  enriched, otherwise from the raw ITD well type (which for pre-drill
+ *  filings is almost always an undifferentiated "OG" — see the
+ *  map-v2-data-sourcing.md finding). Unmatched RBDMS values fall into
+ *  'other', visibly, rather than being silently dropped. */
+export function classifyLifecycleStage(permit: {
+  rbdmsWellStatus?: string;
+  wellType?: string;
+}): LifecycleStage {
+  const status = (permit.rbdmsWellStatus || '').toUpperCase().trim();
+
+  if (status) {
+    if (['OIL', 'GAS', 'OIL/GAS', 'GAS_STORAGE'].includes(status)) return 'active';
+    if (['WATER_INJECTION', 'UIC', 'WATER_SUPPLY'].includes(status)) return 'injection';
+    if (status === 'DRY') return 'dry';
+    if (status === 'TEMPORARILY_ABANDONED') return 'temp_abandoned';
+    if (['PLUGGED', 'TERMINATED', 'STATE_FUNDS_PLUGGING'].includes(status)) return 'plugged';
+    if (status === 'ORPHAN') return 'orphan';
+    return 'other'; // enriched, but an RBDMS value not yet mapped — visible, not hidden
   }
 
-  // Location precision is a separate dimension from well type — shown as a
-  // dashed border instead of a second color, so it never gets confused
-  // with (or visually collides with) the well-type color coding above.
+  // Not enriched yet — still an ITD-only filing.
+  return 'permitted';
+}
+
+// Custom marker icon: color = lifecycle stage, border style = location
+// precision (existing), fill = whether this permit has been matched
+// against RBDMS yet at all. Three independent channels, each answering a
+// different question — deliberately not a fourth, to keep it scannable.
+const getMarkerIcon = (
+  permit: { rbdmsWellStatus?: string; wellType?: string; rbdmsEnrichedAt?: string },
+  isCentroidMapped: boolean = false
+): L.DivIcon => {
+  const stage = classifyLifecycleStage(permit);
+  const color = STAGE_COLORS[stage];
+  const isEnriched = !!permit.rbdmsEnrichedAt;
+
   const border = isCentroidMapped ? '2px dashed white' : '2px solid white';
+  const background = isEnriched ? color : 'white';
+  const dotStyle = isEnriched
+    ? `background: ${background}; border: ${border};`
+    : `background: white; border: 2px solid ${color};`;
 
   return L.divIcon({
     className: 'custom-marker',
     html: `<div style="
       width: 14px;
       height: 14px;
-      background: ${color};
-      border: ${border};
+      ${dotStyle}
       border-radius: 50%;
       box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     "></div>`,
@@ -148,7 +193,8 @@ export function PermitMapAdvanced({
   const [showTrsGrid, setShowTrsGrid] = useState(false);
   const [startDate, setStartDate] = useState<Date | undefined>(getDefaultStartDate());
   const [endDate, setEndDate] = useState<Date | undefined>(getDefaultEndDate());
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedStages, setSelectedStages] = useState<LifecycleStage[]>([]);
+  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([]);
   const [cursorPosition, setCursorPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [viewportOperators, setViewportOperators] = useState<{ name: string; count: number }[]>([]);
 
@@ -205,10 +251,31 @@ export function PermitMapAdvanced({
   // value actually present in the data, with counts, sorted by frequency.
   // Never a hardcoded guess, since Oklahoma's raw status fields are agency
   // codes that don't follow a predictable word list.
-  const statusOptions = useMemo(() => {
+  // Map v2.0 — two filter facets, replacing the old single raw-code
+  // "Well Status" filter. Computed from processedPermits (pre-filter) so
+  // the checkbox list itself doesn't shrink as filters get applied —
+  // same pattern the old statusOptions used.
+  const stageFilterOptions = useMemo(() => {
+    const counts = new Map<LifecycleStage, number>();
+    processedPermits.forEach((p) => {
+      const stage = classifyLifecycleStage(p);
+      counts.set(stage, (counts.get(stage) || 0) + 1);
+    });
+    return (Object.keys(STAGE_LABELS) as LifecycleStage[])
+      .map((stage) => ({ value: stage, label: STAGE_LABELS[stage], count: counts.get(stage) || 0 }))
+      .filter((opt) => opt.count > 0);
+  }, [processedPermits]);
+
+  // Only meaningful for active-producer / injection wells — an oil well
+  // and a water-injection well answer a different question than "what
+  // stage is this well in," so this stays a separate facet rather than
+  // folding into Stage.
+  const productTypeFilterOptions = useMemo(() => {
     const counts = new Map<string, number>();
     processedPermits.forEach((p) => {
-      const status = (p.wellStatus || p.permitStatus || '').trim();
+      const stage = classifyLifecycleStage(p);
+      if (stage !== 'active' && stage !== 'injection') return;
+      const status = (p.rbdmsWellStatus || '').trim();
       if (!status) return;
       counts.set(status, (counts.get(status) || 0) + 1);
     });
@@ -245,17 +312,18 @@ export function PermitMapAdvanced({
       );
     }
 
-    // Status filter — exact match against real observed values now
-    // (selectedStatuses are populated from statusOptions, not guessed keywords)
-    if (selectedStatuses.length > 0) {
-      filtered = filtered.filter(p => {
-        const status = (p.wellStatus || p.permitStatus || '').trim();
-        return selectedStatuses.includes(status);
-      });
+    // Stage filter — the lifecycle-stage facet (permitted/active/dry/etc.)
+    if (selectedStages.length > 0) {
+      filtered = filtered.filter((p) => selectedStages.includes(classifyLifecycleStage(p)));
+    }
+
+    // Product type filter — sub-facet within active/injection wells only
+    if (selectedProductTypes.length > 0) {
+      filtered = filtered.filter((p) => selectedProductTypes.includes((p.rbdmsWellStatus || '').trim()));
     }
 
     return filtered;
-  }, [processedPermits, startDate, endDate, searchQuery, selectedStatuses]);
+  }, [processedPermits, startDate, endDate, searchQuery, selectedStages, selectedProductTypes]);
 
   // Valid permits (with coordinates)
   const validPermits = useMemo(() => 
@@ -268,21 +336,23 @@ export function PermitMapAdvanced({
   // both. Anything still unmatched goes into `other` — which is shown in
   // the legend rather than silently dropped, so a classification gap is
   // visible and debuggable instead of just looking like undercounting.
-  const wellTypeCounts = useMemo(() => {
-    const counts = { gas: 0, injection: 0, disposal: 0, oil: 0, other: 0 };
+  // Map v2.0 lifecycle-stage counts, replacing the old ITD-only well-type
+  // breakdown — see classifyLifecycleStage above and docs/map-v2-ui-design.md.
+  const stageCounts = useMemo(() => {
+    const counts: Record<LifecycleStage, number> = {
+      permitted: 0, active: 0, injection: 0, dry: 0,
+      temp_abandoned: 0, plugged: 0, orphan: 0, other: 0,
+    };
     const otherSamples = new Set<string>();
-    validPermits.forEach(p => {
-      const raw = (p.wellType || '').toLowerCase().trim();
-      if (/^(gw|gas)/.test(raw) || raw.includes('gas')) counts.gas++;
-      else if (/^(inj|iw)/.test(raw) || raw.includes('injection')) counts.injection++;
-      else if (/^(swd|sw|dw)/.test(raw) || raw.includes('disposal') || raw.includes('saltwater')) counts.disposal++;
-      else if (/^ow$/.test(raw) || raw.includes('oil')) counts.oil++;
-      else {
-        counts.other++;
-        if (raw && otherSamples.size < 6) otherSamples.add(p.wellType || raw);
+    validPermits.forEach((p) => {
+      const stage = classifyLifecycleStage(p);
+      counts[stage]++;
+      if (stage === 'other' && p.rbdmsWellStatus && otherSamples.size < 6) {
+        otherSamples.add(p.rbdmsWellStatus);
       }
     });
-    return { ...counts, otherSamples: Array.from(otherSamples) };
+    const enrichedCount = validPermits.filter((p) => !!p.rbdmsEnrichedAt).length;
+    return { counts, otherSamples: Array.from(otherSamples), enrichedCount, total: validPermits.length };
   }, [validPermits]);
 
   // Initialize map - centered on Oklahoma
@@ -408,7 +478,7 @@ export function PermitMapAdvanced({
 
     validPermits.forEach(permit => {
       const marker = L.marker([permit.lat!, permit.lon!], {
-        icon: getMarkerIcon(permit.wellType || '', permit.isCentroidMapped),
+        icon: getMarkerIcon(permit, permit.isCentroidMapped),
       });
 
       const sourceLabel = permit.isCentroidMapped 
@@ -417,21 +487,48 @@ export function PermitMapAdvanced({
       
       const sourceColor = permit.isCentroidMapped ? '#f97316' : '#16a34a';
 
+      const stage = classifyLifecycleStage(permit);
+      const stageColor = STAGE_COLORS[stage];
+      const isEnriched = !!permit.rbdmsEnrichedAt;
+
+      const filedLine = permit.approvalDate
+        ? `Filed ${permit.approvalDate} (ITD)`
+        : permit.submitDate
+          ? `Submitted ${permit.submitDate} (ITD)`
+          : 'Filing date unknown';
+
+      const statusLine = isEnriched
+        ? `<div style="margin-top: 6px; padding: 6px 8px; background: ${stageColor}1a; border-left: 3px solid ${stageColor}; border-radius: 2px;">
+             <div style="font-weight: 600; color: ${stageColor};">${STAGE_LABELS[stage]}</div>
+             <div style="font-size: 10px; color: #6b7280;">RBDMS, checked ${permit.rbdmsEnrichedAt?.split('T')[0]}</div>
+           </div>`
+        : `<div style="margin-top: 6px; padding: 6px 8px; background: #f3f4f6; border-left: 3px solid #9ca3af; border-radius: 2px; color: #6b7280;">
+             Not yet matched to a well record
+           </div>`;
+
+      const legalLine = permit.rbdmsLegalDescription
+        ? `<div><strong>Legal:</strong> ${permit.rbdmsLegalDescription}, ${permit.county || ''}</div>`
+        : '';
+
+      const wellFileLink = permit.rbdmsWellRecordsUrl
+        ? `<div style="margin-top: 6px;"><a href="${permit.rbdmsWellRecordsUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb;">View well file →</a></div>`
+        : '';
+
       const popupContent = `
-        <div style="font-family: system-ui; font-size: 12px; min-width: 220px;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: ${sourceColor};">
+        <div style="font-family: system-ui; font-size: 12px; min-width: 240px;">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px; color: ${sourceColor};">
             ${permit.wellName || 'Unknown Well'}
           </div>
+          <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">${filedLine}</div>
           <div style="display: grid; gap: 4px;">
             <div><strong>Operator:</strong> ${permit.operator || 'N/A'}</div>
             <div><strong>API:</strong> ${permit.api || 'N/A'}</div>
+            ${legalLine}
             <div><strong>County:</strong> ${permit.county || 'N/A'}</div>
-            <div><strong>State:</strong> ${permit.state || 'N/A'}</div>
             <div><strong>Formation:</strong> ${permit.formationName || 'N/A'}</div>
-            <div><strong>Well Type:</strong> ${permit.wellType || 'N/A'}</div>
-            <div><strong>Status:</strong> ${permit.wellStatus || permit.permitStatus || 'N/A'}</div>
-            <div><strong>Approval Date:</strong> ${permit.approvalDate || 'N/A'}</div>
           </div>
+          ${statusLine}
+          ${wellFileLink}
           <div style="background: ${permit.isCentroidMapped ? '#fef3c7' : '#dcfce7'}; color: ${permit.isCentroidMapped ? '#92400e' : '#166534'}; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
             ${permit.isCentroidMapped ? '⚠️' : '📍'} ${sourceLabel}
           </div>
@@ -489,11 +586,19 @@ export function PermitMapAdvanced({
   };
 
   // Toggle status filter
-  const toggleStatus = (status: string) => {
-    setSelectedStatuses(prev => 
-      prev.includes(status) 
-        ? prev.filter(s => s !== status)
-        : [...prev, status]
+  const toggleStage = (stage: LifecycleStage) => {
+    setSelectedStages(prev =>
+      prev.includes(stage)
+        ? prev.filter(s => s !== stage)
+        : [...prev, stage]
+    );
+  };
+
+  const toggleProductType = (type: string) => {
+    setSelectedProductTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
     );
   };
 
@@ -635,29 +740,53 @@ export function PermitMapAdvanced({
                 className="h-9 text-sm"
               />
               <div className="space-y-2">
-                <span className="text-xs text-muted-foreground">Well Status</span>
-                {statusOptions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No status data in current permits</p>
+                <span className="text-xs text-muted-foreground">Lifecycle stage</span>
+                {stageFilterOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No permits loaded yet</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {statusOptions.map(status => (
-                      <div key={status.value} className="flex items-center justify-between gap-2">
+                    {stageFilterOptions.map(opt => (
+                      <div key={opt.value} className="flex items-center justify-between gap-2">
                         <div className="flex items-center space-x-2 min-w-0">
                           <Checkbox
-                            id={status.value}
-                            checked={selectedStatuses.includes(status.value)}
-                            onCheckedChange={() => toggleStatus(status.value)}
+                            id={`stage-${opt.value}`}
+                            checked={selectedStages.includes(opt.value)}
+                            onCheckedChange={() => toggleStage(opt.value)}
                           />
-                          <label htmlFor={status.value} className="text-xs cursor-pointer truncate">
-                            {status.value}
+                          <label htmlFor={`stage-${opt.value}`} className="text-xs cursor-pointer truncate flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: STAGE_COLORS[opt.value] }} />
+                            {opt.label}
                           </label>
                         </div>
-                        <Badge variant="secondary" className="text-[10px] shrink-0">{status.count}</Badge>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">{opt.count}</Badge>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+
+              {productTypeFilterOptions.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-xs text-muted-foreground">Product type</span>
+                  <div className="space-y-1.5">
+                    {productTypeFilterOptions.map(opt => (
+                      <div key={opt.value} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <Checkbox
+                            id={`ptype-${opt.value}`}
+                            checked={selectedProductTypes.includes(opt.value)}
+                            onCheckedChange={() => toggleProductType(opt.value)}
+                          />
+                          <label htmlFor={`ptype-${opt.value}`} className="text-xs cursor-pointer truncate">
+                            {opt.value}
+                          </label>
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">{opt.count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* D. Export Engine */}
@@ -739,55 +868,35 @@ export function PermitMapAdvanced({
         <div ref={mapContainer} className="absolute inset-0" />
 
         {/* Dynamic Legend with Counts - Always Visible */}
-        <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-sm rounded-lg p-4 border border-border text-xs z-[1000] shadow-lg">
-          <div className="font-semibold mb-3">Well Types</div>
+        <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-sm rounded-lg p-4 border border-border text-xs z-[1000] shadow-lg max-w-[220px]">
+          <div className="font-semibold mb-3">Lifecycle stage</div>
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border-2 border-white shadow" style={{ background: WELL_TYPE_COLORS.gas }} />
-                <span>Gas</span>
-              </div>
-              <Badge variant="secondary" className="text-xs">{wellTypeCounts.gas}</Badge>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border-2 border-white shadow" style={{ background: WELL_TYPE_COLORS.injection }} />
-                <span>Injection</span>
-              </div>
-              <Badge variant="secondary" className="text-xs">{wellTypeCounts.injection}</Badge>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border-2 border-white shadow" style={{ background: WELL_TYPE_COLORS.disposal }} />
-                <span>Disposal</span>
-              </div>
-              <Badge variant="secondary" className="text-xs">{wellTypeCounts.disposal}</Badge>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border-2 border-white shadow" style={{ background: WELL_TYPE_COLORS.oil }} />
-                <span>Oil</span>
-              </div>
-              <Badge variant="secondary" className="text-xs">{wellTypeCounts.oil}</Badge>
-            </div>
-            {wellTypeCounts.other > 0 && (
-              <div className="flex items-center justify-between gap-4" title={wellTypeCounts.otherSamples.join(', ')}>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full border-2 border-white shadow" style={{ background: WELL_TYPE_COLORS.default }} />
-                  <span>Other/Unclassified</span>
+            {(Object.keys(STAGE_LABELS) as LifecycleStage[])
+              .filter((stage) => stage !== 'other' || stageCounts.counts.other > 0)
+              .map((stage) => (
+                <div key={stage} className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full border-2 border-white shadow" style={{ background: STAGE_COLORS[stage] }} />
+                    <span>{STAGE_LABELS[stage]}</span>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">{stageCounts.counts[stage]}</Badge>
                 </div>
-                <Badge variant="secondary" className="text-xs">{wellTypeCounts.other}</Badge>
-              </div>
-            )}
-            {wellTypeCounts.other > 0 && wellTypeCounts.otherSamples.length > 0 && (
+              ))}
+            {stageCounts.otherSamples.length > 0 && (
               <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
-                Unrecognized values: {wellTypeCounts.otherSamples.join(', ')}
+                Unrecognized RBDMS values: {stageCounts.otherSamples.join(', ')}
               </p>
             )}
-            <p className="text-[10px] text-muted-foreground pt-1 border-t border-border flex items-center gap-1.5">
-              <span className="inline-block w-2.5 h-2.5 rounded-full border border-dashed border-muted-foreground" />
-              Dashed border = approximate location (county centroid)
-            </p>
+            <div className="pt-2 mt-1 border-t border-border space-y-1.5">
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-full border border-dashed border-muted-foreground" />
+                Dashed border = approximate location
+              </p>
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-white border-2 border-muted-foreground" />
+                Hollow fill = not yet matched to a real well ({stageCounts.total - stageCounts.enrichedCount} of {stageCounts.total})
+              </p>
+            </div>
           </div>
         </div>
 
@@ -795,7 +904,7 @@ export function PermitMapAdvanced({
         <div className="absolute top-28 right-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000] shadow-lg">
           <div className="font-semibold">{validPermits.length} Permits Mapped</div>
           <div className="text-muted-foreground">of {permits.length} total</div>
-          {(selectedStatuses.length > 0 || searchQuery) && (
+          {(selectedStages.length > 0 || selectedProductTypes.length > 0 || searchQuery) && (
             <div className="text-primary mt-1 text-xs">Filters active</div>
           )}
         </div>
