@@ -116,8 +116,8 @@ export default function Landing() {
               Every new Midcontinent permit — scored, mapped, and ready to work.
             </h1>
             <p className="text-lg text-muted-foreground leading-relaxed mb-8 max-w-xl">
-              MidconSight pulls new drilling permits daily, ranks them as leads, and hands your
-              team a working pipeline — permits, operators, and deals in one platform, instead
+              MidconSight pulls new drilling permits every week, ranks them as leads, and hands your
+              team a working pipeline. Permits, operators, and deals live in one platform, instead
               of a folder of spreadsheets and a bookmarked ITD tab.
             </p>
             <div className="flex flex-wrap items-center gap-3">
@@ -216,7 +216,7 @@ export default function Landing() {
         </div>
         <div className="grid md:grid-cols-3 gap-8">
           {[
-            { n: '01', title: 'Permits sync in', body: 'New ITD wells and formations data imports daily — no manual downloads or copy-paste.' },
+            { n: '01', title: 'Permits sync in', body: 'New ITD wells and formations data imports every Monday. No manual downloads or copy-paste.' },
             { n: '02', title: 'Leads get scored', body: 'Each permit is ranked hot, warm, or cold and plotted on the map, ready to triage.' },
             { n: '03', title: 'Deals move forward', body: 'Track outreach, company detail, and deal stage in the same platform where the lead surfaced.' },
           ].map((s) => (
