@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import L from 'leaflet';
+import { createBasemapLayer } from '@/lib/basemap';
 import 'leaflet/dist/leaflet.css';
 import { format, parse, isValid } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -43,10 +44,10 @@ interface PermitMapAdvancedProps {
 // Base map layers (mutually exclusive)
 const TILE_LAYERS = {
   streets: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    url: '',
+    attribution: '',
     name: 'Streetview',
-    subdomains: 'abcd'
+    subdomains: ''
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -55,12 +56,21 @@ const TILE_LAYERS = {
     subdomains: ''
   },
   county: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    url: '',
+    attribution: '',
     name: 'County Borders',
-    subdomains: 'abcd'
+    subdomains: ''
   }
 };
+
+// Streets and County come from the self-hosted basemap; Satellite stays Esri.
+function buildBaseLayer(key: keyof typeof TILE_LAYERS): L.Layer {
+  if (key === 'satellite') {
+    const sat = TILE_LAYERS.satellite;
+    return L.tileLayer(sat.url, { attribution: sat.attribution, maxZoom: 19 });
+  }
+  return createBasemapLayer(key);
+}
 
 // PLSS Township-Range-Section survey grid — a transparent line overlay,
 // not a standalone basemap. Must be layered on top of a real base layer
@@ -183,7 +193,7 @@ export function PermitMapAdvanced({
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const tileLayerRef = useRef<L.Layer | null>(null);
   const trsLayerRef = useRef<L.TileLayer | null>(null);
 
   // State
@@ -366,12 +376,7 @@ export function PermitMapAdvanced({
       scrollWheelZoom: true,
     });
 
-    const layer = TILE_LAYERS[activeLayer];
-    tileLayerRef.current = L.tileLayer(layer.url, {
-      attribution: layer.attribution,
-      subdomains: layer.subdomains || undefined,
-      maxZoom: 19,
-    }).addTo(mapRef.current);
+    tileLayerRef.current = buildBaseLayer(activeLayer).addTo(mapRef.current);
 
     markersRef.current = L.layerGroup().addTo(mapRef.current);
 
@@ -402,25 +407,12 @@ export function PermitMapAdvanced({
   useEffect(() => {
     if (!mapRef.current) return;
     
-    const layer = TILE_LAYERS[activeLayer];
-    
     // Remove old layer if it exists
     if (tileLayerRef.current) {
       mapRef.current.removeLayer(tileLayerRef.current);
     }
-    
-    // Create new layer with proper configuration
-    const tileOptions: L.TileLayerOptions = {
-      attribution: layer.attribution,
-      maxZoom: 19,
-    };
-    
-    // Only add subdomains if they exist
-    if (layer.subdomains) {
-      tileOptions.subdomains = layer.subdomains;
-    }
-    
-    tileLayerRef.current = L.tileLayer(layer.url, tileOptions).addTo(mapRef.current);
+
+    tileLayerRef.current = buildBaseLayer(activeLayer).addTo(mapRef.current);
   }, [activeLayer]);
 
   // Toggle the TRS survey grid overlay independently of the base layer,
