@@ -12,5 +12,5 @@ Never commit straight to `main`. Staging shares the production Supabase project 
 so test with your own account only. Give staging its own Supabase before real customers.
 
 Cloudflare: Worker `midconsight`, Settings, Builds, Branch control: production branch `main`,
-non-production branch builds on. Non-production deploy command: `npx wrangler versions upload`.
+Enable Preview Builds checked. Preview builds on, Preview command: `npx wrangler preview` (each branch gets a Preview URL).
 Add each preview URL to Supabase Auth redirect URLs.
