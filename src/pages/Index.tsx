@@ -7,6 +7,7 @@ import { DataImport } from '@/components/DataImport';
 import { DatasetManager } from '@/components/DatasetManager';
 import { KPICards } from '@/components/KPICards';
 import { PermitMap } from '@/components/PermitMap';
+import { NewPermitsList } from '@/components/NewPermitsList';
 import { PermitMapAdvanced } from '@/components/PermitMapAdvanced';
 import { CompaniesTab } from '@/components/CompaniesTab';
 import { DealsTab } from '@/components/DealsTab';
@@ -216,56 +217,8 @@ const Index = () => {
                     </div>
                   )}
                   
-                  {/* Quick Stats Grid */}
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-lg border border-border bg-card p-4">
-                      <h3 className="font-semibold mb-3 flex items-center gap-2">
-                        <Map className="h-5 w-5 text-primary" />
-                        Geographic Distribution
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        {Object.entries(
-                          permits.reduce((acc, p) => {
-                            const county = p.county || 'Unknown';
-                            acc[county] = (acc[county] || 0) + 1;
-                            return acc;
-                          }, {} as Record<string, number>)
-                        )
-                          .sort((a, b) => b[1] - a[1])
-                          .slice(0, 5)
-                          .map(([county, count]) => (
-                            <div key={county} className="flex justify-between">
-                              <span className="text-muted-foreground">{county}</span>
-                              <span className="font-medium">{count}</span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-border bg-card p-4">
-                      <h3 className="font-semibold mb-3 flex items-center gap-2">
-                        <Users className="h-5 w-5 text-primary" />
-                        Top Operators
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        {Object.entries(
-                          permits.reduce((acc, p) => {
-                            const op = p.operator || 'Unknown';
-                            acc[op] = (acc[op] || 0) + 1;
-                            return acc;
-                          }, {} as Record<string, number>)
-                        )
-                          .sort((a, b) => b[1] - a[1])
-                          .slice(0, 5)
-                          .map(([operator, count]) => (
-                            <div key={operator} className="flex justify-between">
-                              <span className="text-muted-foreground truncate mr-2">{operator}</span>
-                              <span className="font-medium">{count}</span>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
+                  {/* New permits as tiles */}
+                  <NewPermitsList permits={newThisWeekPermits} />
                 </>
               )}
             </TabsContent>
