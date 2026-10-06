@@ -1,4 +1,4 @@
-project_id = "ijglazuuudcqclafomai"
+project_id = "hhlxkhlyilfcrtxrjptq"
 
 [functions.import-itd-weekly]
 # Called by pg_cron with a shared secret, not a logged-in user's JWT —

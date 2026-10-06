@@ -19,31 +19,42 @@ import { incrementPaywallHits, markActivated } from '@/lib/supabase-data';
 import { UpgradeDialog } from '@/components/UpgradeDialog';
 
 const NAV_ITEMS = [
-  { value: 'dashboard', label: 'Dashboard', icon: BarChart3, gated: false },
-  { value: 'map', label: 'Map', icon: Map, gated: false },
-  { value: 'companies', label: 'Companies', icon: Users, gated: true },
-  { value: 'research', label: 'Lead Research', icon: Search, gated: true },
-  { value: 'deals', label: 'Deals', icon: DollarSign, gated: true },
-  { value: 'products', label: 'Products', icon: Package, gated: true },
-  { value: 'data', label: 'Data', icon: Database, gated: true },
+  { value: 'dashboard', label: 'Dashboard', icon: BarChart3, minPlan: null },
+  { value: 'map', label: 'Map', icon: Map, minPlan: null },
+  { value: 'companies', label: 'Companies', icon: Users, minPlan: 'pro' },
+  { value: 'research', label: 'Lead Research', icon: Search, minPlan: 'starter' },
+  { value: 'deals', label: 'Deals', icon: DollarSign, minPlan: 'pro' },
+  { value: 'products', label: 'Products', icon: Package, minPlan: 'pro' },
+  { value: 'data', label: 'Data', icon: Database, minPlan: 'starter' },
 ] as const;
 
-function UpgradePrompt({ label, onUpgradeClick }: { label: string; onUpgradeClick: () => void }) {
+type MinPlan = 'starter' | 'pro' | null;
+
+const TIER_INFO = {
+  starter: { name: 'Starter', price: '$10/mo' },
+  pro: { name: 'Pro', price: '$20/mo' },
+} as const;
+
+function UpgradePrompt({ label, tier, onUpgradeClick }: { label: string; tier: 'starter' | 'pro'; onUpgradeClick: () => void }) {
+  const info = TIER_INFO[tier];
   return (
     <div className="text-center py-16">
       <Lock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
-      <h2 className="text-xl font-semibold mb-2">{label} is a paid feature</h2>
+      <h2 className="text-xl font-semibold mb-2">{label} is on the {info.name} plan</h2>
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-        Upgrade to unlock company tracking, deal pipelines, product catalog, and full data import.
+        {tier === 'starter'
+          ? 'Starter adds the live permit feed, Lead Research, and data import.'
+          : 'Pro adds company tracking, deal pipelines, and the product catalog, on top of everything in Starter.'}
       </p>
-      <Button onClick={onUpgradeClick}>Upgrade to paid</Button>
+      <Button onClick={onUpgradeClick}>Upgrade to {info.name} ({info.price})</Button>
     </div>
   );
 }
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const { profile, isPaid } = useProfile();
+  const { profile, isPaid, hasStarter, isPro } = useProfile();
+  const canAccess = (min: MinPlan) => min === null || (min === 'starter' ? hasStarter : isPro);
   const {
     permits,
     datasets,
@@ -66,7 +77,7 @@ const Index = () => {
   };
   const activeItem = NAV_ITEMS.find((n) => n.value === activeTab);
   const activeLabel = activeItem?.label ?? 'Dashboard';
-  const isGatedTab = !!activeItem?.gated && !isPaid;
+  const isGatedTab = !!activeItem && !canAccess(activeItem.minPlan);
 
   // Log paywall hits when a free user lands on a gated tab (but not on
   // every re-render — only when the tab actually changes).
@@ -77,7 +88,7 @@ const Index = () => {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, isPaid]);
+  }, [activeTab, hasStarter, isPro]);
 
   // Mark activation the first time the user has any permits to look at
   // (server-side no-op after the first call, safe to fire repeatedly).
@@ -104,7 +115,7 @@ const Index = () => {
         <nav className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const isActive = activeTab === item.value;
-            const showLock = item.gated && !isPaid;
+            const showLock = !canAccess(item.minPlan);
             return (
               <button
                 key={item.value}
@@ -166,7 +177,7 @@ const Index = () => {
                 <div className="text-center py-12">
                   <Database className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
                   <h2 className="text-xl font-semibold mb-2">No Data Loaded</h2>
-                  {isPaid ? (
+                  {hasStarter ? (
                     <>
                       <p className="text-muted-foreground mb-6">
                         Import your ITD wells/formations data to get started with permit intelligence.
@@ -261,10 +272,10 @@ const Index = () => {
 
             {/* Research Desk Tab */}
             <TabsContent value="research" className="space-y-6 mt-0">
-              {isPaid ? (
+              {hasStarter ? (
                 <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} />
               ) : (
-                <UpgradePrompt label="Lead Research" onUpgradeClick={() => openUpgradeDialog('research_tab')} />
+                <UpgradePrompt label="Lead Research" tier="starter" onUpgradeClick={() => openUpgradeDialog('research_tab')} />
               )}
             </TabsContent>
 
@@ -277,30 +288,30 @@ const Index = () => {
 
             {/* Companies Tab */}
             <TabsContent value="companies" className="space-y-6 mt-0">
-              {isPaid ? (
+              {isPro ? (
                 <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} />
               ) : (
-                <UpgradePrompt label="Companies" onUpgradeClick={() => openUpgradeDialog('companies_tab')} />
+                <UpgradePrompt label="Companies" tier="pro" onUpgradeClick={() => openUpgradeDialog('companies_tab')} />
               )}
             </TabsContent>
 
             {/* Deals Tab */}
             <TabsContent value="deals" className="space-y-6 mt-0">
-              {isPaid ? (
+              {isPro ? (
                 <DealsTab deals={deals} companies={companies} onRefresh={refresh} />
               ) : (
-                <UpgradePrompt label="Deals" onUpgradeClick={() => openUpgradeDialog('deals_tab')} />
+                <UpgradePrompt label="Deals" tier="pro" onUpgradeClick={() => openUpgradeDialog('deals_tab')} />
               )}
             </TabsContent>
 
             {/* Products Tab */}
             <TabsContent value="products" className="space-y-6 mt-0">
-              {isPaid ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
+              {isPro ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" tier="pro" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
             </TabsContent>
 
             {/* Data Management Tab */}
             <TabsContent value="data" className="space-y-6 mt-0">
-              {isPaid ? (
+              {hasStarter ? (
                 <>
                   <DataImport onImportComplete={refresh} />
                   <DatasetManager
@@ -309,7 +320,7 @@ const Index = () => {
                   />
                 </>
               ) : (
-                <UpgradePrompt label="Data import" onUpgradeClick={() => openUpgradeDialog('data_tab')} />
+                <UpgradePrompt label="Data import" tier="starter" onUpgradeClick={() => openUpgradeDialog('data_tab')} />
               )}
             </TabsContent>
           </Tabs>

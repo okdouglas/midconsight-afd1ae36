@@ -31,7 +31,13 @@ export function useProfile() {
   return {
     profile,
     loading,
-    isPaid: profile?.plan === 'paid',
+    plan: profile?.plan ?? 'free',
+    /** Starter or Pro: live feed, Lead Research, data import. */
+    hasStarter: profile?.plan === 'starter' || profile?.plan === 'pro',
+    /** Pro only: Companies, Deals, Product Catalog. */
+    isPro: profile?.plan === 'pro',
+    /** Any paid tier. */
+    isPaid: profile?.plan === 'starter' || profile?.plan === 'pro',
     refresh,
   };
 }

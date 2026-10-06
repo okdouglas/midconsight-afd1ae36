@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,22 +19,48 @@ interface UpgradeDialogProps {
   source: string;
 }
 
-const UNLOCKS = [
-  'Live permit feed — no 30-day delay',
-  'Companies & deal pipeline',
-  'Lead Research triage',
-  'Product catalog',
-  'Manual + automated data import',
-];
+const TIERS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: '$10',
+    annual: '$100/yr, two months free',
+    features: [
+      'Live permit feed, no 30-day delay',
+      'Lead Research triage',
+      'Manual data import',
+    ],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: '$20',
+    annual: '$200/yr, two months free',
+    features: [
+      'Everything in Starter',
+      'Companies and deal pipeline',
+      'Product catalog and matching',
+    ],
+  },
+] as const;
 
 export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  // Default to the tier that unlocks the feature the user clicked on.
+  const [tier, setTier] = useState<'starter' | 'pro'>('starter');
+
+  useEffect(() => {
+    if (open) {
+      const proSources = ['companies_tab', 'deals_tab', 'products_tab'];
+      setTier(proSources.includes(source) ? 'pro' : 'starter');
+    }
+  }, [open, source]);
 
   const handleRequest = async () => {
     setLoading(true);
     try {
-      await requestUpgrade(source);
+      await requestUpgrade(`${source}:${tier}`);
       setSent(true);
     } catch {
       toast.error("Couldn't send that — please try again.");
@@ -45,7 +71,7 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
 
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setSent(false); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         {sent ? (
           <div className="py-4 text-center">
             <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -53,30 +79,49 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
             </div>
             <DialogTitle className="mb-2">You're on the list</DialogTitle>
             <DialogDescription>
-              We'll reach out to get you set up on paid. In the meantime, keep browsing —
+              We'll reach out to get you set up on {tier === 'pro' ? 'Pro' : 'Starter'}. In the meantime, keep browsing —
               your free plan access doesn't change.
             </DialogDescription>
           </div>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Upgrade to paid</DialogTitle>
+              <DialogTitle>Choose your plan</DialogTitle>
               <DialogDescription>
                 Self-serve checkout is coming soon. For now, tell us you're interested and
                 we'll set your account up directly.
               </DialogDescription>
             </DialogHeader>
-            <ul className="space-y-2 my-4">
-              {UNLOCKS.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  {item}
-                </li>
+            <div className="grid gap-3 sm:grid-cols-2 my-4">
+              {TIERS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTier(t.id)}
+                  className={`text-left rounded-lg border p-4 transition-colors ${
+                    tier === t.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'
+                  }`}
+                >
+                  <p className="font-display font-semibold">{t.name}</p>
+                  <p className="text-2xl font-semibold mt-1">
+                    {t.price}
+                    <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-3">{t.annual}</p>
+                  <ul className="space-y-1.5">
+                    {t.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-sm">
+                        <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </button>
               ))}
-            </ul>
+            </div>
             <Button onClick={handleRequest} disabled={loading} className="w-full">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Request access
+              Request {tier === 'pro' ? 'Pro' : 'Starter'} access
             </Button>
           </>
         )}

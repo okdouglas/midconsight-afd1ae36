@@ -1028,7 +1028,7 @@ export async function setResearchStatus(
 
 export interface DbProfile {
   id: string;
-  plan: 'free' | 'paid';
+  plan: 'free' | 'starter' | 'pro';
   full_name: string | null;
   company_name: string | null;
   marketing_consent: boolean;
