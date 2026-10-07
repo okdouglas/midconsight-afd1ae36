@@ -221,7 +221,7 @@ Deno.serve(async (req) => {
 });
 
 
-// Lead score, rule v4. Keep in sync with src/lib/scoring.ts (the app computes the
+// Lead score, rule v4.1. Keep in sync with src/lib/scoring.ts (the app computes the
 // same rule live; this only fills the stored companies.score column).
 // weight(t) = (1 - c) / (1 + (t / a)^b), t = days since approval, by drill type.
 const CURVES = {
@@ -233,6 +233,8 @@ const HOT_MIN = 1.6;
 const WARM_MIN = 0.75;
 const ACTIVE_DAYS = 30;
 const LOOKBACK_DAYS = 365;
+// ITD application types that re-approve an existing well. The curve was measured on new drills only.
+const NON_NEW_DRILL_TYPES = ['AM', 'RC', 'RE', 'DP'];
 
 function curveFor(drillType?: string | null) {
   const t = (drillType || '').trim().toUpperCase();
@@ -251,6 +253,7 @@ function scoreOperatorRows(permits: any[]): 'hot' | 'warm' | 'cold' {
   for (const p of permits) {
     const d: string = p.approval_date || p.date_imported || '';
     if (!d) continue;
+    if (NON_NEW_DRILL_TYPES.includes(String(p.application_type ?? '').trim().toUpperCase())) continue;
     if (p.expire_date && p.expire_date < todayStr) continue;
     const t = new Date(`${d}T00:00:00Z`).getTime();
     if (isNaN(t)) continue;

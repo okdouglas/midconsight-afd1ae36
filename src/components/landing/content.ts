@@ -328,6 +328,7 @@ export const SCORING = {
   },
   notes: [
     'The median horizontal well takes about 6 months from permit to first production. About 1 in 6 permits never becomes a producing well. The weights come from 6,590 Oklahoma permits.',
+    'Only new drills count. Amendments and recompletions re-approve a well that already has a permit, so they add nothing.',
     'The lookback at the top of every screen caps how far back permits count. It starts at 12 months.',
     'The score belongs to the operator. Every permit it files carries that tier.',
     'Cold does not mean a bad operator. It means little of its pipeline is left. A new filing moves it back up.',

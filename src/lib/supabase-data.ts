@@ -706,7 +706,7 @@ async function rebuildCompanies(userId: string): Promise<void> {
       operator_number: operatorPermits[0]?.operator_number,
       permit_count: operatorPermits.length,
       total_value: totalValue,
-      // Same rule the app shows live (src/lib/scoring.ts, v4).
+      // Same rule the app shows live (src/lib/scoring.ts, v4.1).
       score: scoreOperator(operatorPermits.map((p) => dbPermitToApp(p as DbPermit)), DEFAULT_WINDOW_DAYS).score,
       last_permit_date: lastPermitDate,
       city: operatorPermits[0]?.city,

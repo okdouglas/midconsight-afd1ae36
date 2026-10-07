@@ -1,5 +1,5 @@
 /**
- * Live lead scoring (rule v4: measured permit-to-production curve).
+ * Live lead scoring (rule v4.1: measured permit-to-production curve, new drills only).
  *
  * v4 replaces the 60-day half-life guess with the curve measured from OCC data
  * (6,590 new-drill oil and gas permits approved 2019 or later, joined to the
@@ -18,6 +18,9 @@
  *   Vertical and directional:   c 0.426, a 132.7, b 2.14
  *   Unknown type (all wells):   c 0.248, a 179.3, b 2.31
  *
+ *   Only new-drill permits count. Amendments, recompletions, re-entries and
+ *   deepenings (ITD codes AM, RC, RE, DP) re-approve a well that already has a
+ *   permit, and the curve was measured on new drills only.
  *   A permit past its expiry date is worth nothing.
  *   An operator's pipeline is the sum of its permits' weights, in expected wells.
  *   Activity is the number of permits approved in the last 30 days.
@@ -37,7 +40,7 @@ import type { Permit } from '@/lib/schema-mapping';
 
 export type LeadScore = 'hot' | 'warm' | 'cold';
 
-export const RULE_VERSION = 'v4';
+export const RULE_VERSION = 'v4.1';
 export const HOT_MIN = 1.6;
 export const WARM_MIN = 0.75;
 export const ACTIVE_DAYS = 30;
@@ -68,6 +71,14 @@ export function curveFor(drillType?: string | null): WeightCurve {
 /** Weight of one permit t days after approval. */
 export function weightAt(ageDays: number, curve: WeightCurve): number {
   return (1 - curve.c) / (1 + Math.pow(Math.max(0, ageDays) / curve.a, curve.b));
+}
+
+/** ITD application types that are not new drills. Anything else, including blank, counts. */
+export const NON_NEW_DRILL_TYPES = ['AM', 'RC', 'RE', 'DP'];
+
+export function isNewDrill(p: Pick<Permit, 'applicationType'>): boolean {
+  const t = (p.applicationType || '').trim().toUpperCase();
+  return !NON_NEW_DRILL_TYPES.includes(t);
 }
 
 export const SCORE_WINDOWS = [
@@ -116,6 +127,7 @@ function isExpired(p: Pick<Permit, 'expireDate'>, now: Date): boolean {
 export function permitHeat(p: Permit, windowDays: number, now: Date = new Date()): number {
   const d = permitDate(p);
   if (!d) return 0;
+  if (!isNewDrill(p)) return 0;
   if (isExpired(p, now)) return 0;
   const age = ageInDays(d, now);
   if (age > windowDays) return 0;
@@ -151,8 +163,9 @@ export function computeOperatorStats(permits: Permit[], windowDays: number): Map
     s.permits.push(p);
     s.total += 1;
     const d = permitDate(p);
-    if (d && d >= start) s.inWindow += 1;
-    if (d && d >= recentStart && d >= start && !isExpired(p, now)) s.recent += 1;
+    const counts = isNewDrill(p);
+    if (d && d >= start && counts) s.inWindow += 1;
+    if (d && d >= recentStart && d >= start && counts && !isExpired(p, now)) s.recent += 1;
     if (d && d > s.lastPermitDate) s.lastPermitDate = d;
     s.heat += permitHeat(p, windowDays, now);
   }
@@ -170,7 +183,7 @@ export function scoreOperator(permits: Permit[], windowDays: number): { heat: nu
   const heat = permits.reduce((sum, p) => sum + permitHeat(p, windowDays, now), 0);
   const recent = permits.filter((p) => {
     const d = permitDate(p);
-    return d && d >= recentStart && d >= start && !isExpired(p, now);
+    return d && d >= recentStart && d >= start && isNewDrill(p) && !isExpired(p, now);
   }).length;
   return { heat, score: scoreForHeat(heat, recent) };
 }
