@@ -3,7 +3,7 @@
  * <noscript> copy in index.html (scripts/sync-landing-html.mjs writes those two).
  * Rules: Oklahoma only, weekly only, no customer logos, no testimonials, no
  * invented numbers. Real figures below come from the public shared feed
- * (120 permits, imports Aug 17 to Oct 7). Update FACTS when the data moves.
+ * (1,394 permits, Oct 2024 to Oct 7, 2026). Update FACTS when the data moves.
  */
 
 export const SITE = {
@@ -30,27 +30,27 @@ export const HERO = {
   mapCaption: 'Real permits, Oklahoma Corporation Commission filings, imported through Oct 5.',
 } as const;
 
-/** Counted from the public shared feed export (permits-used.json), as of Oct 7, 2026, scored with a 12 month lookback. */
+/** Counted from the shared feed in the database, as of Oct 7, 2026: two years of new-drill and amendment permits, scored with rule v4.1 (12 month lookback). Permit counts per tier are all of an operator's feed permits. */
 export const FACTS = {
   asOf: 'Oct 7',
-  permits: 120,
-  counties: 26,
-  operators: 46,
-  imports: 8,
-  firstImport: 'Aug 17',
+  permits: 1394,
+  counties: 53,
+  operators: 160,
+  monthsOfHistory: 24,
+  firstImport: 'Oct 2024',
   latestBatch: 17,
-  hot: 66,
-  warm: 42,
-  cold: 12,
-  hotOperators: 13,
-  warmOperators: 21,
-  coldOperators: 12,
+  hot: 630,
+  warm: 570,
+  cold: 194,
+  hotOperators: 20,
+  warmOperators: 44,
+  coldOperators: 96,
 } as const;
 
 export const KPIS = [
-  { value: FACTS.permits, label: 'permits on the map' },
+  { value: FACTS.permits.toLocaleString('en-US'), label: 'permits on the map' },
   { value: FACTS.counties, label: 'counties with a filing' },
-  { value: FACTS.imports, label: 'weekly imports' },
+  { value: FACTS.monthsOfHistory, label: 'months of history' },
   { value: FACTS.latestBatch, label: 'in the latest import' },
 ] as const;
 
@@ -103,7 +103,7 @@ export const LEAD = {
     ['Imported', 'Oct 5, 2026'],
   ],
   source: 'Oklahoma Corporation Commission filing, imported Oct 5.',
-  barTitle: `The ${FACTS.permits} permits in the shared feed`,
+  barTitle: `The ${FACTS.permits.toLocaleString('en-US')} permits in the shared feed`,
   barCaption: `As of ${FACTS.asOf}.`,
 } as const;
 
@@ -144,13 +144,13 @@ export const DATA_SECTION = {
   ],
   operatorsTitle: 'Most active operators',
   operators: [
-    ['Validus Energy II Midcon LLC', 10],
-    ['Koda Operating LLC', 7],
-    ['Devon Energy Production Company LP', 6],
-    ['Camino Natural Resources LLC', 5],
-    ['FW Midcon I, LLC', 5],
+    ['Mewbourne Oil Company', 67],
+    ['Validus Energy II Midcon LLC', 60],
+    ['Continental Resources Inc', 58],
+    ['Devon Energy Production Company LP', 43],
+    ['Coterra Energy Operating Co.', 23],
   ],
-  caption: `Eight weekly imports, ${FACTS.firstImport} to ${FACTS.asOf}. Counts as of ${FACTS.asOf}.`,
+  caption: `Two years of permits, ${FACTS.firstImport} to ${FACTS.asOf}. Counts as of ${FACTS.asOf}.`,
 } as const;
 
 export const COMPANIES = {
