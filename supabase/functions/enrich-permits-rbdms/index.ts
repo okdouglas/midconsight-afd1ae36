@@ -22,9 +22,13 @@ const RBDMS_QUERY_URL = 'https://gis.occ.ok.gov/server/rest/services/Hosted/RBDM
 const BATCH_SIZE = 100; // permits per RBDMS query, keeps the IN-clause URL reasonably short
 const PERMITS_PER_RUN = 500; // caps total work per invocation
 
-/** Strips everything but digits — our stored api is free-text, RBDMS's is numeric. */
+/**
+ * Our permits store the 14-digit API (state + county + well + sidetrack + completion,
+ * e.g. 35051007260000). OCC RBDMS_WELLS stores the 10-digit well API (3505100726).
+ * Matching on the full 14 digits never hits, so match on the first 10.
+ */
 function normalizeApi(raw: string): string {
-  return raw.replace(/\D/g, '');
+  return raw.replace(/\D/g, '').slice(0, 10);
 }
 
 function buildLegalDescription(row: Record<string, unknown>): string | null {
@@ -89,27 +93,35 @@ Deno.serve(async (req) => {
       url.searchParams.set('where', whereClause);
       url.searchParams.set(
         'outFields',
-        'api,wellstatus,sh_lat,sh_lon,county,section,township,range,qtr1,qtr2,qtr3,qtr4,pm,well_records_docs'
+        'api,wellstatus,symbol_class,sh_lat,sh_lon,county,section,township,range,qtr1,qtr2,qtr3,qtr4,pm,well_records_docs'
       );
       url.searchParams.set('f', 'json');
 
-      const resp = await fetch(url.toString());
-      if (!resp.ok) {
-        console.error(`RBDMS query failed for batch starting at ${i}: ${resp.status}`);
+      let resp = await fetch(url.toString());
+      let json = resp.ok ? await resp.json() : null;
+      if (json?.error) {
+        // The layer may not expose symbol_class. Retry once without it.
+        console.error('RBDMS query error, retrying without symbol_class:', JSON.stringify(json.error));
+        url.searchParams.set('outFields', 'api,wellstatus,sh_lat,sh_lon,county,section,township,range,qtr1,qtr2,qtr3,qtr4,pm,well_records_docs');
+        resp = await fetch(url.toString());
+        json = resp.ok ? await resp.json() : null;
+      }
+      if (!resp.ok || !json || json.error) {
+        console.error(`RBDMS query failed for batch starting at ${i}: ${resp.status} ${JSON.stringify(json?.error ?? '')}`);
         continue; // don't let one bad batch stop the rest
       }
-
-      const json = await resp.json();
       const features: Array<{ attributes: Record<string, unknown> }> = json.features || [];
 
       for (const feature of features) {
         const attrs = feature.attributes;
-        const apiKey = String(attrs.api ?? '').replace(/\.0$/, ''); // ArcGIS doubles sometimes stringify as "123.0"
+        const apiKey = String(attrs.api ?? '').replace(/\.0$/, '').slice(0, 10); // ArcGIS doubles sometimes stringify as "123.0"
         const permitIds = apiToPermitIds.get(apiKey);
         if (!permitIds) continue;
 
         const updates: Record<string, unknown> = {
-          rbdms_well_status: attrs.wellstatus || null,
+          // symbol_class is the lifecycle word the map expects (OIL, GAS, PLUGGED, ORPHAN...).
+          // wellstatus is a two or three letter code (AC, PA, NE), kept only as a fallback.
+          rbdms_well_status: attrs.symbol_class || attrs.wellstatus || null,
           rbdms_legal_description: buildLegalDescription(attrs),
           rbdms_well_records_url: attrs.well_records_docs || null,
           rbdms_enriched_at: new Date().toISOString(),

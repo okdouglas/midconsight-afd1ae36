@@ -19,3 +19,11 @@ verify_jwt = false
 [functions.enrich-permits-rbdms]
 # Called by pg_cron with a shared secret, same reasoning as import-itd-weekly.
 verify_jwt = false
+
+[functions.operator-profile]
+# Called by pg_cron with a shared secret, same reasoning as import-itd-weekly.
+verify_jwt = false
+
+[functions.score-operators]
+# Called by pg_cron with a shared secret, same reasoning as import-itd-weekly.
+verify_jwt = false
