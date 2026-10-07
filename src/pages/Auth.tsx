@@ -72,9 +72,10 @@ export default function Auth() {
     
     setLoading(true);
     
-    const redirectUrl = `${window.location.origin}/`;
+    // After the email link is clicked, land in the app (it signs the user in from the link).
+    const redirectUrl = `${window.location.origin}/app`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -93,8 +94,12 @@ export default function Auth() {
       } else {
         toast.error(error.message);
       }
+    } else if (data.session) {
+      // Email confirmation is off: the user is already signed in and the auth listener redirects.
+      toast.success('Account created. Taking you to your dashboard.');
     } else {
-      toast.success('Account created successfully! You are now signed in.');
+      // Email confirmation is on: no session until the link in the email is clicked.
+      toast.success(`Check your email. We sent a confirmation link to ${email}.`);
     }
     
     setLoading(false);
@@ -114,6 +119,8 @@ export default function Auth() {
     if (error) {
       if (error.message.includes('Invalid login credentials')) {
         toast.error('Invalid email or password. Please try again.');
+      } else if (error.message.toLowerCase().includes('email not confirmed')) {
+        toast.error('Please confirm your email first. Check your inbox for the link we sent.');
       } else {
         toast.error(error.message);
       }
