@@ -24,6 +24,7 @@ import { processExcelData } from '../_shared/schema-mapping.ts';
 
 const ITD_URL =
   'https://oklahoma.gov/content/dam/ok/en/occ/documents/og/ogdatafiles/ITD-wells-formations-daily.xlsx';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const AVG_PERMIT_VALUE = 5000; // keep in sync with src/lib/supabase-data.ts
 
 function currentChicagoHour(): number {
@@ -35,12 +36,24 @@ function currentChicagoHour(): number {
   return parseInt(formatted, 10) % 24;
 }
 
+// deno-lint-ignore no-explicit-any
+async function cronAuthorized(req: Request, supabase: any): Promise<boolean> {
+  const header = req.headers.get('x-cron-secret');
+  if (!header) return false;
+  const envSecret = Deno.env.get('CRON_SHARED_SECRET');
+  if (envSecret && header === envSecret) return true;
+  const { data, error } = await supabase.rpc('check_cron_secret', { candidate: header });
+  return !error && data === true;
+}
+
 Deno.serve(async (req) => {
   try {
     // Auth: shared secret set by the pg_cron job (defense in depth on top
     // of the service role key already required to reach this function).
-    const sharedSecret = Deno.env.get('CRON_SHARED_SECRET');
-    if (sharedSecret && req.headers.get('x-cron-secret') !== sharedSecret) {
+    // The vault is the source of truth for the secret pg_cron sends. The env var
+    // had drifted from it (2026-10-07), which would have 401'd every Monday run.
+    const authClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    if (!(await cronAuthorized(req, authClient))) {
       return new Response('Unauthorized', { status: 401 });
     }
 
@@ -55,14 +68,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    const autoImportUserId = Deno.env.get('AUTO_IMPORT_USER_ID');
-    if (!autoImportUserId) {
-      throw new Error('AUTO_IMPORT_USER_ID secret is not set');
-    }
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // The secret was found truncated by one character on 2026-10-07, which made
+    // every query fail. If it is not a valid UUID, fall back to the owner of the
+    // shared feed so the weekly import still runs.
+    let autoImportUserId = Deno.env.get('AUTO_IMPORT_USER_ID') ?? '';
+    if (!UUID_RE.test(autoImportUserId)) {
+      console.error('AUTO_IMPORT_USER_ID is missing or not a valid UUID. Falling back to the shared feed owner.');
+      const { data: owner } = await supabase
+        .from('permits')
+        .select('user_id')
+        .eq('is_shared', true)
+        .limit(1)
+        .maybeSingle();
+      if (!owner?.user_id) {
+        throw new Error('AUTO_IMPORT_USER_ID is invalid and no shared feed owner was found');
+      }
+      autoImportUserId = owner.user_id;
+    }
 
     // 1. Fetch the file
     const fileResp = await fetch(ITD_URL);
@@ -186,7 +212,8 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error('import-itd-weekly failed:', err);
-    return new Response(JSON.stringify({ success: false, error: String(err) }), {
+    const message = err instanceof Error ? err.message : JSON.stringify(err);
+    return new Response(JSON.stringify({ success: false, error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
