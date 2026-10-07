@@ -37,12 +37,16 @@ import {
   saveSellingOption,
   updateSellingOption,
   deleteSellingOption,
+  saveSellingOptionsBatch,
   type DbSellingOption,
+  type NewSellingOption,
 } from '@/lib/supabase-data';
+import { ConfirmAction } from '@/components/ConfirmAction';
+import type { Permit } from '@/lib/schema-mapping';
 import * as XLSX from 'xlsx';
 
 const formatCurrency = (value: number | undefined | null): string => {
-  if (value === undefined || value === null) return '—';
+  if (value === undefined || value === null) return 'None';
   return `$${value.toLocaleString('en-US')}`;
 };
 
@@ -50,10 +54,98 @@ const formatCurrency = (value: number | undefined | null): string => {
 const parseList = (value: string): string[] =>
   value.split(',').map((v) => v.trim()).filter(Boolean);
 
+/** Chip input with suggestions. Enter or comma adds a chip. Backspace on empty input removes the last one. */
+function ChipInput({
+  label,
+  values,
+  onChange,
+  suggestions,
+  placeholder,
+}: {
+  label: string;
+  values: string[];
+  onChange: (next: string[]) => void;
+  suggestions: string[];
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState('');
+  const listId = `chip-suggest-${label.replace(/\s+/g, '-').toLowerCase()}`;
+
+  const add = (raw: string) => {
+    const incoming = parseList(raw);
+    if (incoming.length === 0) return;
+    const next = [...values];
+    for (const v of incoming) {
+      if (!next.some((x) => x.toLowerCase() === v.toLowerCase())) next.push(v);
+    }
+    onChange(next);
+    setDraft('');
+  };
+
+  const remaining = suggestions.filter((s) => !values.some((v) => v.toLowerCase() === s.toLowerCase()));
+
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex flex-wrap gap-1 mt-1 mb-1">
+        {values.map((v) => (
+          <Badge key={v} variant="secondary" className="gap-1">
+            {v}
+            <button
+              type="button"
+              aria-label={`Remove ${v}`}
+              onClick={() => onChange(values.filter((x) => x !== v))}
+              className="hover:text-destructive"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+      </div>
+      <Input
+        value={draft}
+        list={listId}
+        placeholder={placeholder}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v.endsWith(',')) add(v);
+          else setDraft(v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            add(draft);
+          } else if (e.key === 'Backspace' && !draft && values.length > 0) {
+            onChange(values.slice(0, -1));
+          }
+        }}
+        onBlur={() => add(draft)}
+      />
+      <datalist id={listId}>
+        {remaining.slice(0, 50).map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
+interface ImportPreview {
+  fileName: string;
+  rows: NewSellingOption[];
+  duplicates: string[];
+  errors: { row: number; message: string }[];
+}
+
 type SortField = 'name' | 'default_price' | 'annual_rental';
 type SortDirection = 'asc' | 'desc';
 
-export function ProductCatalog() {
+interface ProductCatalogProps {
+  /** The user's permits. Used to suggest formations and well types. */
+  permits?: Permit[];
+}
+
+export function ProductCatalog({ permits = [] }: ProductCatalogProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [options, setOptions] = useState<DbSellingOption[]>([]);
@@ -65,10 +157,31 @@ export function ProductCatalog() {
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOption, setEditingOption] = useState<Partial<DbSellingOption> | null>(null);
-  // Comma-separated text working copies for the array fields, so the
-  // person can type freely without the input fighting them mid-edit.
-  const [formationsText, setFormationsText] = useState('');
-  const [wellTypesText, setWellTypesText] = useState('');
+  const [formations, setFormations] = useState<string[]>([]);
+  const [wellTypes, setWellTypes] = useState<string[]>([]);
+  const [optionToDelete, setOptionToDelete] = useState<DbSellingOption | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+
+  // Suggestions come from the formations and well types in the user's own permits.
+  const formationSuggestions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of permits) {
+      const f = (p.formationName || '').trim();
+      if (f) counts.set(f, (counts.get(f) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([f]) => f);
+  }, [permits]);
+
+  const wellTypeSuggestions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of permits) {
+      for (const t of [p.wellType, p.wellClass]) {
+        const v = (t || '').trim();
+        if (v) counts.set(v, (counts.get(v) || 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  }, [permits]);
 
   const loadOptions = async () => {
     setLoading(true);
@@ -120,6 +233,7 @@ export function ProductCatalog() {
     }
   };
 
+  /** Reads the spreadsheet and builds a preview. Nothing is saved until the person confirms. */
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -132,49 +246,74 @@ export function ProductCatalog() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
-      let imported = 0;
-      for (const row of jsonData) {
+      const existingNames = new Set(options.map((o) => o.name.trim().toLowerCase()));
+      const seenInFile = new Set<string>();
+      const rows: NewSellingOption[] = [];
+      const duplicates: string[] = [];
+      const errors: { row: number; message: string }[] = [];
+
+      // Returns undefined when blank, null when present but not a number.
+      const toNumber = (v: unknown): number | undefined | null => {
+        if (v === undefined || v === null || String(v).trim() === '') return undefined;
+        const n = parseFloat(String(v).replace(/[,$]/g, ''));
+        return Number.isFinite(n) ? n : null;
+      };
+
+      jsonData.forEach((row, idx) => {
+        const rowNumber = idx + 2; // header is row 1
         const name = String(row['Product Name'] || row['Name'] || row['Product'] || '').trim();
-        if (!name) continue;
+        if (!name) {
+          errors.push({ row: rowNumber, message: 'Missing product name' });
+          return;
+        }
 
-        const price = row['Price ($)'] || row['Price'] || row['Default Price'];
-        const rental = row['Annual Rental ($)'] || row['Annual Rental'];
-        const maintenance = row['Annual Maintenance ($)'] || row['Annual Maintenance'] || row['M&S'];
+        const price = toNumber(row['Price ($)'] ?? row['Price'] ?? row['Default Price']);
+        const rental = toNumber(row['Annual Rental ($)'] ?? row['Annual Rental']);
+        const maintenance = toNumber(row['Annual Maintenance ($)'] ?? row['Annual Maintenance'] ?? row['M&S']);
+        const minDepth = toNumber(row['Min Depth (ft)']);
+        const maxDepth = toNumber(row['Max Depth (ft)']);
 
-        const defaultPrice = parseFloat(String(price || 0).replace(/[,$]/g, '')) || 0;
-        const annualRental = parseFloat(String(rental || 0).replace(/[,$]/g, '')) || undefined;
-        const annualMaintenance = parseFloat(String(maintenance || 0).replace(/[,$]/g, '')) || undefined;
+        if (price === null || rental === null || maintenance === null || minDepth === null || maxDepth === null) {
+          errors.push({ row: rowNumber, message: `${name}: a price or depth is not a number` });
+          return;
+        }
+        if (price !== undefined && price < 0) {
+          errors.push({ row: rowNumber, message: `${name}: price is negative` });
+          return;
+        }
+        if (minDepth !== undefined && maxDepth !== undefined && minDepth > maxDepth) {
+          errors.push({ row: rowNumber, message: `${name}: min depth is higher than max depth` });
+          return;
+        }
 
-        const category = String(row['Category'] || '').trim() || undefined;
-        const description = String(row['Description'] || '').trim() || undefined;
-        const formations = parseList(String(row['Target Formations'] || ''));
-        const wellTypes = parseList(String(row['Applicable Well Types'] || ''));
-        const minDepth = row['Min Depth (ft)'] ? parseFloat(String(row['Min Depth (ft)'])) : undefined;
-        const maxDepth = row['Max Depth (ft)'] ? parseFloat(String(row['Max Depth (ft)'])) : undefined;
+        const key = name.toLowerCase();
+        if (existingNames.has(key) || seenInFile.has(key)) {
+          duplicates.push(name);
+          return;
+        }
+        seenInFile.add(key);
 
-        await saveSellingOption({
+        rows.push({
           name,
-          category: category || 'General',
+          category: String(row['Category'] || '').trim() || 'General',
           type: String(row['Type'] || '').trim() || 'Standard',
-          default_price: defaultPrice,
-          annual_rental: annualRental,
-          annual_maintenance: annualMaintenance,
-          description,
-          target_formations: formations,
-          applicable_well_types: wellTypes,
+          default_price: price ?? 0,
+          annual_rental: rental || undefined,
+          annual_maintenance: maintenance || undefined,
+          description: String(row['Description'] || '').trim() || undefined,
+          target_formations: parseList(String(row['Target Formations'] || '')),
+          applicable_well_types: parseList(String(row['Applicable Well Types'] || '')),
           min_depth: minDepth,
           max_depth: maxDepth,
         });
-        imported++;
-      }
+      });
 
-      toast({ title: 'Import complete', description: `Imported ${imported} products from spreadsheet` });
-      loadOptions();
+      setImportPreview({ fileName: file.name, rows, duplicates, errors });
     } catch (error) {
       console.error('Import failed:', error);
       toast({
         title: 'Import failed',
-        description: 'Could not parse the spreadsheet. Check the format and try again.',
+        description: 'Could not read the spreadsheet. Check the format and try again.',
         variant: 'destructive',
       });
     } finally {
@@ -183,17 +322,51 @@ export function ProductCatalog() {
     }
   };
 
+  const confirmImport = async () => {
+    if (!importPreview || importPreview.rows.length === 0) {
+      setImportPreview(null);
+      return;
+    }
+    const preview = importPreview;
+    setImporting(true);
+    try {
+      const { saved, failed } = await saveSellingOptionsBatch(preview.rows);
+      if (failed.length === 0) {
+        toast({ title: 'Import complete', description: `Imported ${saved} products.` });
+      } else if (saved > 0) {
+        toast({
+          title: 'Import partly done',
+          description: `Imported ${saved} of ${preview.rows.length}. ${failed.length} failed. First error: ${failed[0].message}`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Import failed',
+          description: `No products were saved. ${failed[0].message}`,
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Import failed:', error);
+      toast({ title: 'Import failed', description: 'Could not save products. Try again.', variant: 'destructive' });
+    } finally {
+      setImporting(false);
+      setImportPreview(null);
+      loadOptions();
+    }
+  };
+
   const handleAddNew = () => {
     setEditingOption({ name: '', category: '', type: '', default_price: 0 });
-    setFormationsText('');
-    setWellTypesText('');
+    setFormations([]);
+    setWellTypes([]);
     setShowEditModal(true);
   };
 
   const handleEdit = (option: DbSellingOption) => {
     setEditingOption(option);
-    setFormationsText((option.target_formations || []).join(', '));
-    setWellTypesText((option.applicable_well_types || []).join(', '));
+    setFormations(option.target_formations || []);
+    setWellTypes(option.applicable_well_types || []);
     setShowEditModal(true);
   };
 
@@ -221,8 +394,8 @@ export function ProductCatalog() {
       default_price: editingOption.default_price || 0,
       annual_rental: editingOption.annual_rental,
       annual_maintenance: editingOption.annual_maintenance,
-      target_formations: parseList(formationsText),
-      applicable_well_types: parseList(wellTypesText),
+      target_formations: formations,
+      applicable_well_types: wellTypes,
       min_depth: editingOption.min_depth,
       max_depth: editingOption.max_depth,
     };
@@ -256,7 +429,7 @@ export function ProductCatalog() {
         'Applicable Well Types': 'Horizontal, Directional',
         'Min Depth (ft)': 8000,
         'Max Depth (ft)': 15000,
-        Description: 'Example product — edit or delete this row',
+        Description: 'Example product. Edit or delete this row.',
       },
     ];
     const ws = XLSX.utils.json_to_sheet(templateData);
@@ -376,17 +549,18 @@ export function ProductCatalog() {
                                   ))}
                                 </div>
                               ) : (
-                                <span className="text-xs text-muted-foreground">General — no criteria set</span>
+                                <span className="text-xs text-muted-foreground">General. No criteria set.</span>
                               )}
                             </TableCell>
                             <TableCell className="tabular-nums text-sm">{formatCurrency(option.default_price)}</TableCell>
                             <TableCell className="tabular-nums text-sm">{formatCurrency(option.annual_rental)}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(option)}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Edit ${option.name}`} onClick={() => handleEdit(option)}>
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDelete(option.id)}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={`Delete ${option.name}`}
+                                  onClick={() => setOptionToDelete(option)}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </div>
@@ -417,8 +591,8 @@ export function ProductCatalog() {
                   <li>Product Name</li>
                   <li>Category, Type</li>
                   <li>Price ($), Annual Rental ($), Annual Maintenance ($)</li>
-                  <li>Target Formations (comma-separated)</li>
-                  <li>Applicable Well Types (comma-separated)</li>
+                  <li>Target Formations (comma separated)</li>
+                  <li>Applicable Well Types (comma separated)</li>
                   <li>Min Depth (ft), Max Depth (ft)</li>
                   <li>Description (optional)</li>
                 </ul>
@@ -429,7 +603,7 @@ export function ProductCatalog() {
               </Button>
               <p className="text-xs text-muted-foreground border-t border-border pt-3">
                 Target Formations and Applicable Well Types are what let MidconSight match your
-                catalog against active permits — leave them blank for a general-purpose product.
+                catalog against active permits. Leave them blank for a general-purpose product.
               </p>
             </CardContent>
           </Card>
@@ -502,25 +676,27 @@ export function ProductCatalog() {
 
               <div className="col-span-2 border-t border-border pt-3 mt-1">
                 <p className="text-xs font-medium text-muted-foreground mb-3">
-                  Matching criteria — connects this product to real permit activity. Leave blank for a general-purpose product.
+                  Matching criteria. Connects this product to real permit activity. Leave blank for a general-purpose product.
                 </p>
               </div>
 
               <div className="col-span-2">
-                <Label>Target formations</Label>
-                <Input
-                  value={formationsText}
-                  onChange={(e) => setFormationsText(e.target.value)}
-                  placeholder="Woodford, Meramec, SCOOP"
+                <ChipInput
+                  label="Target formations"
+                  values={formations}
+                  onChange={setFormations}
+                  suggestions={formationSuggestions}
+                  placeholder="Type a formation and press Enter (Woodford, Meramec)"
                 />
               </div>
 
               <div className="col-span-2">
-                <Label>Applicable well types</Label>
-                <Input
-                  value={wellTypesText}
-                  onChange={(e) => setWellTypesText(e.target.value)}
-                  placeholder="Horizontal, Directional, Oil, Gas"
+                <ChipInput
+                  label="Applicable well types"
+                  values={wellTypes}
+                  onChange={setWellTypes}
+                  suggestions={wellTypeSuggestions}
+                  placeholder="Type a well type and press Enter (Horizontal, Oil)"
                 />
               </div>
 
@@ -549,6 +725,53 @@ export function ProductCatalog() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditModal(false)}>Cancel</Button>
             <Button onClick={handleSave}>{editingOption?.id ? 'Update' : 'Add product'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmAction
+        open={!!optionToDelete}
+        title="Delete this product?"
+        description={optionToDelete ? `"${optionToDelete.name}" will be removed from your catalog. Deals that use it keep their value but lose the link.` : ''}
+        confirmLabel="Delete product"
+        destructive
+        onConfirm={() => { const o = optionToDelete; setOptionToDelete(null); if (o) handleDelete(o.id); }}
+        onCancel={() => setOptionToDelete(null)}
+      />
+
+      <Dialog open={!!importPreview} onOpenChange={(open) => { if (!open && !importing) setImportPreview(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import preview</DialogTitle>
+          </DialogHeader>
+          {importPreview && (
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">{importPreview.fileName}</p>
+              <ul className="space-y-1">
+                <li><span className="font-semibold">{importPreview.rows.length}</span> products ready to import</li>
+                <li><span className="font-semibold">{importPreview.duplicates.length}</span> skipped, name already in your catalog or repeated in the file</li>
+                <li><span className="font-semibold">{importPreview.errors.length}</span> rows with errors</li>
+              </ul>
+              {importPreview.duplicates.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Skipped: {importPreview.duplicates.slice(0, 5).join(', ')}
+                  {importPreview.duplicates.length > 5 ? `, and ${importPreview.duplicates.length - 5} more` : ''}
+                </p>
+              )}
+              {importPreview.errors.length > 0 && (
+                <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2 text-xs space-y-1">
+                  {importPreview.errors.map((er, i) => (
+                    <div key={i} className="text-destructive">Row {er.row}: {er.message}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportPreview(null)} disabled={importing}>Cancel</Button>
+            <Button onClick={confirmImport} disabled={importing || !importPreview || importPreview.rows.length === 0}>
+              {importing ? 'Importing...' : `Import ${importPreview?.rows.length ?? 0} products`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

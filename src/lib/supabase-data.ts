@@ -122,6 +122,9 @@ export interface DbDeal {
   notes?: string;
   selling_option_id?: string;
   probability?: number;
+  /** Added by migration 20261007210000. Absent until applied, so treat undefined as empty. */
+  next_step?: string | null;
+  next_step_date?: string | null;
   created_at: string;
 }
 
@@ -763,6 +766,43 @@ export async function saveSellingOption(
 
   if (error) throw error;
   return data as DbSellingOption;
+}
+
+export type NewSellingOption = Omit<DbSellingOption, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+
+/**
+ * Inserts products in batches. If a batch fails, it retries that batch one row
+ * at a time so one bad row (or a plan cap) does not hide which rows went in.
+ * Returns how many were saved and which rows failed.
+ */
+export async function saveSellingOptionsBatch(
+  options: NewSellingOption[],
+  batchSize = 50
+): Promise<{ saved: number; failed: { name: string; message: string }[] }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  let saved = 0;
+  const failed: { name: string; message: string }[] = [];
+
+  for (let i = 0; i < options.length; i += batchSize) {
+    const chunk = options.slice(i, i + batchSize);
+    const { error } = await supabase
+      .from('selling_options')
+      .insert(chunk.map((o) => ({ ...o, user_id: user.id })));
+    if (!error) {
+      saved += chunk.length;
+      continue;
+    }
+    for (const o of chunk) {
+      const { error: rowError } = await supabase
+        .from('selling_options')
+        .insert({ ...o, user_id: user.id });
+      if (rowError) failed.push({ name: o.name, message: rowError.message });
+      else saved += 1;
+    }
+  }
+  return { saved, failed };
 }
 
 export async function updateSellingOption(

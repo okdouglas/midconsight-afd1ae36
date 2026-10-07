@@ -97,6 +97,16 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, hasStarter, isPro]);
 
+  // Let child components switch tabs (e.g. the Deals empty state).
+  useEffect(() => {
+    const onGoto = (e: Event) => {
+      const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (tab) setActiveTab(tab);
+    };
+    window.addEventListener('midconsight:goto-tab', onGoto);
+    return () => window.removeEventListener('midconsight:goto-tab', onGoto);
+  }, []);
+
   // Mark activation the first time the user has any permits to look at
   // (server-side no-op after the first call, safe to fire repeatedly).
   useEffect(() => {
@@ -274,7 +284,7 @@ const Index = () => {
 
             {/* Products Tab */}
             <TabsContent value="products" className="space-y-6 mt-0">
-              {isPro ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" tier="pro" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
+              {isPro ? <ProductCatalog permits={permits} /> : <UpgradePrompt label="Product Catalog" tier="pro" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
             </TabsContent>
 
             {/* Data Management Tab */}

@@ -52,6 +52,10 @@ export interface Deal {
   notes?: string;
   sellingOptionId?: string;
   probability: number;
+  /** Empty string when the next_step columns are absent or unset. */
+  nextStep: string;
+  /** YYYY-MM-DD or empty string. */
+  nextStepDate: string;
   createdDate: string;
 }
 
@@ -97,7 +101,9 @@ function mapDbDealToDeal(db: DbDeal): Deal {
     linkedPermitIds: db.linked_permit_ids || [],
     notes: db.notes,
     sellingOptionId: db.selling_option_id,
-    probability: db.probability || 10,
+    probability: db.probability ?? 10,
+    nextStep: db.next_step || '',
+    nextStepDate: db.next_step_date || '',
     createdDate: db.created_at,
   };
 }

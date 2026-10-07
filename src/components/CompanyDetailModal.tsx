@@ -33,6 +33,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import type { Permit } from '@/lib/schema-mapping';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { ConfirmAction } from '@/components/ConfirmAction';
+import { STAGES, stageLabel, formatLocalDate } from '@/lib/deal-stages';
 import { 
   saveContact, 
   saveDeal, 
@@ -62,6 +65,8 @@ interface CompanyDetailModalProps {
 }
 
 export function CompanyDetailModal({ company, companyPermits = [], onClose, onUpdate, windowDays = 30 }: CompanyDetailModalProps) {
+  const { toast } = useToast();
+  const [dealToDelete, setDealToDelete] = useState<DbDeal | null>(null);
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [deals, setDeals] = useState<DbDeal[]>([]);
   const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
@@ -228,6 +233,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const handleAddDeal = async () => {
     if (!company || !newDeal.name.trim()) return;
 
+    try {
     await saveDeal({
       company_id: company.id,
       name: newDeal.name,
@@ -238,13 +244,17 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
       linked_permit_ids: [],
       notes: newDeal.notes || undefined,
       selling_option_id: newDeal.sellingOptionId && newDeal.sellingOptionId !== 'none' ? newDeal.sellingOptionId : undefined,
-      probability: 10,
+      probability: STAGES.new_lead.probability,
     });
 
     setNewDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
     setShowAddDeal(false);
     loadCompanyData();
     onUpdate?.();
+    } catch (error) {
+      console.error('Failed to create deal:', error);
+      toast({ title: 'Could not create deal', description: 'Your deal was not saved. Try again.', variant: 'destructive' });
+    }
   };
 
   const handleStartEditDeal = (deal: DbDeal) => {
@@ -266,6 +276,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const handleSaveEditDeal = async () => {
     if (!editingDealId || !editDeal.name.trim()) return;
 
+    try {
     await updateDeal(editingDealId, {
       name: editDeal.name,
       value: parseFloat(editDeal.value) || 0,
@@ -278,12 +289,22 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
     setEditDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
     loadCompanyData();
     onUpdate?.();
+    } catch (error) {
+      console.error('Failed to update deal:', error);
+      toast({ title: 'Could not save deal', description: 'Your changes were not saved. Try again.', variant: 'destructive' });
+    }
   };
 
   const handleDeleteDeal = async (dealId: string) => {
-    await deleteDeal(dealId);
-    loadCompanyData();
-    onUpdate?.();
+    try {
+      await deleteDeal(dealId);
+      toast({ title: 'Deal deleted' });
+      loadCompanyData();
+      onUpdate?.();
+    } catch (error) {
+      console.error('Failed to delete deal:', error);
+      toast({ title: 'Could not delete deal', description: 'Try again.', variant: 'destructive' });
+    }
   };
 
   const handleAddLicense = async () => {
@@ -342,6 +363,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const primaryContact = getPrimaryContact();
 
   return (
+    <>
     <Dialog open={!!company} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -901,7 +923,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                         <SelectItem value="none">No product</SelectItem>
                         {sellingOptions.map(opt => (
                           <SelectItem key={opt.id} value={opt.id}>
-                            {opt.name} - ${formatCurrency(Number(opt.annual_rental) || Number(opt.default_price))}
+                            {opt.name} - ${formatCurrency(Number(opt.default_price) || 0)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -979,7 +1001,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                               <SelectItem value="none">No product</SelectItem>
                               {sellingOptions.map(opt => (
                                 <SelectItem key={opt.id} value={opt.id}>
-                                  {opt.name} - ${formatCurrency(Number(opt.annual_rental) || Number(opt.default_price))}
+                                  {opt.name} - ${formatCurrency(Number(opt.default_price) || 0)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -1011,14 +1033,14 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                         <div className="flex-1">
                           <div className="font-medium">{deal.name}</div>
                           <div className="text-sm text-muted-foreground mt-1">
-                            Stage: <span className="capitalize">{deal.stage?.replace('_', ' ') || 'New Lead'}</span>
+                            Stage: <span>{stageLabel(deal.stage)}</span>
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
                           <div className="text-right">
                             <div className="font-semibold text-primary">${Number(deal.value || 0).toLocaleString()}</div>
                             <div className="text-xs text-muted-foreground">
-                              Close: {deal.expected_close_date ? new Date(deal.expected_close_date).toLocaleDateString() : 'TBD'}
+                              Close: {formatLocalDate(deal.expected_close_date)}
                             </div>
                           </div>
                           <div className="flex gap-1 ml-2">
@@ -1034,7 +1056,8 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDeleteDeal(deal.id)}
+                              aria-label={`Delete ${deal.name}`}
+                              onClick={() => setDealToDelete(deal)}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -1055,5 +1078,15 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
         </Tabs>
       </DialogContent>
     </Dialog>
+    <ConfirmAction
+      open={!!dealToDelete}
+      title="Delete this deal?"
+      description={dealToDelete ? `"${dealToDelete.name}" will be removed. This cannot be undone.` : ''}
+      confirmLabel="Delete deal"
+      destructive
+      onConfirm={() => { const d = dealToDelete; setDealToDelete(null); if (d) handleDeleteDeal(d.id); }}
+      onCancel={() => setDealToDelete(null)}
+    />
+    </>
   );
 }
