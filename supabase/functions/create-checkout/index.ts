@@ -5,6 +5,8 @@
 //
 // Secrets: STRIPE_SECRET_KEY, STRIPE_PRICE_STARTER_MONTH, STRIPE_PRICE_STARTER_YEAR,
 //          STRIPE_PRICE_PRO_MONTH, STRIPE_PRICE_PRO_YEAR, optional SITE_URL.
+// Optional: STRIPE_AUTOMATIC_TAX=true turns on Stripe Tax at checkout. Set it only after Stripe Tax
+//          is set up in the dashboard (head office address and tax settings), or Stripe refuses checkout.
 // The plan itself is only ever changed by stripe-webhook, never here.
 
 import { createClient } from 'npm:@supabase/supabase-js@2.89.0';
@@ -86,9 +88,19 @@ Deno.serve(async (req) => {
       await supabase.from('profiles').update({ stripe_customer_id: customer }).eq('id', user.id);
     }
 
+    const automaticTax = Deno.env.get('STRIPE_AUTOMATIC_TAX') === 'true';
     const session = await stripe(
       'checkout/sessions',
       {
+        ...(automaticTax
+          ? {
+              'automatic_tax[enabled]': 'true',
+              billing_address_collection: 'required',
+              'customer_update[address]': 'auto',
+              'customer_update[name]': 'auto',
+              'tax_id_collection[enabled]': 'true',
+            }
+          : {}),
         mode: 'subscription',
         customer,
         client_reference_id: user.id,
