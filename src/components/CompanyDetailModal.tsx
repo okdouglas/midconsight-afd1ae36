@@ -84,7 +84,7 @@ interface CompanyDetailModalProps {
 }
 
 export function CompanyDetailModal({ company, companyPermits = [], onClose, onUpdate, windowDays = 30 }: CompanyDetailModalProps) {
-  const { toast } = useToast();
+  const { toast: legacyToast } = useToast();
   const [dealToDelete, setDealToDelete] = useState<DbDeal | null>(null);
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [deals, setDeals] = useState<DbDeal[]>([]);
@@ -305,7 +305,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
     onUpdate?.();
     } catch (error) {
       console.error('Failed to create deal:', error);
-      toast({ title: 'Could not create deal', description: 'Your deal was not saved. Try again.', variant: 'destructive' });
+      legacyToast({ title: 'Could not create deal', description: 'Your deal was not saved. Try again.', variant: 'destructive' });
     }
   };
 
@@ -343,19 +343,19 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
     onUpdate?.();
     } catch (error) {
       console.error('Failed to update deal:', error);
-      toast({ title: 'Could not save deal', description: 'Your changes were not saved. Try again.', variant: 'destructive' });
+      legacyToast({ title: 'Could not save deal', description: 'Your changes were not saved. Try again.', variant: 'destructive' });
     }
   };
 
   const handleDeleteDeal = async (dealId: string) => {
     try {
       await deleteDeal(dealId);
-      toast({ title: 'Deal deleted' });
+      legacyToast({ title: 'Deal deleted' });
       loadCompanyData();
       onUpdate?.();
     } catch (error) {
       console.error('Failed to delete deal:', error);
-      toast({ title: 'Could not delete deal', description: 'Try again.', variant: 'destructive' });
+      legacyToast({ title: 'Could not delete deal', description: 'Try again.', variant: 'destructive' });
     }
   };
 
