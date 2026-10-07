@@ -203,3 +203,13 @@ export function whyLine(heat: number, newPermits: number, recentPermits: number)
 export function formatHeat(heat: number): string {
   return heat.toFixed(1);
 }
+
+/** The permits that add the most heat, biggest first. */
+export function topContributingPermits(permits: Permit[], windowDays: number, n = 3): { permit: Permit; heat: number }[] {
+  const now = new Date();
+  return permits
+    .map((permit) => ({ permit, heat: permitHeat(permit, windowDays, now) }))
+    .filter((x) => x.heat > 0)
+    .sort((a, b) => b.heat - a.heat)
+    .slice(0, n);
+}

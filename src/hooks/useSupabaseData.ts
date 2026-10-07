@@ -129,7 +129,7 @@ function buildLiveCompanies(
   realCompanies: Company[],
   deals: Deal[],
   windowDays: number,
-): { companies: Company[]; hiddenCount: number } {
+): { companies: Company[]; hiddenCount: number; hidden: Company[] } {
   const stats = computeOperatorStats(permits, windowDays);
   const realByName = new Map(realCompanies.map((c) => [c.name.toLowerCase(), c]));
   const dealCompanyIds = new Set(deals.map((d) => d.companyId));
@@ -161,15 +161,17 @@ function buildLiveCompanies(
   });
 
   let hiddenCount = 0;
+  const hidden: Company[] = [];
   for (const real of realCompanies) {
     if (used.has(real.id)) continue;
     if (real.isCurrentClient || dealCompanyIds.has(real.id)) {
       out.push({ ...real, permitCount: 0, windowCount: 0, heat: 0, totalValue: 0, score: 'cold' });
     } else {
       hiddenCount += 1;
+      hidden.push({ ...real, permitCount: 0, windowCount: 0, heat: 0, totalValue: 0, score: 'cold' });
     }
   }
-  return { companies: out, hiddenCount };
+  return { companies: out, hiddenCount, hidden };
 }
 
 export function useSupabaseData() {
@@ -221,7 +223,7 @@ export function useSupabaseData() {
   };
 
   // Computed values
-  const { companies, hiddenCount: hiddenCompanyCount } = useMemo(
+  const { companies, hiddenCount: hiddenCompanyCount, hidden: hiddenCompanies } = useMemo(
     () => buildLiveCompanies(permits, realCompanies, deals, windowDays),
     [permits, realCompanies, deals, windowDays],
   );
@@ -247,6 +249,7 @@ export function useSupabaseData() {
     loading,
     windowDays,
     hiddenCompanyCount,
+    hiddenCompanies,
     refresh,
     removeDataset,
     newThisWeekPermits,
