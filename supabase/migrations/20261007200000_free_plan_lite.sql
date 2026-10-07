@@ -22,3 +22,8 @@ begin
 end $$;
 create trigger free_limit_deals before insert on public.deals for each row execute function public.enforce_free_plan_limit();
 create trigger free_limit_selling_options before insert on public.selling_options for each row execute function public.enforce_free_plan_limit();
+
+-- Full-history operator scores are paid-only.
+alter policy "Signed-in users read operator scores" on public.operator_scores using (
+  (select plan from public.profiles where id = auth.uid()) = any (array['starter','pro'])
+);

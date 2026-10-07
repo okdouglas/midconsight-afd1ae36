@@ -11,6 +11,10 @@ import { BRAND } from '@/lib/brand-colors';
 import { permitDate, windowStart, windowLabel, ageInDays, permitHeat } from '@/lib/scoring';
 import { classifyLifecycleStage, STAGE_LABELS } from '@/components/PermitMapAdvanced';
 import type { Permit } from '@/lib/schema-mapping';
+import { useProfile } from '@/hooks/useProfile';
+import { promptUpgrade } from '@/lib/supabase-data';
+import { Button } from '@/components/ui/button';
+import { Lock } from 'lucide-react';
 
 const esc = (v: unknown) =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
@@ -30,6 +34,8 @@ interface Props {
 }
 
 export function CompanyPermitsMap({ permits, windowDays }: Props) {
+  const { isPaid, loading: planLoading } = useProfile();
+  const locked = !isPaid && !planLoading;
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -109,13 +115,27 @@ export function CompanyPermitsMap({ permits, windowDays }: Props) {
           </span>
         </div>
       </div>
-      {located.length === 0 ? (
-        <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
-          No mapped permits tracked for this company yet.
-        </div>
-      ) : (
-        <div ref={el} className="h-64 w-full" role="img" aria-label="Map of this company's tracked permits" />
-      )}
+      <div className="relative" style={{ height: 288 }}>
+        <div
+          ref={el}
+          style={{ height: 288, width: '100%' }}
+          className={locked ? 'pointer-events-none grayscale opacity-40' : ''}
+          role="img"
+          aria-label="Map of this company's tracked permits"
+        />
+        {located.length === 0 && !locked && (
+          <div className="absolute inset-0 z-[500] flex items-center justify-center bg-card/80 text-sm text-muted-foreground">
+            No mapped permits tracked for this company yet.
+          </div>
+        )}
+        {locked && (
+          <div className="absolute inset-0 z-[500] flex flex-col items-center justify-center gap-2 text-center px-6">
+            <Lock className="h-6 w-6 text-muted-foreground" />
+            <div className="text-sm font-medium">The permit map is on the paid plans</div>
+            <Button size="sm" onClick={promptUpgrade}>Upgrade</Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

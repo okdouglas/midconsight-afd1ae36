@@ -11,8 +11,8 @@ import { openBillingPortal, type DbProfile } from '@/lib/supabase-data';
 
 const PLAN_LABEL = { free: 'Free', starter: 'Starter', pro: 'Pro' } as const;
 const PLAN_NOTE = {
-  free: 'Permits from the last 30 days, up to 3 deals and 3 products, and small data imports.',
-  starter: 'Full permit history, unlimited deals, products and imports.',
+  free: 'Permits from the last 30 days, up to 3 deals and 3 products, and no data import.',
+  starter: 'Full permit history, scores, unlimited deals and products, data and product import.',
   pro: 'Everything in Starter.',
 } as const;
 

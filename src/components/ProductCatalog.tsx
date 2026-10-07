@@ -32,6 +32,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { useProfile } from '@/hooks/useProfile';
+import { promptUpgrade } from '@/lib/supabase-data';
 import {
   getSellingOptions,
   saveSellingOption,
@@ -55,6 +57,8 @@ type SortDirection = 'asc' | 'desc';
 
 export function ProductCatalog() {
   const { toast } = useToast();
+  const { isPaid } = useProfile();
+  const startImport = () => (isPaid ? fileInputRef.current?.click() : promptUpgrade());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [options, setOptions] = useState<DbSellingOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,9 +295,9 @@ export function ProductCatalog() {
                 </div>
                 <div className="flex gap-2">
                   <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
-                  <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                  <Button variant="outline" onClick={startImport} disabled={importing}>
                     <FileSpreadsheet className="h-4 w-4 mr-2" />
-                    {importing ? 'Importing…' : 'Import'}
+                    {importing ? 'Importing…' : isPaid ? 'Import' : 'Import (Pro)'}
                   </Button>
                   <Button onClick={handleAddNew}>
                     <Plus className="h-4 w-4 mr-2" />
@@ -328,7 +332,7 @@ export function ProductCatalog() {
                       <Plus className="h-4 w-4 mr-2" />
                       Add your first product
                     </Button>
-                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                    <Button variant="outline" onClick={startImport}>
                       <Upload className="h-4 w-4 mr-2" />
                       Import a spreadsheet
                     </Button>

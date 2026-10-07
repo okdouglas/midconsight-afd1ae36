@@ -29,7 +29,7 @@ const TIERS = [
     features: [
       'Full permit history, not just 30 days',
       'Unlimited deals and products',
-      'Unlimited data import',
+      'Data and product import',
     ],
   },
   {

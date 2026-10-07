@@ -30,8 +30,7 @@ const NAV_ITEMS = [
   { value: 'research', label: 'Lead Research', icon: Search, minPlan: null },
   { value: 'deals', label: 'Deals', icon: DollarSign, minPlan: null },
   { value: 'products', label: 'Products', icon: Package, minPlan: null },
-  { value: 'data', label: 'Data', icon: Database, minPlan: null },
-  { value: 'account', label: 'Account', icon: Settings, minPlan: null },
+  { value: 'data', label: 'Data', icon: Database, minPlan: 'pro' },
 ] as const;
 
 type MinPlan = 'starter' | 'pro' | null;
@@ -48,9 +47,7 @@ function UpgradePrompt({ label, tier, onUpgradeClick }: { label: string; tier: '
       <Lock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
       <h2 className="text-xl font-semibold mb-2">{label} is on the {info.name} plan</h2>
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-        {tier === 'starter'
-          ? 'Starter adds the live permit feed, Lead Research, and data import.'
-          : 'Pro adds company tracking, deal pipelines, and the product catalog, on top of everything in Starter.'}
+        Importing your own permit data is part of the paid plans. The free plan shows the last 30 days of permits.
       </p>
       <Button onClick={onUpgradeClick}>Upgrade to {info.name} ({info.price})</Button>
     </div>
@@ -134,7 +131,7 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const activeItem = NAV_ITEMS.find((n) => n.value === activeTab);
-  const activeLabel = activeItem?.label ?? 'Dashboard';
+  const activeLabel = activeTab === 'account' ? 'Account' : activeItem?.label ?? 'Dashboard';
   const isGatedTab = !!activeItem && !canAccess(activeItem.minPlan);
 
   // Log paywall hits when a free user lands on a gated tab (but not on
@@ -195,7 +192,15 @@ const Index = () => {
             Back to site
           </Link>
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
-            <span className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</span>
+            <button
+              type="button"
+              onClick={() => setActiveTab('account')}
+              title={user?.email ?? 'Account'}
+              className={`flex items-center gap-2 text-sm truncate transition-colors ${activeTab === 'account' ? 'text-sidebar-foreground font-medium' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'}`}
+            >
+              <Settings className="h-4 w-4 shrink-0" />
+              Account
+            </button>
             <Button
               variant="ghost"
               size="icon"
@@ -329,7 +334,7 @@ const Index = () => {
 
             {/* Data Management Tab */}
             <TabsContent value="data" className="space-y-6 mt-0">
-              {canAccess('starter') ? (
+              {canAccess('pro') ? (
                 <>
                   <DataImport onImportComplete={refresh} />
                   <DatasetManager
@@ -338,7 +343,7 @@ const Index = () => {
                   />
                 </>
               ) : (
-                <UpgradePrompt label="Data import" tier="starter" onUpgradeClick={() => openUpgradeDialog('data_tab')} />
+                <UpgradePrompt label="Data import" tier="pro" onUpgradeClick={() => openUpgradeDialog('data_tab')} />
               )}
             </TabsContent>
           </Tabs>
