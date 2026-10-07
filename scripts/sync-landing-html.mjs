@@ -60,7 +60,7 @@ const graph = {
         'Web app for oil and gas land, leasing and business development teams in Oklahoma. Pulls new drilling permits every Monday, scores each as a lead, maps them, and tracks operators, companies and deals.',
       publisher: { '@id': `${URL}#org` },
       offers: [
-        { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD', description: 'Shared permits older than 30 days.', url: `${URL}#pricing` },
+        { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD', description: 'Permits from the last 30 days.', url: `${URL}#pricing` },
         ...[['Starter', '10'], ['Pro', '20']].map(([name, price]) => ({
           '@type': 'Offer',
           name,
@@ -99,7 +99,7 @@ const noscript = [
   p(C.KPI_CAPTION),
   sec(W.h2, p(W.lead) + li(W.facts.map((f) => `${esc(f.title)} ${esc(f.body)}`)) + p(W.ladderTitle) + li(W.ladder.map((t) => `${esc(t.sample)} ${esc(t.label)}`)), 'platform'),
   sec(L.h2, p(L.lead) + p(L.eyebrow) + p(`${L.operator}, ${L.well}. ${L.score}.`) + li(L.rows.map(([k, v]) => `${esc(k)}: ${esc(v)}`)) + p(L.source) + p(L.barTitle) + li([`${C.FACTS.hot} Hot`, `${C.FACTS.warm} Warm`, `${C.FACTS.cold} Cold`]) + p(L.barCaption)),
-  sec(SC.h2, p(SC.lead) + li(SC.tiers.map((t) => `${esc(t.name)}: heat ${esc(t.rule)}. ${esc(t.meaning)}.`)) + p(`${esc(SC.windowsLabel)}: ${SC.windows.map(esc).join(', ')}.`) + p(`${SC.example.text} ${SC.example.caption}`) + li(SC.notes.map(esc)), 'scoring'),
+  sec(SC.h2, p(SC.lead) + li(SC.tiers.map((t) => `${esc(t.name)}: heat ${esc(t.rule)}. ${esc(t.meaning)}.`)) + p(`${SC.example.text} ${SC.example.caption}`) + li(SC.notes.map(esc)), 'scoring'),
   sec(CO.h2, p(CO.lead) + li(CO.stages.map(esc)) + p(CO.note)),
   sec(R.h2, R.cards.map((c) => `<h3>${esc(c.title)}</h3>${p(c.body)}${p(c.plan)}`).join('')),
   sec(MO.h2, p(MO.lead) + `<h3>${esc(MO.title)}</h3>` + li(MO.steps.map((s) => `${esc(s.n)} ${esc(s.when)}. ${esc(s.title)} ${esc(s.body)}`)), 'how-it-works'),

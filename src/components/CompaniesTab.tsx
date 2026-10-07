@@ -473,7 +473,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
       {/* Company Detail Modal */}
       <CompanyDetailModal
         company={selectedCompany}
-        companyPermits={permits.filter(p => p.operator === selectedCompany?.name)}
+        companyPermits={permits.filter(p => (p.operator || '').toLowerCase() === (selectedCompany?.name || '').toLowerCase())}
         windowDays={windowDays}
         onClose={() => setSelectedCompany(null)}
         onUpdate={onRefresh}

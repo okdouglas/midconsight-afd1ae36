@@ -140,7 +140,7 @@ export default function Auth() {
           <CardDescription>Permit Intelligence Platform</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="space-y-4">
+          <Tabs defaultValue={new URLSearchParams(window.location.search).get('mode') === 'signup' ? 'signup' : 'signin'} className="space-y-4">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>

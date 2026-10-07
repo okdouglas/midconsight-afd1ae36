@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 export function useCta() {
   const { user } = useAuth();
   return {
-    href: user ? '/app' : '/auth',
+    href: user ? '/app' : '/auth?mode=signup',
     label: user ? 'Go to dashboard' : 'Start free',
     signedIn: !!user,
   };

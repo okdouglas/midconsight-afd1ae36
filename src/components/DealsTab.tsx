@@ -3,6 +3,7 @@
  * CRM for managing deal flow from companies
  */
 
+import { toast } from 'sonner';
 import { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, 
@@ -123,13 +124,17 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
     const newStatus = (newStage === 'closed_won' || newStage === 'closed_lost') ? 'closed' : 'open';
     const newProbability = STAGE_PROBABILITY[newStage];
     
-    await updateDeal(deal.id, { 
-      stage: newStage, 
-      status: newStatus,
-      probability: newProbability
-    });
-    
-    onRefresh();
+    try {
+      await updateDeal(deal.id, {
+        stage: newStage,
+        status: newStatus,
+        probability: newProbability,
+      });
+      onRefresh();
+    } catch (err) {
+      console.error('Stage change failed', err);
+      toast.error("Couldn't move that deal. Please try again.");
+    }
   };
 
   // Period-based metrics

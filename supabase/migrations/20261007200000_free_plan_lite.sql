@@ -27,3 +27,24 @@ create trigger free_limit_selling_options before insert on public.selling_option
 alter policy "Signed-in users read operator scores" on public.operator_scores using (
   (select plan from public.profiles where id = auth.uid()) = any (array['starter','pro'])
 );
+
+-- Closed Lost deals carry 0% probability.
+alter table public.deals drop constraint deals_probability_check, add constraint deals_probability_check check (probability = any (array[0, 10, 30, 60, 90, 100]));
+
+-- Free deal limit counts open deals only.
+create or replace function public.enforce_free_plan_limit() returns trigger language plpgsql security definer set search_path = public as $$
+declare cnt int; p text;
+begin
+  if auth.role() = 'service_role' then return new; end if;
+  select plan into p from public.profiles where id = new.user_id;
+  if coalesce(p, 'free') <> 'free' then return new; end if;
+  if tg_table_name = 'deals' then
+    select count(*) into cnt from public.deals where user_id = new.user_id and status = 'open';
+  else
+    execute format('select count(*) from public.%I where user_id = $1', tg_table_name) into cnt using new.user_id;
+  end if;
+  if cnt >= 3 then
+    raise exception 'FREE_LIMIT:%', tg_table_name using errcode = 'P0001';
+  end if;
+  return new;
+end $$;

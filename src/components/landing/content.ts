@@ -157,7 +157,7 @@ export const COMPANIES = {
   h2: 'Operators, companies and deals in one place',
   lead: 'Each operator gets a company record built from its permits. Link a permit to a deal and move it down the pipeline.',
   stages: ['New Lead', 'Contacted', 'Qualified', 'Proposal', 'Closed Won', 'Closed Lost'],
-  note: 'Company records and the deals pipeline are on Pro.',
+  note: 'Free accounts track up to 3 deals. Paid plans have no limit.',
 } as const;
 
 export const RESEARCH = {
@@ -166,7 +166,7 @@ export const RESEARCH = {
     {
       title: 'Research',
       body: 'Triage new permits in Lead Research. Mark each one new, researching, verified or current client.',
-      plan: 'Starter and Pro',
+      plan: 'Every plan',
     },
     {
       title: 'Export',
@@ -211,15 +211,15 @@ export const PLAIN = {
 
 export const PRICING = {
   h2: 'Plans: Free, Starter $10, Pro $20',
-  lead: 'Start free. Move up when you want current permits or the deals pipeline.',
+  lead: 'Start free with the last 30 days of permits. Move up for the full history and no limits.',
   plans: [
     {
       id: 'free',
       name: 'Free',
       price: '$0',
       per: '',
-      limit: 'Shared permits older than 30 days.',
-      features: ['Dashboard and county map', 'CSV and Excel export from the map'],
+      limit: 'Permits from the last 30 days.',
+      features: ['Dashboard, map, companies and Lead Research', 'Up to 3 deals and 3 products', 'CSV and Excel export from the map'],
       cta: 'Start free',
     },
     {
@@ -227,8 +227,8 @@ export const PRICING = {
       name: 'Starter',
       price: '$10',
       per: '/mo',
-      limit: 'Everything in Free, with current permits.',
-      features: ['No 30-day delay on permits', 'Lead Research', 'Data import'],
+      limit: 'Everything in Free, with the full history.',
+      features: ['Full permit history and operator scores', 'Unlimited deals and products', 'Data and product import'],
       cta: 'Get Starter',
     },
     {
@@ -236,13 +236,13 @@ export const PRICING = {
       name: 'Pro',
       price: '$20',
       per: '/mo',
-      limit: 'Everything in Starter, with the full pipeline.',
-      features: ['Company records', 'Deals pipeline', 'Product catalog and matching'],
+      limit: 'Everything in Starter.',
+      features: ['Full permit history and operator scores', 'Unlimited deals and products', 'Data and product import'],
       cta: 'Get Pro',
       featured: true,
     },
   ],
-  note: 'Paid plans are set up by request inside the app. Self-serve checkout is coming.',
+  note: 'Pay by card. Cancel any time from your account page. Annual billing saves two months.',
 } as const;
 
 export const FAQ_H2 = 'Questions';
@@ -269,7 +269,7 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
   },
   {
     q: 'What does the Free plan include?',
-    a: 'Free users see shared permits older than 30 days. Starter is $10 a month and Pro is $20 a month.',
+    a: 'Free shows permits from the last 30 days, with up to 3 deals and 3 products. Starter is $10 a month and Pro is $20 a month. Both give the full history, scores and no limits.',
   },
   {
     q: 'The OCC publishes this data. Why use MidconSight?',
@@ -319,8 +319,6 @@ export const SCORING = {
     { tone: 'warm', name: 'Warm', rule: '0.75 or more', meaning: '3 permits 3 months ago, or 1 this month' },
     { tone: 'steady', name: 'Cold', rule: 'Under 0.75', meaning: '1 permit 6 months ago' },
   ],
-  windows: ['7 days', '14 days', '30 days', '60 days', '90 days', '6 months', '12 months'],
-  windowsLabel: 'Pick a lookback',
   example: {
     label: 'One real example',
     text: `Today, ${FACTS.hotOperators} of ${FACTS.operators} operators in the feed are hot, ${FACTS.warmOperators} are warm and ${FACTS.coldOperators} are cold.`,
@@ -329,7 +327,7 @@ export const SCORING = {
   notes: [
     'The median horizontal well takes about 6 months from permit to first production. About 1 in 6 permits never becomes a producing well. The weights come from 6,590 Oklahoma permits.',
     'Only new drills count. Amendments and recompletions re-approve a well that already has a permit, so they add nothing.',
-    'The lookback at the top of every screen caps how far back permits count. It starts at 12 months.',
+    'Permits count for up to 12 months. Older ones add nothing.',
     'The score belongs to the operator. Every permit it files carries that tier.',
     'Cold does not mean a bad operator. It means little of its pipeline is left. A new filing moves it back up.',
   ],

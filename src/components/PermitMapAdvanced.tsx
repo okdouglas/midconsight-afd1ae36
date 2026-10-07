@@ -185,6 +185,9 @@ const getDefaultStartDate = () => {
 };
 const getDefaultEndDate = () => new Date();
 
+const escHtml = (v: unknown) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
 export function PermitMapAdvanced({ 
   permits, 
   onPermitClick, 
@@ -487,15 +490,15 @@ export function PermitMapAdvanced({
       const popupContent = `
         <div style="font-family: system-ui; font-size: 12px; min-width: 240px;">
           <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px; color: ${sourceColor};">
-            ${permit.wellName || 'Unknown Well'}
+            ${escHtml(permit.wellName || 'Unknown Well')}
           </div>
           <div style="font-size: 11px; color: #5B6F8A; margin-bottom: 8px;">${filedLine}</div>
           <div style="display: grid; gap: 4px;">
-            <div><strong>Operator:</strong> ${permit.operator || 'N/A'}</div>
-            <div><strong>API:</strong> ${permit.api || 'N/A'}</div>
+            <div><strong>Operator:</strong> ${escHtml(permit.operator || 'N/A')}</div>
+            <div><strong>API:</strong> ${escHtml(permit.api || 'N/A')}</div>
             ${legalLine}
-            <div><strong>County:</strong> ${permit.county || 'N/A'}</div>
-            <div><strong>Formation:</strong> ${permit.formationName || 'N/A'}</div>
+            <div><strong>County:</strong> ${escHtml(permit.county || 'N/A')}</div>
+            <div><strong>Formation:</strong> ${escHtml(permit.formationName || 'N/A')}</div>
           </div>
           ${statusLine}
           ${wellFileLink}
@@ -545,7 +548,7 @@ export function PermitMapAdvanced({
 
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...rows.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
