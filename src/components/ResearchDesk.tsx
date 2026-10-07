@@ -44,7 +44,8 @@ import { ResearchSidebar } from './ResearchSidebar';
 import { type Permit } from '@/lib/schema-mapping';
 import { type Company } from '@/hooks/useSupabaseData';
 import { toast } from 'sonner';
-import { scoreOperator, windowStart, permitDate, windowLabel, computeOperatorStats, whyLine } from '@/lib/scoring';
+import { scoreOperator, computeOperatorStats, whyLine } from '@/lib/scoring';
+import { ensureRealCompany } from '@/lib/research-company';
 import { updateCompany, getAllResearchStatuses, setResearchStatus as persistResearchStatus } from '@/lib/supabase-data';
 
 type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
@@ -55,6 +56,7 @@ interface OperatorLead {
   operator: string;
   permits: Permit[];
   latestPermitDate: string;
+  latestPermit: Permit;
   county: string;
   state: string;
   researchStatus: ResearchStatus;
@@ -97,7 +99,20 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
     return first ?? { heat: 0, inWindow: 0, recent: 0 };
   };
   // Null means the default order: priority first, then newest permit.
-  const [dateSort, setDateSort] = useState<'asc' | 'desc' | null>(null);
+  // Priority 'desc' puts Hot first.
+  const [sort, setSort] = useState<{ key: 'date' | 'priority'; dir: 'asc' | 'desc' } | null>(null);
+  const cycleSort = (key: 'date' | 'priority') => {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'desc' };
+      return cur.dir === 'desc' ? { key, dir: 'asc' } : null;
+    });
+  };
+  const sortIcon = (key: 'date' | 'priority') =>
+    sort?.key === key
+      ? (sort.dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+      : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />;
+  const ariaSort = (key: 'date' | 'priority') =>
+    sort?.key === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none';
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
   const [selectedOperators, setSelectedOperators] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,7 +129,7 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
         if (!cancelled) setStatusMap(map as Record<string, ResearchStatus>);
       })
       .catch(() => {
-        toast.error('Failed to load research status — showing defaults');
+        toast.error('Failed to load research status. Showing defaults.');
       })
       .finally(() => {
         if (!cancelled) setStatusLoaded(true);
@@ -172,6 +187,7 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
         latestPermitDate: latestPermit.approvalDate || latestPermit.dateImported,
         county: latestPermit.county || 'Unknown',
         state: latestPermit.state || 'Unknown',
+        latestPermit,
         researchStatus: statusMap[operator] ?? 'new',
         priority: calculatePriority(opPermits, windowDays),
         company,
@@ -205,19 +221,27 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
         return true;
       })
       .sort((a, b) => {
-        // A date sort set from the column header wins over the default order
-        if (dateSort) {
-          const diff = new Date(a.latestPermitDate).getTime() - new Date(b.latestPermitDate).getTime();
-          return dateSort === 'asc' ? diff : -diff;
+        const priorityOrder = { hot: 0, warm: 1, cold: 2 };
+        const byPriority = priorityOrder[a.priority] - priorityOrder[b.priority]; // Hot first
+        const newestFirst = new Date(b.latestPermitDate).getTime() - new Date(a.latestPermitDate).getTime();
+        // A sort set from a column header wins over the default order
+        if (sort?.key === 'date') {
+          return sort.dir === 'desc' ? newestFirst : -newestFirst;
+        }
+        if (sort?.key === 'priority') {
+          if (byPriority !== 0) return sort.dir === 'desc' ? byPriority : -byPriority;
+          return newestFirst;
         }
         // Default: priority (hot first), then newest permit
-        const priorityOrder = { hot: 0, warm: 1, cold: 2 };
-        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-          return priorityOrder[a.priority] - priorityOrder[b.priority];
-        }
-        return new Date(b.latestPermitDate).getTime() - new Date(a.latestPermitDate).getTime();
+        if (byPriority !== 0) return byPriority;
+        return newestFirst;
       });
-  }, [operatorLeads, statusFilter, priorityFilter, searchQuery, dateSort]);
+  }, [operatorLeads, statusFilter, priorityFilter, searchQuery, sort]);
+
+  // A selection made under one filter should not follow you into another.
+  useEffect(() => {
+    setSelectedOperators(new Set());
+  }, [statusFilter, priorityFilter, searchQuery]);
 
   const selectedLead = selectedOperator 
     ? operatorLeads.find(l => l.operator === selectedOperator) 
@@ -243,33 +267,52 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
 
   const handleBulkArchive = async () => {
     const operators = Array.from(selectedOperators);
+    const before: Record<string, ResearchStatus> = {};
+    operators.forEach((op) => { before[op] = statusMap[op] ?? 'new'; });
     setSelectedOperators(new Set());
     const results = await Promise.allSettled(operators.map((op) => updateStatus(op, 'archived')));
-    const failed = results.filter((r) => r.status === 'rejected').length;
+    const done = operators.filter((_, i) => results[i].status === 'fulfilled');
+    const failed = operators.length - done.length;
     if (failed > 0) {
-      toast.error(`Archived ${operators.length - failed} of ${operators.length} leads — ${failed} failed`);
-    } else {
-      toast.success(`Archived ${operators.length} leads`);
+      toast.error(`Archived ${done.length} of ${operators.length} leads. ${failed} failed.`);
     }
-    onRefresh();
+    if (done.length > 0) {
+      toast.success(`Archived ${done.length} lead${done.length === 1 ? '' : 's'}`, {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            Promise.allSettled(done.map((op) => updateStatus(op, before[op]))).then((r) => {
+              if (r.every((x) => x.status === 'fulfilled')) toast.success('Restored');
+            });
+          },
+        },
+      });
+    }
+    // Status lives in this component, so no full data refresh is needed.
   };
 
   const handleStatusChange = async (operator: string, status: ResearchStatus) => {
+    const previous = statusMap[operator] ?? 'new';
     try {
       await updateStatus(operator, status);
     } catch {
       return; // error toast already shown by updateStatus
     }
 
-    // If marking as current client, update the company record
+    // If marking as current client, update the company record.
+    // A preview company has no row yet, so save it first.
     if (status === 'current_client') {
       const lead = operatorLeads.find(l => l.operator === operator);
       if (lead?.company) {
         try {
-          await updateCompany(lead.company.id, { is_current_client: true });
+          const { id } = await ensureRealCompany(lead.company);
+          await updateCompany(id, { is_current_client: true });
           toast.success(`${operator} marked as current client`);
         } catch (error) {
-          toast.error('Failed to update company');
+          // Put the status back so the table matches what was saved.
+          try { await updateStatus(operator, previous); } catch { /* toast already shown */ }
+          toast.error(`Could not mark ${operator} as a current client. Status restored.`);
+          return;
         }
       }
     }
@@ -277,14 +320,8 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
     onRefresh();
   };
 
-  const handleDealCreated = async () => {
-    if (selectedOperator) {
-      try {
-        await updateStatus(selectedOperator, 'verified');
-      } catch {
-        // error toast already shown
-      }
-    }
+  // Creating a deal does not mean the lead is verified, so the status stays as it was.
+  const handleDealCreated = () => {
     setSelectedOperator(null);
     onRefresh();
   };
@@ -292,10 +329,17 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
   // Stats
   const newCount = operatorLeads.filter(l => l.researchStatus === 'new').length;
   const hotCount = operatorLeads.filter(l => l.priority === 'hot' && l.researchStatus !== 'archived').length;
-  const currentClientCount = companies.filter(c => c.isCurrentClient).length;
   const researchingCount = operatorLeads.filter(l => l.researchStatus === 'researching').length;
   const verifiedCount = operatorLeads.filter(l => l.researchStatus === 'verified').length;
-
+  const archivedCount = operatorLeads.filter(l => l.researchStatus === 'archived').length;
+  const filtersActive = statusFilter !== 'all' || priorityFilter !== 'all' || searchQuery.trim() !== '';
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setPriorityFilter('all');
+    setSearchQuery('');
+  };
+  const tileClass = (active: boolean) =>
+    `rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/30 ${active ? 'border-primary ring-1 ring-primary' : 'border-border'}`;
   if (!statusLoaded) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-200px)] text-sm text-muted-foreground">
@@ -308,28 +352,28 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
     <div className="flex h-[calc(100vh-200px)]">
       {/* Main Table Area */}
       <div className={`flex-1 flex flex-col ${selectedLead ? 'mr-4' : ''}`}>
-        {/* Header Stats */}
-        <div className="grid gap-3 grid-cols-5 mb-4">
-          <div className="rounded-lg border border-border bg-card p-3">
+        {/* Header Stats. Each tile sets the matching filter. */}
+        <div className="grid gap-3 grid-cols-4 mb-4">
+          <button type="button" className={tileClass(statusFilter === 'new' && priorityFilter === 'all')}
+            onClick={() => { setStatusFilter('new'); setPriorityFilter('all'); }}>
             <div className="text-2xl font-semibold text-primary">{newCount}</div>
             <div className="text-xs text-muted-foreground">New Leads</div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3">
+          </button>
+          <button type="button" className={tileClass(priorityFilter === 'hot' && statusFilter === 'all')}
+            onClick={() => { setPriorityFilter('hot'); setStatusFilter('all'); }}>
             <div className="text-2xl font-semibold text-score-hot">{hotCount}</div>
             <div className="text-xs text-muted-foreground">Hot Leads</div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3">
-            <div className="text-2xl font-semibold text-foreground">{currentClientCount}</div>
-            <div className="text-xs text-muted-foreground">Current Clients</div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3">
+          </button>
+          <button type="button" className={tileClass(statusFilter === 'researching' && priorityFilter === 'all')}
+            onClick={() => { setStatusFilter('researching'); setPriorityFilter('all'); }}>
             <div className="text-2xl font-semibold text-score-warm-foreground">{researchingCount}</div>
             <div className="text-xs text-muted-foreground">Researching</div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3">
+          </button>
+          <button type="button" className={tileClass(statusFilter === 'verified' && priorityFilter === 'all')}
+            onClick={() => { setStatusFilter('verified'); setPriorityFilter('all'); }}>
             <div className="text-2xl font-semibold text-success">{verifiedCount}</div>
             <div className="text-xs text-muted-foreground">Verified</div>
-          </div>
+          </button>
         </div>
 
         {/* Filters & Actions */}
@@ -396,17 +440,27 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
-                <TableHead className="w-24">Priority</TableHead>
-                <TableHead>Operator</TableHead>
-                <TableHead aria-sort={dateSort === 'asc' ? 'ascending' : dateSort === 'desc' ? 'descending' : 'none'}>
+                <TableHead className="w-24" aria-sort={ariaSort('priority')}>
                   <button
                     type="button"
                     className="flex items-center gap-1 font-medium hover:text-foreground"
-                    onClick={() => setDateSort(dateSort === null ? 'asc' : dateSort === 'asc' ? 'desc' : null)}
-                    title="Sort by latest permit. Oldest first, then newest first, then back to priority order."
+                    onClick={() => cycleSort('priority')}
+                    title="Sort by priority. Hot first, then Cold first, then back to the default order."
+                  >
+                    Priority
+                    {sortIcon('priority')}
+                  </button>
+                </TableHead>
+                <TableHead>Operator</TableHead>
+                <TableHead aria-sort={ariaSort('date')}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 font-medium hover:text-foreground"
+                    onClick={() => cycleSort('date')}
+                    title="Sort by latest permit. Newest first, then oldest first, then back to priority order."
                   >
                     Latest Permit
-                    {dateSort === 'asc' ? <ArrowUp className="h-3 w-3" /> : dateSort === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                    {sortIcon('date')}
                   </button>
                 </TableHead>
                 <TableHead>County</TableHead>
@@ -418,7 +472,19 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
               {filteredLeads.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                    No leads found. Import data or adjust filters.
+                    {operatorLeads.length === 0 ? (
+                      <p>No permits yet. Permits load every Monday.</p>
+                    ) : filtersActive ? (
+                      <div className="space-y-3">
+                        <p>No leads match these filters.</p>
+                        <Button variant="outline" size="sm" onClick={clearFilters}>Clear filters</Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p>Every lead is archived{archivedCount > 0 ? ` (${archivedCount})` : ''}.</p>
+                        <Button variant="outline" size="sm" onClick={() => setStatusFilter('archived')}>Show archived</Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -498,7 +564,8 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
       {/* Research Sidebar */}
       {selectedLead && (
         <ResearchSidebar
-          permit={selectedLead.permits[0]}
+          key={selectedLead.operator}
+          permit={selectedLead.latestPermit}
           allPermits={selectedLead.permits}
           companies={companies}
           onClose={() => setSelectedOperator(null)}

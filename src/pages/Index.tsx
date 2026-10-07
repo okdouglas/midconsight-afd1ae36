@@ -130,6 +130,15 @@ const Index = () => {
     return () => window.removeEventListener('midconsight:free-limit', onLimit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Modules ask to switch tabs with a 'midconsight:goto-tab' event.
+  useEffect(() => {
+    const onGoto = (e: Event) => {
+      const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (tab) setActiveTab(tab);
+    };
+    window.addEventListener('midconsight:goto-tab', onGoto);
+    return () => window.removeEventListener('midconsight:goto-tab', onGoto);
+  }, []);
   const activeItem = NAV_ITEMS.find((n) => n.value === activeTab);
   const activeLabel = activeTab === 'account' ? 'Account' : activeItem?.label ?? 'Dashboard';
   const isGatedTab = !!activeItem && !canAccess(activeItem.minPlan);

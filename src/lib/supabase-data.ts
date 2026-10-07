@@ -909,6 +909,76 @@ export function suggestBestProduct(
   return matches[0] || null;
 }
 
+export interface OperatorProductFit {
+  product: DbSellingOption;
+  /** Permits this product matched on at least one criterion. */
+  matchedPermits: number;
+  totalPermits: number;
+  /** Plain line such as "12 horizontal permits in Woodford". */
+  reason: string;
+}
+
+type FitPermit = { formationName?: string; wellType?: string; totalDepth?: number; drillType?: string };
+
+function drillWord(drillType?: string): string {
+  const t = (drillType || '').trim().toUpperCase();
+  if (t === 'HH' || t.startsWith('MU')) return 'horizontal';
+  if (t === 'SH' || t === 'DH') return 'vertical';
+  return '';
+}
+
+function topKey(counts: Map<string, number>): string {
+  let best = '';
+  let n = 0;
+  counts.forEach((v, k) => {
+    if (v > n) { best = k; n = v; }
+  });
+  return best;
+}
+
+/**
+ * Scores every product against all of an operator's permits and returns the
+ * product that fits the most of them, with the reason. Returns null when no
+ * product matches any permit (including an empty catalog or products with no
+ * criteria set), so the caller never labels a guess as a recommendation.
+ */
+export function suggestBestProductForPermits(
+  permits: FitPermit[],
+  catalog: DbSellingOption[]
+): OperatorProductFit | null {
+  if (catalog.length === 0 || permits.length === 0) return null;
+  type Row = { product: DbSellingOption; score: number; permits: FitPermit[] };
+  const totals = new Map<string, Row>();
+  for (const permit of permits) {
+    for (const m of matchProductsToPermit(permit, catalog)) {
+      if (m.score <= 0) continue;
+      const row: Row = totals.get(m.product.id) ?? { product: m.product, score: 0, permits: [] };
+      row.score += m.score;
+      row.permits.push(permit);
+      totals.set(m.product.id, row);
+    }
+  }
+  let hit: Row | null = null;
+  totals.forEach((row) => {
+    if (!hit || row.score > hit.score) hit = row;
+  });
+  if (!hit) return null;
+  const best: Row = hit;
+  const formations = new Map<string, number>();
+  const words = new Map<string, number>();
+  for (const p of best.permits) {
+    const f = (p.formationName || '').trim();
+    if (f) formations.set(f, (formations.get(f) || 0) + 1);
+    const w = drillWord(p.drillType);
+    if (w) words.set(w, (words.get(w) || 0) + 1);
+  }
+  const n = best.permits.length;
+  const word = topKey(words);
+  const formation = topKey(formations);
+  const reason = `${n} ${word ? word + ' ' : ''}permit${n === 1 ? '' : 's'}${formation ? ' in ' + formation : ''}`;
+  return { product: best.product, matchedPermits: n, totalPermits: permits.length, reason };
+}
+
 // ============ COMPANY UPDATES ============
 
 export async function updateCompany(
