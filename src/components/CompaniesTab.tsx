@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
-import { windowLabel } from '@/lib/scoring';
+import { windowLabel, computeOperatorStats, whyLine } from '@/lib/scoring';
 import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +33,7 @@ interface CompaniesTabProps {
   hiddenCompanyCount?: number;
 }
 
-type SortField = 'name' | 'permitCount' | 'totalValue' | 'dealCount' | 'weightedRevenue' | 'score';
+type SortField = 'name' | 'permitCount' | 'heat' | 'dealCount' | 'weightedRevenue' | 'score';
 type SortDirection = 'asc' | 'desc';
 
 interface CompanyWithDetails extends Company {
@@ -202,6 +202,13 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
     </TableHead>
   );
 
+  // Permits filed in the last 30 days per operator, for the "why" line under each name.
+  const recentByOperator = useMemo(() => {
+    const m = new Map<string, number>();
+    computeOperatorStats(permits, windowDays).forEach((s, name) => m.set(name.toLowerCase(), s.recent));
+    return m;
+  }, [permits, windowDays]);
+
   // Filter and sort companies
   const filteredCompanies = companiesWithDetails
     .filter(c => {
@@ -221,8 +228,8 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
         case 'permitCount':
           comparison = a.permitCount - b.permitCount;
           break;
-        case 'totalValue':
-          comparison = a.totalValue - b.totalValue;
+        case 'heat':
+          comparison = (a.heat ?? 0) - (b.heat ?? 0);
           break;
         case 'dealCount':
           comparison = a.dealCount - b.dealCount;
@@ -231,7 +238,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
           comparison = a.weightedRevenue - b.weightedRevenue;
           break;
         case 'score':
-          comparison = scorePriority[a.score] - scorePriority[b.score];
+          comparison = scorePriority[a.score] - scorePriority[b.score] || (a.heat ?? 0) - (b.heat ?? 0);
           break;
         default:
           comparison = 0;
@@ -384,7 +391,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
                 <SortHeader field="permitCount">Permits</SortHeader>
                 <SortHeader field="dealCount">Deals</SortHeader>
                 <SortHeader field="weightedRevenue">Weighted Revenue</SortHeader>
-                <SortHeader field="totalValue">Est. Value</SortHeader>
+                <SortHeader field="heat">Heat</SortHeader>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -435,8 +442,9 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {company.lastPermitDate ? `Last: ${new Date(company.lastPermitDate).toLocaleDateString()}` : 'No permits tracked'}
-                            {company.permitCount > 0 && ` · ${company.windowCount ?? 0} in last ${windowLabel(windowDays)}`}
+                            {company.permitCount > 0
+                              ? whyLine(company.heat ?? 0, company.windowCount ?? 0, recentByOperator.get(company.name.toLowerCase()) ?? 0)
+                              : 'No permits tracked'}
                           </div>
                         </div>
                       </div>
@@ -460,7 +468,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
                       ${company.weightedRevenue.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right font-semibold text-primary">
-                      ${company.totalValue.toLocaleString()}
+                      {(company.heat ?? 0).toFixed(1)}
                     </TableCell>
                   </TableRow>
                 ))

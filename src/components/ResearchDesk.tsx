@@ -44,7 +44,7 @@ import { ResearchSidebar } from './ResearchSidebar';
 import { type Permit } from '@/lib/schema-mapping';
 import { type Company } from '@/hooks/useSupabaseData';
 import { toast } from 'sonner';
-import { scoreOperator, windowStart, permitDate, windowLabel } from '@/lib/scoring';
+import { scoreOperator, windowStart, permitDate, windowLabel, computeOperatorStats, whyLine } from '@/lib/scoring';
 import { updateCompany, getAllResearchStatuses, setResearchStatus as persistResearchStatus } from '@/lib/supabase-data';
 
 type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
@@ -92,6 +92,10 @@ function calculatePriority(permits: Permit[], windowDays: number): Priority {
 // table) instead of localStorage, so it syncs across devices and team members.
 
 export function ResearchDesk({ permits, companies, onRefresh, windowDays }: ResearchDeskProps) {
+  const statsOf = (opPermits: Permit[]) => {
+    const first = computeOperatorStats(opPermits, windowDays).values().next().value;
+    return first ?? { heat: 0, inWindow: 0, recent: 0 };
+  };
   // Null means the default order: priority first, then newest permit.
   const [dateSort, setDateSort] = useState<'asc' | 'desc' | null>(null);
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
@@ -443,9 +447,7 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
                     <TableCell>
                       <div className="font-medium">{lead.operator}</div>
                       <div className="text-xs text-muted-foreground">
-                        {lead.permits.length} permit{lead.permits.length > 1 ? 's' : ''}
-                        {' · '}
-                        {lead.permits.filter(p => permitDate(p) >= windowStart(windowDays)).length} in last {windowLabel(windowDays)}
+                        {(() => { const st = statsOf(lead.permits); return whyLine(st.heat, st.inWindow, st.recent); })()}
                       </div>
                     </TableCell>
                     <TableCell>

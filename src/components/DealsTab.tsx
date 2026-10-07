@@ -30,6 +30,7 @@ import {
 import { type Deal, type Company } from '@/hooks/useSupabaseData';
 import { updateDeal, getSellingOptionById, getSellingOptions, type DbSellingOption } from '@/lib/supabase-data';
 import { DealDetailModal } from './DealDetailModal';
+import { FreeUsageBadge } from './FreeUsageBadge';
 
 interface DealsTabProps {
   deals: Deal[];
@@ -204,6 +205,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
 
   return (
     <div className="space-y-6">
+      <FreeUsageBadge used={openDeals.length} noun="open deals" />
       {/* KPI Summary */}
       <div className="grid gap-4 md:grid-cols-5">
         <Card>

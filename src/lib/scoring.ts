@@ -192,6 +192,14 @@ export function windowLabel(days: number): string {
   return SCORE_WINDOWS.find((w) => w.days === days)?.label ?? `${days} days`;
 }
 
+/** One plain line that says why an operator ranks where it does. */
+export function whyLine(heat: number, newPermits: number, recentPermits: number): string {
+  if (newPermits === 0) return 'No new drilling permits in the window.';
+  const wells = heat >= 0.05 ? `About ${heat.toFixed(1)} wells still coming` : 'Almost nothing still coming';
+  const recent = recentPermits > 0 ? `, ${recentPermits} filed in the last ${ACTIVE_DAYS} days` : '';
+  return `${wells} from ${newPermits} new permit${newPermits === 1 ? '' : 's'}${recent}.`;
+}
+
 export function formatHeat(heat: number): string {
   return heat.toFixed(1);
 }

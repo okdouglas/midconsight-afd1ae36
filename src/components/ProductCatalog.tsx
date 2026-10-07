@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { useProfile } from '@/hooks/useProfile';
+import { FreeUsageBadge } from '@/components/FreeUsageBadge';
 import { promptUpgrade, isFreeLimitError } from '@/lib/supabase-data';
 import {
   getSellingOptions,
@@ -293,6 +294,7 @@ export function ProductCatalog() {
                 <div className="flex items-center gap-2">
                   <Package className="h-5 w-5 text-primary" />
                   <CardTitle>Product catalog</CardTitle>
+                  <FreeUsageBadge used={options.length} noun="products" />
                 </div>
                 <div className="flex gap-2">
                   <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
