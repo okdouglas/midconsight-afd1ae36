@@ -20,11 +20,14 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { 
-  Search, Layers, Filter, Download, MapPin, Calendar as CalendarIcon, Users, 
-  ChevronLeft, ChevronRight, FileSpreadsheet
+import {
+  Search, Layers, Filter, Download, Calendar as CalendarIcon, Users,
+  ChevronLeft, ChevronRight, FileSpreadsheet, X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useProfile } from '@/hooks/useProfile';
+import { computeOperatorStats, DEFAULT_WINDOW_DAYS, type LeadScore } from '@/lib/scoring';
+import { Flame, Thermometer, Snowflake, Maximize2 } from 'lucide-react';
 import { BRAND } from '@/lib/brand-colors';
 
 // Fix default marker icons for Leaflet
@@ -40,6 +43,31 @@ interface PermitMapAdvancedProps {
   onPermitClick?: (permit: Permit) => void;
   showFilters?: boolean;
   defaultFilter?: 'all' | 'new_this_week';
+  /** Score lookback for the heat badges. Defaults to 12 months. */
+  windowDays?: number;
+}
+
+/** Free accounts see 30 days. Paid accounts start on a year. */
+const FREE_WINDOW_DAYS = 30;
+const PAID_START_DAYS = 365;
+const RANGE_PRESETS = [7, 30, 90] as const;
+
+const HEAT_BADGE: Record<LeadScore, { cls: string; label: string; Icon: typeof Flame }> = {
+  hot: { cls: 'bg-score-hot/10 text-score-hot border-score-hot/30', label: 'Hot', Icon: Flame },
+  warm: { cls: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30', label: 'Warm', Icon: Thermometer },
+  cold: { cls: 'bg-secondary text-primary-hover border-primary/20', label: 'Cold', Icon: Snowflake },
+};
+
+function daysAgoMidnight(days: number): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - days);
+  return d;
+}
+
+function openCompany(name: string) {
+  if (!name) return;
+  window.dispatchEvent(new CustomEvent('midconsight:open-company', { detail: { name } }));
 }
 
 // Base map layers (mutually exclusive)
@@ -178,19 +206,20 @@ const getMarkerIcon = (
 };
 
 // Date range bounds
-const getDefaultStartDate = () => {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - 1);
-  return d;
-};
 const getDefaultEndDate = () => new Date();
 
-export function PermitMapAdvanced({ 
-  permits, 
-  onPermitClick, 
+const escHtml = (v: unknown) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
+export function PermitMapAdvanced({
+  permits,
+  onPermitClick,
   showFilters = true,
-  defaultFilter = 'all'
+  defaultFilter = 'all',
+  windowDays = DEFAULT_WINDOW_DAYS,
 }: PermitMapAdvancedProps) {
+  const compact = !showFilters;
+  const { isPaid, loading: planLoading } = useProfile();
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
@@ -202,16 +231,23 @@ export function PermitMapAdvanced({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeLayer, setActiveLayer] = useState<keyof typeof TILE_LAYERS>('streets');
   const [showTrsGrid, setShowTrsGrid] = useState(false);
-  const [startDate, setStartDate] = useState<Date | undefined>(getDefaultStartDate());
+  const [startDate, setStartDate] = useState<Date | undefined>(() => daysAgoMidnight(FREE_WINDOW_DAYS));
+  const datesTouched = useRef(false);
   const [endDate, setEndDate] = useState<Date | undefined>(getDefaultEndDate());
   const [selectedStages, setSelectedStages] = useState<LifecycleStage[]>([]);
-  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([]);
-  const [cursorPosition, setCursorPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [viewportOperators, setViewportOperators] = useState<{ name: string; count: number }[]>([]);
+
+  // Default start date matches the plan: 30 days for Free, a year for paid plans.
+  // Stops once the user picks a date themselves.
+  useEffect(() => {
+    if (planLoading || datesTouched.current) return;
+    setStartDate(daysAgoMidnight(isPaid ? PAID_START_DAYS : FREE_WINDOW_DAYS));
+  }, [isPaid, planLoading]);
 
   // Handle start date input change
   const handleStartDateChange = (date: Date | undefined) => {
     if (date && isValid(date)) {
+      datesTouched.current = true;
       setStartDate(date);
     }
   };
@@ -219,9 +255,19 @@ export function PermitMapAdvanced({
   // Handle end date input change
   const handleEndDateChange = (date: Date | undefined) => {
     if (date && isValid(date)) {
+      datesTouched.current = true;
       setEndDate(date);
     }
   };
+
+  const applyPreset = (days: number) => {
+    datesTouched.current = true;
+    setStartDate(daysAgoMidnight(days));
+    setEndDate(new Date());
+  };
+  const activePreset = startDate
+    ? RANGE_PRESETS.find((d) => format(daysAgoMidnight(d), 'yyyy-MM-dd') === format(startDate, 'yyyy-MM-dd'))
+    : undefined;
 
   // Handle text input for start date
   const handleStartDateText = (value: string) => {
@@ -277,23 +323,17 @@ export function PermitMapAdvanced({
       .filter((opt) => opt.count > 0);
   }, [processedPermits]);
 
-  // Only meaningful for active-producer / injection wells — an oil well
-  // and a water-injection well answer a different question than "what
-  // stage is this well in," so this stays a separate facet rather than
-  // folding into Stage.
-  const productTypeFilterOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    processedPermits.forEach((p) => {
-      const stage = classifyLifecycleStage(p);
-      if (stage !== 'active' && stage !== 'injection') return;
-      const status = (p.rbdmsWellStatus || '').trim();
-      if (!status) return;
-      counts.set(status, (counts.get(status) || 0) + 1);
+
+  // Drop a ticked stage when no permit in the data has it any more, so a hidden filter cannot empty the map.
+  useEffect(() => {
+    setSelectedStages((prev) => {
+      const next = prev.filter((s) => stageFilterOptions.some((o) => o.value === s));
+      return next.length === prev.length ? prev : next;
     });
-    return Array.from(counts.entries())
-      .map(([value, count]) => ({ value, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [processedPermits]);
+  }, [stageFilterOptions]);
+
+  // Heat tier per operator, from all the permits we were given.
+  const operatorStats = useMemo(() => computeOperatorStats(permits, windowDays), [permits, windowDays]);
 
   // Compute filtered permits
   const filteredPermits = useMemo(() => {
@@ -304,7 +344,7 @@ export function PermitMapAdvanced({
     // pre-approval, so approvalDate being empty is normal, not exceptional;
     // excluding those permits outright (as this used to) can silently hide
     // most or all of a fresh import.
-    filtered = filtered.filter(p => {
+    if (!compact) filtered = filtered.filter(p => {
       const effectiveDate = p.approvalDate || p.submitDate || p.dateImported;
       if (!effectiveDate) return true; // never hide a permit for lacking any date at all
       const dateObj = new Date(effectiveDate);
@@ -316,7 +356,7 @@ export function PermitMapAdvanced({
     // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(p => 
+      filtered = filtered.filter(p =>
         p.operator?.toLowerCase().includes(query) ||
         p.wellName?.toLowerCase().includes(query) ||
         p.api?.toLowerCase().includes(query)
@@ -328,16 +368,11 @@ export function PermitMapAdvanced({
       filtered = filtered.filter((p) => selectedStages.includes(classifyLifecycleStage(p)));
     }
 
-    // Product type filter — sub-facet within active/injection wells only
-    if (selectedProductTypes.length > 0) {
-      filtered = filtered.filter((p) => selectedProductTypes.includes((p.rbdmsWellStatus || '').trim()));
-    }
-
     return filtered;
-  }, [processedPermits, startDate, endDate, searchQuery, selectedStages, selectedProductTypes]);
+  }, [processedPermits, startDate, endDate, searchQuery, selectedStages, compact]);
 
   // Valid permits (with coordinates)
-  const validPermits = useMemo(() => 
+  const validPermits = useMemo(() =>
     filteredPermits.filter(p => p.lat && p.lon && !isNaN(p.lat) && !isNaN(p.lon)),
     [filteredPermits]
   );
@@ -381,14 +416,15 @@ export function PermitMapAdvanced({
 
     markersRef.current = L.layerGroup().addTo(mapRef.current);
 
-    // Mouse move handler for coordinate display
-    mapRef.current.on('mousemove', (e: L.LeafletMouseEvent) => {
-      setCursorPosition({ lat: e.latlng.lat, lng: e.latlng.lng });
-    });
-
-    mapRef.current.on('mouseout', () => {
-      setCursorPosition(null);
-    });
+    // Popup buttons. Leaflet stops click bubbling at the popup, so listen in the capture phase.
+    const container = mapContainer.current;
+    const onPopupClick = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-mc-action]');
+      if (!btn) return;
+      e.preventDefault();
+      openCompany(btn.getAttribute('data-operator') || '');
+    };
+    container.addEventListener('click', onPopupClick, true);
 
     // Update viewport operators on move
     mapRef.current.on('moveend', updateViewportOperators);
@@ -399,6 +435,7 @@ export function PermitMapAdvanced({
     }, 100);
 
     return () => {
+      container.removeEventListener('click', onPopupClick, true);
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -407,7 +444,7 @@ export function PermitMapAdvanced({
   // Update tile layer when changed
   useEffect(() => {
     if (!mapRef.current) return;
-    
+
     // Remove old layer if it exists
     if (tileLayerRef.current) {
       mapRef.current.removeLayer(tileLayerRef.current);
@@ -442,12 +479,12 @@ export function PermitMapAdvanced({
   // Update viewport operators
   const updateViewportOperators = useCallback(() => {
     if (!mapRef.current) return;
-    
+
     const bounds = mapRef.current.getBounds();
-    const inViewport = validPermits.filter(p => 
+    const inViewport = validPermits.filter(p =>
       p.lat && p.lon && bounds.contains([p.lat, p.lon])
     );
-    
+
     const operatorCounts: Record<string, number> = {};
     inViewport.forEach(p => {
       if (p.operator) {
@@ -474,10 +511,10 @@ export function PermitMapAdvanced({
         icon: getMarkerIcon(permit, permit.isCentroidMapped),
       });
 
-      const sourceLabel = permit.isCentroidMapped 
-        ? 'Source: County Estimate' 
+      const sourceLabel = permit.isCentroidMapped
+        ? 'Source: County Estimate'
         : 'Source: State GPS';
-      
+
       const sourceColor = BRAND.navy;
 
       const stage = classifyLifecycleStage(permit);
@@ -510,18 +547,22 @@ export function PermitMapAdvanced({
       const popupContent = `
         <div style="font-family: system-ui; font-size: 12px; min-width: 240px;">
           <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px; color: ${sourceColor};">
-            ${permit.wellName || 'Unknown Well'}
+            ${escHtml(permit.wellName || 'Unknown Well')}
           </div>
           <div style="font-size: 11px; color: #5B6F8A; margin-bottom: 8px;">${filedLine}</div>
           <div style="display: grid; gap: 4px;">
-            <div><strong>Operator:</strong> ${permit.operator || 'N/A'}</div>
-            <div><strong>API:</strong> ${permit.api || 'N/A'}</div>
+            <div><strong>Operator:</strong> ${escHtml(permit.operator || 'N/A')}</div>
+            <div><strong>API:</strong> ${escHtml(permit.api || 'N/A')}</div>
             ${legalLine}
-            <div><strong>County:</strong> ${permit.county || 'N/A'}</div>
-            <div><strong>Formation:</strong> ${permit.formationName || 'N/A'}</div>
+            <div><strong>County:</strong> ${escHtml(permit.county || 'N/A')}</div>
+            <div><strong>Formation:</strong> ${escHtml(permit.formationName || 'N/A')}</div>
           </div>
           ${statusLine}
           ${wellFileLink}
+          ${permit.operator ? `<div style="display:flex;gap:6px;margin-top:8px;">
+            <button type="button" data-mc-action="view-company" data-operator="${escHtml(permit.operator)}" style="flex:1;padding:5px 8px;border-radius:4px;border:1px solid #005A9C;background:#005A9C;color:#fff;font-size:11px;cursor:pointer;">View company</button>
+            <button type="button" data-mc-action="add-deal" data-operator="${escHtml(permit.operator)}" style="flex:1;padding:5px 8px;border-radius:4px;border:1px solid #005A9C;background:#fff;color:#005A9C;font-size:11px;cursor:pointer;">Add to Deals</button>
+          </div>` : ''}
           <div style="background: ${permit.isCentroidMapped ? BRAND.amberTint : BRAND.blue100}; color: ${permit.isCentroidMapped ? BRAND.amberText : BRAND.blue700}; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
             ${permit.isCentroidMapped ? '⚠️' : '📍'} ${sourceLabel}
           </div>
@@ -568,7 +609,7 @@ export function PermitMapAdvanced({
 
     const csvContent = [
       headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ...rows.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -587,13 +628,6 @@ export function PermitMapAdvanced({
     );
   };
 
-  const toggleProductType = (type: string) => {
-    setSelectedProductTypes(prev =>
-      prev.includes(type)
-        ? prev.filter(t => t !== type)
-        : [...prev, type]
-    );
-  };
 
   // Handle layer change
   const handleLayerChange = (value: string) => {
@@ -601,11 +635,12 @@ export function PermitMapAdvanced({
   };
 
   return (
-    <div className="flex w-full h-[calc(100vh-120px)] min-h-[750px]">
+    <div className={compact ? 'flex w-full h-full min-h-[400px]' : 'flex w-full h-[calc(100vh-120px)] min-h-[750px]'}>
       {/* Left Sidebar - Operation Dashboard with 16px right margin */}
-      <div 
+      <div
         className={cn(
           "bg-card border border-border rounded-l-xl transition-all duration-300 flex flex-col shrink-0",
+          compact && 'hidden',
           sidebarCollapsed ? 'w-0 overflow-hidden border-0' : 'w-80 mr-4'
         )}
       >
@@ -624,7 +659,7 @@ export function PermitMapAdvanced({
                 <CalendarIcon className="h-3.5 w-3.5" />
                 Issue Date Range
               </Label>
-              
+
               {/* Date Input Fields */}
               <div className="grid grid-cols-2 gap-2">
                 {/* Start Date */}
@@ -686,6 +721,22 @@ export function PermitMapAdvanced({
                 </div>
               </div>
 
+              <div className="flex gap-1.5" role="group" aria-label="Date range presets">
+                {RANGE_PRESETS.map((d) => (
+                  <Button
+                    key={d}
+                    type="button"
+                    size="sm"
+                    variant={activePreset === d ? 'default' : 'outline'}
+                    className="h-7 flex-1 px-2 text-xs"
+                    aria-pressed={activePreset === d}
+                    onClick={() => applyPreset(d)}
+                  >
+                    {d} days
+                  </Button>
+                ))}
+              </div>
+
               {/* Date range summary */}
               <div className="px-2 pt-2">
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -706,16 +757,35 @@ export function PermitMapAdvanced({
                 {viewportOperators.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Pan/zoom to see operators</p>
                 ) : (
-                  viewportOperators.map((op, idx) => (
-                    <div 
-                      key={op.name}
-                      className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1.5 cursor-pointer hover:bg-muted transition-colors"
-                      onClick={() => setSearchQuery(op.name)}
-                    >
-                      <span className="truncate flex-1 min-w-0">{idx + 1}. {op.name}</span>
-                      <Badge variant="secondary" className="ml-2 text-xs shrink-0">{op.count}</Badge>
-                    </div>
-                  ))
+                  viewportOperators.map((op, idx) => {
+                    const tier = operatorStats.get(op.name)?.score;
+                    const heat = tier ? HEAT_BADGE[tier] : null;
+                    return (
+                      <div
+                        key={op.name}
+                        role="button"
+                        tabIndex={0}
+                        className="flex items-center justify-between gap-1 text-xs bg-muted/50 rounded px-2 py-1.5 cursor-pointer hover:bg-muted transition-colors"
+                        onClick={() => openCompany(op.name)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            openCompany(op.name);
+                          }
+                        }}
+                        title={`Open ${op.name}`}
+                      >
+                        <span className="truncate flex-1 min-w-0">{idx + 1}. {op.name}</span>
+                        {heat && (
+                          <Badge className={`${heat.cls} text-[10px] px-1.5 shrink-0`}>
+                            <heat.Icon className="h-3 w-3 mr-0.5" aria-hidden="true" />
+                            {heat.label}
+                          </Badge>
+                        )}
+                        <Badge variant="secondary" className="text-xs shrink-0">{op.count}</Badge>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -758,29 +828,23 @@ export function PermitMapAdvanced({
                 )}
               </div>
 
-              {productTypeFilterOptions.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-xs text-muted-foreground">Product type</span>
-                  <div className="space-y-1.5">
-                    {productTypeFilterOptions.map(opt => (
-                      <div key={opt.value} className="flex items-center justify-between gap-2">
-                        <div className="flex items-center space-x-2 min-w-0">
-                          <Checkbox
-                            id={`ptype-${opt.value}`}
-                            checked={selectedProductTypes.includes(opt.value)}
-                            onCheckedChange={() => toggleProductType(opt.value)}
-                          />
-                          <label htmlFor={`ptype-${opt.value}`} className="text-xs cursor-pointer truncate">
-                            {opt.value}
-                          </label>
-                        </div>
-                        <Badge variant="secondary" className="text-[10px] shrink-0">{opt.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
+
+            {(selectedStages.length > 0 || searchQuery) && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => {
+                  setSelectedStages([]);
+                  setSearchQuery('');
+                }}
+              >
+                <X className="h-3 w-3 mr-1" aria-hidden="true" />
+                Clear filters
+              </Button>
+            )}
 
             {/* D. Export Engine */}
             <div className="space-y-3">
@@ -811,35 +875,33 @@ export function PermitMapAdvanced({
             </div>
           </div>
         </div>
-
-        {/* E. Coordinate Readout */}
-        <div className="p-3 border-t border-border bg-muted/30">
-          <div className="flex items-center gap-2 text-xs">
-            <MapPin className="h-3.5 w-3.5 text-primary" />
-            <span className="text-muted-foreground">Lat/Lon:</span>
-            {cursorPosition ? (
-              <span className="tabular-nums">
-                {cursorPosition.lat.toFixed(5)}, {cursorPosition.lng.toFixed(5)}
-              </span>
-            ) : (
-              <span className="text-muted-foreground">Hover over map</span>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Sidebar Toggle */}
       <button
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        className="bg-card border-y border-r border-border p-1.5 hover:bg-muted transition-colors self-center shrink-0 rounded-r"
+        aria-label={sidebarCollapsed ? 'Show filters' : 'Hide filters'}
+        className={cn('bg-card border-y border-r border-border p-1.5 hover:bg-muted transition-colors self-center shrink-0 rounded-r', compact && 'hidden')}
       >
         {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </button>
 
       {/* Map Container - Fluid width to fill remaining space */}
-      <div className="flex-1 relative rounded-xl overflow-hidden border border-border ml-2">
+      <div className={cn('flex-1 relative rounded-xl overflow-hidden border border-border', !compact && 'ml-2')}>
         {/* Layer Switcher - Top Right */}
-        <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2">
+        {compact && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="absolute top-3 right-3 z-[1000] bg-card/95 shadow-lg"
+            onClick={() => window.dispatchEvent(new CustomEvent('midconsight:goto-tab', { detail: { tab: 'map' } }))}
+          >
+            <Maximize2 className="h-3.5 w-3.5 mr-1.5" aria-hidden="true" />
+            Open full map
+          </Button>
+        )}
+        <div className={cn('absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2', compact && 'hidden')}>
           <Select value={activeLayer} onValueChange={handleLayerChange}>
             <SelectTrigger className="w-[180px] bg-card/95 backdrop-blur-sm shadow-lg border-border">
               <Layers className="h-4 w-4 mr-2" />
@@ -861,7 +923,7 @@ export function PermitMapAdvanced({
         <div ref={mapContainer} className="absolute inset-0" />
 
         {/* Dynamic Legend with Counts - Always Visible */}
-        <div className="absolute bottom-4 left-4 bg-card/95 backdrop-blur-sm rounded-lg p-4 border border-border text-xs z-[1000] shadow-lg max-w-[220px]">
+        <div className={cn('absolute bottom-4 left-4 bg-card/95 backdrop-blur-sm rounded-lg p-4 border border-border text-xs z-[1000] shadow-lg max-w-[220px]', compact && 'hidden')}>
           <div className="font-semibold mb-3">Lifecycle stage</div>
           <div className="space-y-2">
             {(Object.keys(STAGE_LABELS) as LifecycleStage[])
@@ -875,11 +937,6 @@ export function PermitMapAdvanced({
                   <Badge variant="secondary" className="text-xs">{stageCounts.counts[stage]}</Badge>
                 </div>
               ))}
-            {stageCounts.otherSamples.length > 0 && (
-              <p className="text-[10px] text-muted-foreground pt-1 border-t border-border">
-                Unrecognized RBDMS values: {stageCounts.otherSamples.join(', ')}
-              </p>
-            )}
             <div className="pt-2 mt-1 border-t border-border space-y-1.5">
               <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
                 <span className="inline-block w-2.5 h-2.5 rounded-full border border-dashed border-muted-foreground" />
@@ -894,10 +951,10 @@ export function PermitMapAdvanced({
         </div>
 
         {/* Stats Overlay */}
-        <div className="absolute top-28 right-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000] shadow-lg">
+        <div className={cn('absolute top-28 right-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000] shadow-lg', compact && 'hidden')}>
           <div className="font-semibold">{validPermits.length} Permits Mapped</div>
           <div className="text-muted-foreground">of {permits.length} total</div>
-          {(selectedStages.length > 0 || selectedProductTypes.length > 0 || searchQuery) && (
+          {(selectedStages.length > 0 || searchQuery) && (
             <div className="text-primary mt-1 text-xs">Filters active</div>
           )}
         </div>

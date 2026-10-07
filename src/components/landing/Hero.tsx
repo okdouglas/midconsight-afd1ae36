@@ -12,7 +12,11 @@ export function Hero() {
         <div className="lp-wrap">
           <Eyebrow className="lp-enter mb-6">{HERO.eyebrow}</Eyebrow>
           <h1 id="hero-h1" className="lp-h1 lp-enter d1 max-w-5xl">
-            <span className="md:block">New permits, scored</span> <span className="md:block">and on a map.</span>{' '}
+            {HERO.h1Lines.map((line) => (
+              <span key={line} className="md:block">
+                {line}{' '}
+              </span>
+            ))}
             <span className="text-[#005a9c] md:block">{HERO.h1Accent}</span>
           </h1>
           <div className="lp-enter d2 mt-10 flex flex-col gap-8 md:mt-14 md:flex-row md:items-end md:justify-between md:gap-16">

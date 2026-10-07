@@ -1,11 +1,10 @@
 import { Hero } from '@/components/landing/Hero';
 import { SkipLink, SiteNav, SiteFooter } from '@/components/landing/Chrome';
-import { WeekStart, VoiceCount } from '@/components/landing/VoiceSections';
+import { WeekStart } from '@/components/landing/VoiceSections';
 import {
   ScoredLeads,
   CompaniesDeals,
   ResearchExport,
-  MondayImport,
 } from '@/components/landing/ProductSections';
 import { ScoringLogic } from '@/components/landing/Scoring';
 import { Pricing, Faq, ClosingCta, Newsletter } from '@/components/landing/Commerce';
@@ -27,8 +26,6 @@ export default function Landing() {
         <ScoringLogic />
         <CompaniesDeals />
         <ResearchExport />
-        <MondayImport />
-        <VoiceCount />
         <Pricing />
         <Faq />
         <ClosingCta />

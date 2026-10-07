@@ -12,7 +12,7 @@ import {
   type DbDataset
 } from '@/lib/supabase-data';
 import type { Permit } from '@/lib/schema-mapping';
-import { computeOperatorStats, DEFAULT_WINDOW_DAYS, SCORE_WINDOWS } from '@/lib/scoring';
+import { computeOperatorStats, DEFAULT_WINDOW_DAYS } from '@/lib/scoring';
 
 // Frontend-friendly types (matching old indexeddb types for compatibility)
 export interface Company {
@@ -52,6 +52,10 @@ export interface Deal {
   notes?: string;
   sellingOptionId?: string;
   probability: number;
+  /** Empty string when the next_step columns are absent or unset. */
+  nextStep: string;
+  /** YYYY-MM-DD or empty string. */
+  nextStepDate: string;
   createdDate: string;
 }
 
@@ -97,7 +101,9 @@ function mapDbDealToDeal(db: DbDeal): Deal {
     linkedPermitIds: db.linked_permit_ids || [],
     notes: db.notes,
     sellingOptionId: db.selling_option_id,
-    probability: db.probability || 10,
+    probability: db.probability ?? 10,
+    nextStep: db.next_step || '',
+    nextStepDate: db.next_step_date || '',
     createdDate: db.created_at,
   };
 }
@@ -115,18 +121,6 @@ function mapDbDatasetToDataset(db: DbDataset): Dataset {
   };
 }
 
-const WINDOW_STORAGE_KEY = 'midconsight.scoreLookbackDays.v3';
-
-function loadWindowDays(): number {
-  try {
-    const raw = Number(localStorage.getItem(WINDOW_STORAGE_KEY));
-    if (SCORE_WINDOWS.some((w) => w.days === raw)) return raw;
-  } catch {
-    // storage unavailable, use the default
-  }
-  return DEFAULT_WINDOW_DAYS;
-}
-
 /**
  * Builds the company list live from the permits you can see.
  *
@@ -141,7 +135,7 @@ function buildLiveCompanies(
   realCompanies: Company[],
   deals: Deal[],
   windowDays: number,
-): { companies: Company[]; hiddenCount: number } {
+): { companies: Company[]; hiddenCount: number; hidden: Company[] } {
   const stats = computeOperatorStats(permits, windowDays);
   const realByName = new Map(realCompanies.map((c) => [c.name.toLowerCase(), c]));
   const dealCompanyIds = new Set(deals.map((d) => d.companyId));
@@ -173,15 +167,17 @@ function buildLiveCompanies(
   });
 
   let hiddenCount = 0;
+  const hidden: Company[] = [];
   for (const real of realCompanies) {
     if (used.has(real.id)) continue;
     if (real.isCurrentClient || dealCompanyIds.has(real.id)) {
       out.push({ ...real, permitCount: 0, windowCount: 0, heat: 0, totalValue: 0, score: 'cold' });
     } else {
       hiddenCount += 1;
+      hidden.push({ ...real, permitCount: 0, windowCount: 0, heat: 0, totalValue: 0, score: 'cold' });
     }
   }
-  return { companies: out, hiddenCount };
+  return { companies: out, hiddenCount, hidden };
 }
 
 export function useSupabaseData() {
@@ -189,7 +185,7 @@ export function useSupabaseData() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [permits, setPermits] = useState<Permit[]>([]);
   const [realCompanies, setRealCompanies] = useState<Company[]>([]);
-  const [windowDays, setWindowDaysState] = useState<number>(loadWindowDays);
+  const windowDays = DEFAULT_WINDOW_DAYS;
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -233,16 +229,7 @@ export function useSupabaseData() {
   };
 
   // Computed values
-  const setWindowDays = useCallback((days: number) => {
-    setWindowDaysState(days);
-    try {
-      localStorage.setItem(WINDOW_STORAGE_KEY, String(days));
-    } catch {
-      // storage unavailable, the choice just will not persist
-    }
-  }, []);
-
-  const { companies, hiddenCount: hiddenCompanyCount } = useMemo(
+  const { companies, hiddenCount: hiddenCompanyCount, hidden: hiddenCompanies } = useMemo(
     () => buildLiveCompanies(permits, realCompanies, deals, windowDays),
     [permits, realCompanies, deals, windowDays],
   );
@@ -267,8 +254,8 @@ export function useSupabaseData() {
     deals,
     loading,
     windowDays,
-    setWindowDays,
     hiddenCompanyCount,
+    hiddenCompanies,
     refresh,
     removeDataset,
     newThisWeekPermits,

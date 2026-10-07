@@ -168,3 +168,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+@layer base {
+  /* Keyboard focus is always visible, including on custom clickable rows. */
+  [role="button"]:focus-visible,
+  a:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}

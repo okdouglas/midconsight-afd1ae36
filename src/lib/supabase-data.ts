@@ -17,6 +17,8 @@ export interface ExtendedImportResult {
   importResult: ImportResult;
   metadata: ImportMetadata;
   skippedRows: SkippedRow[];
+  /** What happened to the rows in the file: added, already in the database, or unusable. */
+  counts: { newCount: number; duplicateCount: number; invalidCount: number };
 }
 
 // Types for database records
@@ -122,6 +124,9 @@ export interface DbDeal {
   notes?: string;
   selling_option_id?: string;
   probability?: number;
+  /** Added by migration 20261007210000. Absent until applied, so treat undefined as empty. */
+  next_step?: string | null;
+  next_step_date?: string | null;
   created_at: string;
 }
 
@@ -291,6 +296,22 @@ export async function getContactsByCompany(companyId: string): Promise<DbContact
   return (data || []) as DbContact[];
 }
 
+/** Contacts for many companies in one query per 150 ids, newest first. */
+export async function getContactsForCompanies(companyIds: string[]): Promise<DbContact[]> {
+  const ids = Array.from(new Set(companyIds.filter(Boolean)));
+  const out: DbContact[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .in('company_id', ids.slice(i, i + 150))
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    out.push(...((data || []) as DbContact[]));
+  }
+  return out;
+}
+
 export async function getDealsByCompany(companyId: string): Promise<DbDeal[]> {
   const { data, error } = await supabase
     .from('deals')
@@ -355,7 +376,10 @@ export async function saveDeal(deal: Omit<DbDeal, 'id' | 'user_id' | 'created_at
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    announceFreeLimit(error);
+    throw error;
+  }
   return data as DbDeal;
 }
 
@@ -378,6 +402,7 @@ export async function deleteDeal(id: string): Promise<void> {
 }
 
 export async function deleteDataset(datasetId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
   // Delete permits associated with the dataset
   const { error: permitsError } = await supabase
     .from('permits')
@@ -393,6 +418,9 @@ export async function deleteDataset(datasetId: string): Promise<void> {
     .eq('id', datasetId);
 
   if (error) throw error;
+
+  // Companies and their scores were built from these permits, so refresh them.
+  if (user) await rebuildCompanies(user.id);
 }
 
 // ============ IMPORT OPERATIONS ============
@@ -669,7 +697,12 @@ export async function importFile(
       skippedRows: importResult.skippedRows + duplicatePermits.length
     },
     metadata,
-    skippedRows: allSkippedRows
+    skippedRows: allSkippedRows,
+    counts: {
+      newCount: newPermits.length,
+      duplicateCount: duplicatePermits.length,
+      invalidCount: importResult.skippedRows,
+    },
   };
 }
 
@@ -746,6 +779,23 @@ export async function getSellingOptions(): Promise<DbSellingOption[]> {
   return (data || []) as DbSellingOption[];
 }
 
+/** Raised by the database when a free account tries to go past its limit (3 deals, 3 products). */
+export function isFreeLimitError(err: unknown): boolean {
+  const msg = typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : String(err);
+  return msg.includes('FREE_LIMIT');
+}
+
+function announceFreeLimit(err: unknown) {
+  if (isFreeLimitError(err) && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('midconsight:free-limit'));
+  }
+}
+
+/** Ask the app to open the upgrade dialog (used by locked buttons deep inside a module). */
+export function promptUpgrade(source = 'free_limit') {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('midconsight:free-limit', { detail: { source } }));
+}
+
 export async function saveSellingOption(
   option: Omit<DbSellingOption, 'id' | 'user_id' | 'created_at' | 'updated_at'>
 ): Promise<DbSellingOption> {
@@ -761,8 +811,48 @@ export async function saveSellingOption(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    announceFreeLimit(error);
+    throw error;
+  }
   return data as DbSellingOption;
+}
+
+export type NewSellingOption = Omit<DbSellingOption, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+
+/**
+ * Inserts products in batches. If a batch fails, it retries that batch one row
+ * at a time so one bad row (or a plan cap) does not hide which rows went in.
+ * Returns how many were saved and which rows failed.
+ */
+export async function saveSellingOptionsBatch(
+  options: NewSellingOption[],
+  batchSize = 50
+): Promise<{ saved: number; failed: { name: string; message: string }[] }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  let saved = 0;
+  const failed: { name: string; message: string }[] = [];
+
+  for (let i = 0; i < options.length; i += batchSize) {
+    const chunk = options.slice(i, i + batchSize);
+    const { error } = await supabase
+      .from('selling_options')
+      .insert(chunk.map((o) => ({ ...o, user_id: user.id })));
+    if (!error) {
+      saved += chunk.length;
+      continue;
+    }
+    for (const o of chunk) {
+      const { error: rowError } = await supabase
+        .from('selling_options')
+        .insert({ ...o, user_id: user.id });
+      if (rowError) failed.push({ name: o.name, message: rowError.message });
+      else saved += 1;
+    }
+  }
+  return { saved, failed };
 }
 
 export async function updateSellingOption(
@@ -873,6 +963,76 @@ export function suggestBestProduct(
   if (catalog.length === 0) return null;
   const matches = matchProductsToPermit(permit, catalog);
   return matches[0] || null;
+}
+
+export interface OperatorProductFit {
+  product: DbSellingOption;
+  /** Permits this product matched on at least one criterion. */
+  matchedPermits: number;
+  totalPermits: number;
+  /** Plain line such as "12 horizontal permits in Woodford". */
+  reason: string;
+}
+
+type FitPermit = { formationName?: string; wellType?: string; totalDepth?: number; drillType?: string };
+
+function drillWord(drillType?: string): string {
+  const t = (drillType || '').trim().toUpperCase();
+  if (t === 'HH' || t.startsWith('MU')) return 'horizontal';
+  if (t === 'SH' || t === 'DH') return 'vertical';
+  return '';
+}
+
+function topKey(counts: Map<string, number>): string {
+  let best = '';
+  let n = 0;
+  counts.forEach((v, k) => {
+    if (v > n) { best = k; n = v; }
+  });
+  return best;
+}
+
+/**
+ * Scores every product against all of an operator's permits and returns the
+ * product that fits the most of them, with the reason. Returns null when no
+ * product matches any permit (including an empty catalog or products with no
+ * criteria set), so the caller never labels a guess as a recommendation.
+ */
+export function suggestBestProductForPermits(
+  permits: FitPermit[],
+  catalog: DbSellingOption[]
+): OperatorProductFit | null {
+  if (catalog.length === 0 || permits.length === 0) return null;
+  type Row = { product: DbSellingOption; score: number; permits: FitPermit[] };
+  const totals = new Map<string, Row>();
+  for (const permit of permits) {
+    for (const m of matchProductsToPermit(permit, catalog)) {
+      if (m.score <= 0) continue;
+      const row: Row = totals.get(m.product.id) ?? { product: m.product, score: 0, permits: [] };
+      row.score += m.score;
+      row.permits.push(permit);
+      totals.set(m.product.id, row);
+    }
+  }
+  let hit: Row | null = null;
+  totals.forEach((row) => {
+    if (!hit || row.score > hit.score) hit = row;
+  });
+  if (!hit) return null;
+  const best: Row = hit;
+  const formations = new Map<string, number>();
+  const words = new Map<string, number>();
+  for (const p of best.permits) {
+    const f = (p.formationName || '').trim();
+    if (f) formations.set(f, (formations.get(f) || 0) + 1);
+    const w = drillWord(p.drillType);
+    if (w) words.set(w, (words.get(w) || 0) + 1);
+  }
+  const n = best.permits.length;
+  const word = topKey(words);
+  const formation = topKey(formations);
+  const reason = `${n} ${word ? word + ' ' : ''}permit${n === 1 ? '' : 's'}${formation ? ' in ' + formation : ''}`;
+  return { product: best.product, matchedPermits: n, totalPermits: permits.length, reason };
 }
 
 // ============ COMPANY UPDATES ============
@@ -1038,6 +1198,10 @@ export interface DbProfile {
   activated_at: string | null;
   paywall_hits: number;
   last_digest_sent_at: string | null;
+  /** Kept in step with Stripe by the webhook. May be missing until the 20261007220000 migration is applied. */
+  subscription_status?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -1069,7 +1233,35 @@ export async function markActivated(): Promise<void> {
   if (error) throw error;
 }
 
-/** Records upgrade intent (Stripe checkout doesn't exist yet — this is the honest interim). */
+/** Result of asking the server for a Stripe page. `notConfigured` means billing is not switched on yet. */
+export type BillingResult = { url: string } | { notConfigured: true } | { error: string };
+
+async function callBilling(fn: 'create-checkout' | 'billing-portal', body: Record<string, unknown>): Promise<BillingResult> {
+  const { data, error } = await supabase.functions.invoke(fn, {
+    body: { ...body, returnOrigin: window.location.origin },
+  });
+  if (error) {
+    // supabase-js hides the response body in `error.context`; read it to see our own error code.
+    const ctx = (error as { context?: Response }).context;
+    const payload = ctx && typeof ctx.json === 'function' ? await ctx.json().catch(() => null) : null;
+    if (payload?.error === 'billing_not_configured') return { notConfigured: true };
+    return { error: payload?.error ?? error.message };
+  }
+  if (data?.url) return { url: data.url as string };
+  return { error: data?.error ?? 'No checkout link came back.' };
+}
+
+/** Starts Stripe Checkout for a plan. The plan itself is only changed by the server after Stripe confirms payment. */
+export function startCheckout(tier: 'starter' | 'pro', interval: 'month' | 'year'): Promise<BillingResult> {
+  return callBilling('create-checkout', { tier, interval });
+}
+
+/** Opens Stripe's billing portal (card, plan change, cancel). */
+export function openBillingPortal(): Promise<BillingResult> {
+  return callBilling('billing-portal', {});
+}
+
+/** Records upgrade intent. Used only while Stripe billing is not switched on yet. */
 export async function requestUpgrade(source: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');

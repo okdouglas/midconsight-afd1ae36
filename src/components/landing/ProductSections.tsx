@@ -1,5 +1,5 @@
-import { COMPANIES, DATA_SECTION, FACTS, LEAD, MAP_SECTION, MONDAY, RESEARCH } from './content';
-import { Brackets, Eyebrow } from './Frames';
+import { COMPANIES, FACTS, LEAD, RESEARCH } from './content';
+import { Eyebrow } from './Frames';
 
 /** Intent to Drill filings, scored hot or warm: a real lead card and the real score split. */
 export function ScoredLeads() {
@@ -47,9 +47,11 @@ export function ScoredLeads() {
               <div className="flex">
                 <div className="w-2 shrink-0 bg-[#c4262a]" aria-hidden="true" />
                 <div className="flex-1 p-6 md:p-8">
-                  <div className="flex items-start justify-between gap-4">
+                  <p className="lp-num text-[clamp(1.75rem,1.2rem+1.6vw,2.5rem)] leading-tight text-[#c4262a]">{LEAD.headline}</p>
+                  <p className="mt-3 text-base leading-relaxed text-[#2b3f5c]">{LEAD.reason}</p>
+                  <div className="mt-8 flex items-start justify-between gap-4 border-t border-[#eef4fa] pt-6">
                     <div>
-                      <h3 className="text-2xl font-semibold leading-tight tracking-tight text-[#0b2545]">{LEAD.operator}</h3>
+                      <h3 className="text-xl font-semibold leading-tight tracking-tight text-[#0b2545]">{LEAD.operator}</h3>
                       <p className="mt-1 text-base text-[#5b6f8a]">{LEAD.well}</p>
                     </div>
                     <span className="lp-label shrink-0 rounded-full bg-[#c4262a] px-3 py-1.5 text-white">{LEAD.score}</span>
@@ -68,109 +70,6 @@ export function ScoredLeads() {
             </article>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-const MAP_DOTS: [number, number, 'hot' | 'warm' | 'steady'][] = [
-  [8, 20, 'warm'], [16, 12, 'warm'], [14, 38, 'steady'], [30, 26, 'steady'], [38, 44, 'hot'],
-  [44, 18, 'steady'], [52, 36, 'warm'], [58, 60, 'steady'], [24, 62, 'steady'], [34, 74, 'hot'],
-  [46, 80, 'steady'], [62, 46, 'hot'], [70, 30, 'steady'], [76, 56, 'warm'], [84, 40, 'steady'],
-  [90, 70, 'steady'], [66, 78, 'hot'], [80, 84, 'steady'], [20, 82, 'warm'], [54, 54, 'steady'],
-  [40, 62, 'steady'], [72, 18, 'steady'], [92, 24, 'warm'], [10, 56, 'steady'],
-];
-
-/** Every permit on a county map. A drawn panel, with a popup built from real filing fields. */
-export function MapSection() {
-  return (
-    <section className="lp-on-dark bg-[#0b2545] lp-band" aria-labelledby="map-h2">
-      <div className="lp-wrap grid items-center gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
-        <div>
-          <p className="lp-label mb-5 text-[#6fa3d3]">The county map</p>
-          <h2 id="map-h2" className="lp-h2 lp-reveal">
-            {MAP_SECTION.h2}
-          </h2>
-          <p className="lp-lead lp-reveal mt-6">{MAP_SECTION.lead}</p>
-          <ul className="lp-reveal mt-8 flex flex-wrap gap-x-8 gap-y-3" aria-label="Map legend">
-            {MAP_SECTION.legend.map((l) => (
-              <li key={l.tone} className="flex items-center gap-3 text-lg font-medium text-white">
-                <span className={`lp-dot hot-legend ${l.tone}`} style={{ position: 'static', transform: 'none' }} aria-hidden="true" />
-                {l.label}
-              </li>
-            ))}
-          </ul>
-          <p className="lp-reveal mt-8 border-t border-[#1d3b66] pt-5 text-base text-[#c9d8e8]">{MAP_SECTION.note}</p>
-        </div>
-
-        <Brackets onDark className="lp-reveal">
-          <div className="lp-panel" aria-hidden="true">
-            {MAP_DOTS.map(([x, y, t], i) => (
-              <span key={i} className={`lp-dot ${t}`} style={{ left: `${x}%`, top: `${y}%` }} />
-            ))}
-            <span className="lp-dot hot pulse" style={{ left: '62%', top: '58%' }} />
-            <div className="lp-popup r" style={{ right: 'calc(38% - 1.9rem)', bottom: 'calc(42% + 16px)' }}>
-              <p className="text-base font-semibold text-[#0b2545]">{MAP_SECTION.popup.title}</p>
-              <dl className="mt-1.5 space-y-0.5">
-                {MAP_SECTION.popup.rows.map(([k, v]) => (
-                  <div key={k} className="flex gap-1.5">
-                    <dt className="font-semibold text-[#0b2545]">{k}:</dt>
-                    <dd className="tabular-nums">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </div>
-        </Brackets>
-      </div>
-    </section>
-  );
-}
-
-/** County. Operator. Numbers. Real counts from the shared feed. */
-export function DataSection() {
-  const max = Math.max(...DATA_SECTION.counties.map((c) => c[1] as number));
-  return (
-    <section className="bg-white lp-band" aria-labelledby="data-h2">
-      <div className="lp-wrap">
-        <div className="max-w-3xl">
-          <Eyebrow className="mb-5">Real counts</Eyebrow>
-          <h2 id="data-h2" className="lp-h2 lp-reveal">
-            {DATA_SECTION.h2}
-          </h2>
-          <p className="lp-lead lp-reveal mt-6">{DATA_SECTION.lead}</p>
-        </div>
-
-        <div className="mt-14 grid gap-14 lg:grid-cols-2 lg:gap-20">
-          <div className="lp-reveal">
-            <h3 className="lp-label mb-5 border-b-[1.5px] border-[#0b2545] pb-3 text-[#005a9c]">{DATA_SECTION.countiesTitle}</h3>
-            <ul>
-              {DATA_SECTION.counties.map(([name, n]) => (
-                <li key={name} className="grid grid-cols-[6.5rem_1fr_2.5rem] items-center gap-4 border-b border-[#eef4fa] py-3 sm:grid-cols-[8rem_1fr_3rem]">
-                  <span className="text-base text-[#2b3f5c]">{name}</span>
-                  <span className="lp-bar-track" aria-hidden="true">
-                    <span className="lp-bar-fill block" style={{ width: `${((n as number) / max) * 100}%` }} />
-                  </span>
-                  <span className="lp-num text-right text-xl text-[#0b2545]">{n}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="lp-reveal">
-            <h3 className="lp-label mb-5 border-b-[1.5px] border-[#0b2545] pb-3 text-[#005a9c]">{DATA_SECTION.operatorsTitle}</h3>
-            <ol>
-              {DATA_SECTION.operators.map(([name, n], i) => (
-                <li key={name} className="grid grid-cols-[2rem_1fr_3rem] items-baseline gap-3 border-b border-[#eef4fa] py-3.5">
-                  <span className="lp-num text-base text-[#5b6f8a]">{i + 1}</span>
-                  <span className="text-base font-medium text-[#0b2545]">{name}</span>
-                  <span className="lp-num text-right text-xl text-[#0b2545]">{n}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-        <p className="mt-10 text-sm text-[#5b6f8a]">{DATA_SECTION.caption}</p>
       </div>
     </section>
   );
@@ -244,34 +143,6 @@ export function ResearchExport() {
             </article>
           ))}
         </div>
-      </div>
-    </section>
-  );
-}
-
-export function MondayImport() {
-  return (
-    <section id="how-it-works" className="bg-[#eef4fa] lp-band" aria-labelledby="mon-h2">
-      <div className="lp-wrap">
-        <div className="max-w-3xl">
-          <Eyebrow className="mb-5">How it works</Eyebrow>
-          <h2 id="mon-h2" className="lp-h2 lp-reveal">
-            {MONDAY.h2}
-          </h2>
-          <p className="lp-lead lp-reveal mt-6">{MONDAY.lead}</p>
-        </div>
-        <h3 className="lp-label mb-6 mt-16 text-[#5b6f8a]">{MONDAY.title}</h3>
-        <ol className="grid gap-10 md:grid-cols-3 md:gap-8">
-          {MONDAY.steps.map((s) => (
-            <li key={s.n} className="lp-reveal border-t-[3px] border-[#005a9c] pt-6">
-              <p className="lp-label text-[#005a9c]">
-                {s.n} &middot; {s.when}
-              </p>
-              <p className="mt-4 text-[1.75rem] font-semibold leading-tight tracking-[-0.02em] text-[#0b2545]">{s.title}</p>
-              <p className="mt-3 text-lg leading-relaxed text-[#2b3f5c]">{s.body}</p>
-            </li>
-          ))}
-        </ol>
       </div>
     </section>
   );

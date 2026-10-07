@@ -50,12 +50,6 @@ export function ScoringLogic() {
                 ))}
               </tbody>
             </table>
-            <p className="lp-label mt-8 text-[#6fa3d3]">{SCORING.windowsLabel}</p>
-            <ul className="mt-3 flex flex-wrap gap-2" aria-label="Lookback options">
-              {SCORING.windows.map((w) => (
-                <li key={w} className="rounded-full border border-[#2b3f5c] px-3 py-1 text-sm text-[#c9d8e8]">{w}</li>
-              ))}
-            </ul>
             <ul className="mt-8 space-y-3 text-base leading-relaxed text-[#c9d8e8]">
               {SCORING.notes.map((n) => (
                 <li key={n}>{n}</li>

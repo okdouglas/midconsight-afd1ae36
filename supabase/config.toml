@@ -27,3 +27,19 @@ verify_jwt = false
 [functions.score-operators]
 # Called by pg_cron with a shared secret, same reasoning as import-itd-weekly.
 verify_jwt = false
+
+[functions.stripe-webhook]
+# Called by Stripe, not a logged-in user. The stripe-signature header check inside the
+# function is what guards it.
+verify_jwt = false
+
+[functions.create-checkout]
+# Checks the user's token itself, so the CORS preflight can pass.
+verify_jwt = false
+
+[functions.billing-portal]
+verify_jwt = false
+
+[functions.send-weekly-digest]
+# Called by pg_cron with the shared secret, same as import-itd-weekly.
+verify_jwt = false

@@ -12,7 +12,18 @@ import {
 import { format } from 'date-fns';
 import { CompanyPermitsMap } from '@/components/CompanyPermitsMap';
 import { PermitLifecycleTimeline } from '@/components/PermitLifecycleTimeline';
-import { windowLabel, formatHeat } from '@/lib/scoring';
+import { windowLabel, whyLine, computeOperatorStats, topContributingPermits, permitDate } from '@/lib/scoring';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +44,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import type { Permit } from '@/lib/schema-mapping';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { ConfirmAction } from '@/components/ConfirmAction';
+import { STAGES, stageLabel, formatLocalDate } from '@/lib/deal-stages';
 import { 
   saveContact, 
   saveDeal, 
@@ -53,6 +67,14 @@ import {
   type DbLicensePurchase
 } from '@/lib/supabase-data';
 
+// Product decision: license tracking is hidden for now. Flip to true to show the
+// License Information block again. The code and handlers stay in place.
+const SHOW_LICENSE_INFO = false;
+
+function errMsg(e: unknown): string {
+  return e instanceof Error && e.message ? e.message : 'Please try again.';
+}
+
 interface CompanyDetailModalProps {
   company: Company | null;
   companyPermits?: Permit[];
@@ -62,6 +84,8 @@ interface CompanyDetailModalProps {
 }
 
 export function CompanyDetailModal({ company, companyPermits = [], onClose, onUpdate, windowDays = 30 }: CompanyDetailModalProps) {
+  const { toast: legacyToast } = useToast();
+  const [dealToDelete, setDealToDelete] = useState<DbDeal | null>(null);
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [deals, setDeals] = useState<DbDeal[]>([]);
   const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
@@ -98,6 +122,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const [hqAddress, setHqAddress] = useState('');
   const [primaryContactId, setPrimaryContactId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<DbContact | null>(null);
   const [tempHqAddress, setTempHqAddress] = useState('');
 
   useEffect(() => {
@@ -141,38 +166,61 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
 
   const handleToggleCurrentClient = async (checked: boolean) => {
     if (!company) return;
+    const previous = isCurrentClient;
     setIsCurrentClient(checked);
-    await updateCompany(company.id, { is_current_client: checked });
-    onUpdate?.();
+    try {
+      await updateCompany(company.id, { is_current_client: checked });
+      onUpdate?.();
+    } catch (e) {
+      setIsCurrentClient(previous);
+      toast.error(`Couldn't update client status. ${errMsg(e)}`);
+    }
   };
 
   const handleUpdateHqAddress = async () => {
     if (!company) return;
+    const previous = hqAddress;
     setHqAddress(tempHqAddress);
     setEditingField(null);
-    await updateCompany(company.id, { hq_address: tempHqAddress });
-    onUpdate?.();
+    try {
+      await updateCompany(company.id, { hq_address: tempHqAddress });
+      onUpdate?.();
+    } catch (e) {
+      setHqAddress(previous);
+      toast.error(`Couldn't save the address. ${errMsg(e)}`);
+    }
   };
 
   const handleUpdatePrimaryContact = async (contactId: string) => {
     if (!company) return;
     const newContactId = contactId === 'none' ? null : contactId;
+    const previous = primaryContactId;
     setPrimaryContactId(newContactId);
-    await updateCompany(company.id, { primary_contact_id: newContactId });
-    onUpdate?.();
+    try {
+      await updateCompany(company.id, { primary_contact_id: newContactId });
+      onUpdate?.();
+    } catch (e) {
+      setPrimaryContactId(previous);
+      toast.error(`Couldn't change the primary contact. ${errMsg(e)}`);
+    }
   };
 
   const handleAddContact = async () => {
     if (!company || !newContact.name.trim()) return;
 
-    await saveContact({
-      company_id: company.id,
-      name: newContact.name,
-      email: newContact.email || undefined,
-      phone: newContact.phone || undefined,
-      role: newContact.role || undefined,
-      notes: newContact.notes || undefined,
-    });
+    try {
+      await saveContact({
+        company_id: company.id,
+        name: newContact.name,
+        email: newContact.email || undefined,
+        phone: newContact.phone || undefined,
+        role: newContact.role || undefined,
+        notes: newContact.notes || undefined,
+      });
+    } catch (e) {
+      toast.error(`Couldn't save the contact. ${errMsg(e)}`);
+      return;
+    }
 
     setNewContact({ name: '', email: '', phone: '', role: '', notes: '' });
     setShowAddContact(false);
@@ -199,13 +247,18 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const handleSaveEditContact = async () => {
     if (!editingContactId || !editContact.name.trim()) return;
 
-    await updateContact(editingContactId, {
-      name: editContact.name,
-      email: editContact.email || undefined,
-      phone: editContact.phone || undefined,
-      role: editContact.role || undefined,
-      notes: editContact.notes || undefined,
-    });
+    try {
+      await updateContact(editingContactId, {
+        name: editContact.name,
+        email: editContact.email || undefined,
+        phone: editContact.phone || undefined,
+        role: editContact.role || undefined,
+        notes: editContact.notes || undefined,
+      });
+    } catch (e) {
+      toast.error(`Couldn't save the changes. ${errMsg(e)}`);
+      return;
+    }
 
     setEditingContactId(null);
     setEditContact({ name: '', email: '', phone: '', role: '', notes: '' });
@@ -214,13 +267,17 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   };
 
   const handleDeleteContact = async (contactId: string) => {
-    // If deleting the primary contact, clear primary contact first
-    if (contactId === primaryContactId && company) {
-      await updateCompany(company.id, { primary_contact_id: null });
-      setPrimaryContactId(null);
+    try {
+      // If deleting the primary contact, clear primary contact first
+      if (contactId === primaryContactId && company) {
+        await updateCompany(company.id, { primary_contact_id: null });
+        setPrimaryContactId(null);
+      }
+      await deleteContact(contactId);
+    } catch (e) {
+      toast.error(`Couldn't delete the contact. ${errMsg(e)}`);
+      return;
     }
-    
-    await deleteContact(contactId);
     loadCompanyData();
     onUpdate?.();
   };
@@ -228,6 +285,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const handleAddDeal = async () => {
     if (!company || !newDeal.name.trim()) return;
 
+    try {
     await saveDeal({
       company_id: company.id,
       name: newDeal.name,
@@ -238,13 +296,17 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
       linked_permit_ids: [],
       notes: newDeal.notes || undefined,
       selling_option_id: newDeal.sellingOptionId && newDeal.sellingOptionId !== 'none' ? newDeal.sellingOptionId : undefined,
-      probability: 10,
+      probability: STAGES.new_lead.probability,
     });
 
     setNewDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
     setShowAddDeal(false);
     loadCompanyData();
     onUpdate?.();
+    } catch (error) {
+      console.error('Failed to create deal:', error);
+      legacyToast({ title: 'Could not create deal', description: 'Your deal was not saved. Try again.', variant: 'destructive' });
+    }
   };
 
   const handleStartEditDeal = (deal: DbDeal) => {
@@ -266,6 +328,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   const handleSaveEditDeal = async () => {
     if (!editingDealId || !editDeal.name.trim()) return;
 
+    try {
     await updateDeal(editingDealId, {
       name: editDeal.name,
       value: parseFloat(editDeal.value) || 0,
@@ -278,12 +341,22 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
     setEditDeal({ name: '', value: '', expectedCloseDate: '', notes: '', sellingOptionId: '' });
     loadCompanyData();
     onUpdate?.();
+    } catch (error) {
+      console.error('Failed to update deal:', error);
+      legacyToast({ title: 'Could not save deal', description: 'Your changes were not saved. Try again.', variant: 'destructive' });
+    }
   };
 
   const handleDeleteDeal = async (dealId: string) => {
-    await deleteDeal(dealId);
-    loadCompanyData();
-    onUpdate?.();
+    try {
+      await deleteDeal(dealId);
+      legacyToast({ title: 'Deal deleted' });
+      loadCompanyData();
+      onUpdate?.();
+    } catch (error) {
+      console.error('Failed to delete deal:', error);
+      legacyToast({ title: 'Could not delete deal', description: 'Try again.', variant: 'destructive' });
+    }
   };
 
   const handleAddLicense = async () => {
@@ -340,8 +413,12 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
   if (!company) return null;
 
   const primaryContact = getPrimaryContact();
+  const topPermits = topContributingPermits(companyPermits, windowDays, 3);
+  let recentCount = 0;
+  computeOperatorStats(companyPermits, windowDays).forEach((st) => { recentCount += st.recent; });
 
   return (
+    <>
     <Dialog open={!!company} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -356,10 +433,22 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                   {getScoreIcon(company.score)}
                   <span className="ml-1 capitalize">{company.score} Lead</span>
                 </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {company.permitCount} permits • ${company.totalValue.toLocaleString()} estimated value
-                </span>
               </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                {whyLine(company.heat ?? 0, company.windowCount ?? 0, recentCount)}
+              </p>
+              {topPermits.length > 0 && (
+                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                  {topPermits.map(({ permit, heat }) => (
+                    <li key={permit.id} className="tabular-nums">
+                      {[permit.wellName, permit.wellNumber].filter(Boolean).join(' ') || permit.api}
+                      {permit.county ? `, ${permit.county} Co.` : ''}
+                      {', approved '}{permitDate(permit) || 'n/a'}
+                      {`, about ${heat.toFixed(2)} of a well`}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </DialogHeader>
@@ -395,6 +484,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
               <Switch
                 checked={isCurrentClient}
                 onCheckedChange={handleToggleCurrentClient}
+                aria-label="Current client"
               />
             </div>
 
@@ -406,8 +496,10 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                 <div className="text-xs text-muted-foreground mt-1">{company.windowCount ?? 0} in last {windowLabel(windowDays)}</div>
               </div>
               <div className="border border-border rounded-lg p-4">
-                <div className="text-sm text-muted-foreground">Est. Value</div>
-                <div className="text-2xl font-semibold text-primary">${company.totalValue.toLocaleString()}</div>
+                <div className="text-sm text-muted-foreground">Last Permit</div>
+                <div className="text-2xl font-semibold">
+                  {company.lastPermitDate ? new Date(company.lastPermitDate).toLocaleDateString() : 'None tracked'}
+                </div>
               </div>
             </div>
 
@@ -470,6 +562,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                     variant="ghost" 
                     size="sm" 
                     className="h-6 px-2"
+                    aria-label="Edit HQ address"
                     onClick={() => {
                       setTempHqAddress(hqAddress);
                       setEditingField('hqAddress');
@@ -482,6 +575,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                     variant="ghost" 
                     size="sm" 
                     className="h-6 px-2"
+                    aria-label="Save HQ address"
                     onClick={handleUpdateHqAddress}
                   >
                     <Check className="h-3 w-3" />
@@ -498,12 +592,24 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                 />
               ) : (
                 <div className="text-sm whitespace-pre-wrap">
-                  {hqAddress || <span className="text-muted-foreground italic">No address on file</span>}
+                  {hqAddress ? (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(hqAddress.replace(/\n/g, ', '))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      {hqAddress}
+                    </a>
+                  ) : (
+                    <span className="text-muted-foreground italic">No address on file</span>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* License Information Section */}
+            {/* License Information Section (hidden, see SHOW_LICENSE_INFO) */}
+            {SHOW_LICENSE_INFO && (
             <div className="border border-border rounded-lg p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-sm text-muted-foreground flex items-center gap-1">
@@ -622,27 +728,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                 </div>
               )}
             </div>
-
-            {/* Timeline Section */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border border-border rounded-lg p-4">
-                <div className="text-sm text-muted-foreground mb-1">Lead Score</div>
-                <div className="flex items-center gap-2">
-                  {getScoreIcon(company.score)}
-                  <span className="font-medium capitalize">{company.score}</span>
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Pipeline {formatHeat(company.heat ?? 0)} expected wells from {company.windowCount ?? 0} permit{company.windowCount === 1 ? '' : 's'} in the last {windowLabel(windowDays)}.
-                  Weighted by how long permits typically take to reach first production (measured from OCC data).
-                </div>
-              </div>
-              <div className="border border-border rounded-lg p-4">
-                <div className="text-sm text-muted-foreground mb-1">Last Permit</div>
-                <div className="font-medium">
-                  {company.lastPermitDate ? new Date(company.lastPermitDate).toLocaleDateString() : 'None tracked'}
-                </div>
-              </div>
-            </div>
+            )}
 
             {company.operatorNumber && (
               <div className="border border-border rounded-lg p-4">
@@ -807,14 +893,14 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                           <div className="text-right text-sm">
                             {contact.email && (
                               <div className="flex items-center gap-1 text-muted-foreground">
-                                <Mail className="h-3 w-3" />
-                                {contact.email}
+                                <Mail className="h-3 w-3" aria-hidden="true" />
+                                <a href={`mailto:${contact.email}`} className="hover:text-primary hover:underline">{contact.email}</a>
                               </div>
                             )}
                             {contact.phone && (
                               <div className="flex items-center gap-1 text-muted-foreground mt-1">
-                                <Phone className="h-3 w-3" />
-                                {contact.phone}
+                                <Phone className="h-3 w-3" aria-hidden="true" />
+                                <a href={`tel:${contact.phone.replace(/[^\d+]/g, '')}`} className="hover:text-primary hover:underline">{contact.phone}</a>
                               </div>
                             )}
                           </div>
@@ -823,6 +909,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0"
+                              aria-label={`Edit ${contact.name}`}
                               onClick={() => handleStartEditContact(contact)}
                             >
                               <Edit2 className="h-3 w-3" />
@@ -831,7 +918,8 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDeleteContact(contact.id)}
+                              aria-label={`Delete ${contact.name}`}
+                              onClick={() => setContactToDelete(contact)}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -901,7 +989,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                         <SelectItem value="none">No product</SelectItem>
                         {sellingOptions.map(opt => (
                           <SelectItem key={opt.id} value={opt.id}>
-                            {opt.name} - ${formatCurrency(Number(opt.annual_rental) || Number(opt.default_price))}
+                            {opt.name} - ${formatCurrency(Number(opt.default_price) || 0)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -979,7 +1067,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                               <SelectItem value="none">No product</SelectItem>
                               {sellingOptions.map(opt => (
                                 <SelectItem key={opt.id} value={opt.id}>
-                                  {opt.name} - ${formatCurrency(Number(opt.annual_rental) || Number(opt.default_price))}
+                                  {opt.name} - ${formatCurrency(Number(opt.default_price) || 0)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -1011,14 +1099,14 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                         <div className="flex-1">
                           <div className="font-medium">{deal.name}</div>
                           <div className="text-sm text-muted-foreground mt-1">
-                            Stage: <span className="capitalize">{deal.stage?.replace('_', ' ') || 'New Lead'}</span>
+                            Stage: <span>{stageLabel(deal.stage)}</span>
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
                           <div className="text-right">
                             <div className="font-semibold text-primary">${Number(deal.value || 0).toLocaleString()}</div>
                             <div className="text-xs text-muted-foreground">
-                              Close: {deal.expected_close_date ? new Date(deal.expected_close_date).toLocaleDateString() : 'TBD'}
+                              Close: {formatLocalDate(deal.expected_close_date)}
                             </div>
                           </div>
                           <div className="flex gap-1 ml-2">
@@ -1034,7 +1122,8 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                               variant="ghost"
                               size="sm"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => handleDeleteDeal(deal.id)}
+                              aria-label={`Delete ${deal.name}`}
+                              onClick={() => setDealToDelete(deal)}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -1054,6 +1143,36 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
           </TabsContent>
         </Tabs>
       </DialogContent>
+      <AlertDialog open={!!contactToDelete} onOpenChange={(o) => !o && setContactToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {contactToDelete?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>This removes the contact from {company.name}. You cannot undo it.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const id = contactToDelete?.id;
+                setContactToDelete(null);
+                if (id) handleDeleteContact(id);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
+    <ConfirmAction
+      open={!!dealToDelete}
+      title="Delete this deal?"
+      description={dealToDelete ? `"${dealToDelete.name}" will be removed. This cannot be undone.` : ''}
+      confirmLabel="Delete deal"
+      destructive
+      onConfirm={() => { const d = dealToDelete; setDealToDelete(null); if (d) handleDeleteDeal(d.id); }}
+      onCancel={() => setDealToDelete(null)}
+    />
+    </>
   );
 }

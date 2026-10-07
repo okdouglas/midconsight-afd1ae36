@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Calendar, MapPin, Layers } from 'lucide-react';
+import { Calendar, MapPin, Layers, Flame, Thermometer, Snowflake } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type Permit } from '@/lib/schema-mapping';
 import { WELL_TYPE_COLORS, wellTypeKey } from '@/lib/brand-colors';
+import { computeOperatorStats, DEFAULT_WINDOW_DAYS, type LeadScore } from '@/lib/scoring';
+import { Badge } from '@/components/ui/badge';
 
 // Dot colors match the Well Types legend on the dashboard map.
 const DOT_LABELS = { oil: 'Oil', gas: 'Gas', injection: 'Injection', disposal: 'Disposal' } as const;
@@ -25,8 +27,22 @@ function formatDate(d?: string): string {
 
 const PAGE = 12;
 
-export function NewPermitsList({ permits }: { permits: Permit[] }) {
+const HEAT: Record<LeadScore, { cls: string; label: string; Icon: typeof Flame }> = {
+  hot: { cls: 'bg-score-hot/10 text-score-hot border-score-hot/30', label: 'Hot', Icon: Flame },
+  warm: { cls: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30', label: 'Warm', Icon: Thermometer },
+  cold: { cls: 'bg-secondary text-primary-hover border-primary/20', label: 'Cold', Icon: Snowflake },
+};
+
+interface NewPermitsListProps {
+  permits: Permit[];
+  /** Every permit we can see, so the heat badge reflects the operator's whole pipeline. */
+  allPermits?: Permit[];
+  windowDays?: number;
+}
+
+export function NewPermitsList({ permits, allPermits, windowDays = DEFAULT_WINDOW_DAYS }: NewPermitsListProps) {
   const [showAll, setShowAll] = useState(false);
+  const stats = useMemo(() => computeOperatorStats(allPermits ?? permits, windowDays), [allPermits, permits, windowDays]);
 
   const sorted = useMemo(
     () =>
@@ -38,7 +54,7 @@ export function NewPermitsList({ permits }: { permits: Permit[] }) {
   if (sorted.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div id="new-permits-list" className="rounded-lg border border-border bg-card p-4 scroll-mt-20">
       <h3 className="font-semibold mb-3">
         New permits this week <span className="text-muted-foreground font-normal tabular-nums">({sorted.length})</span>
       </h3>
@@ -53,7 +69,33 @@ export function NewPermitsList({ permits }: { permits: Permit[] }) {
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="font-medium text-sm truncate">{p.operator || 'Unknown operator'}</div>
+                  {p.operator ? (
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <button
+                        type="button"
+                        className="font-medium text-sm truncate text-left hover:text-primary hover:underline"
+                        title={`Open ${p.operator}`}
+                        onClick={() =>
+                          window.dispatchEvent(new CustomEvent('midconsight:open-company', { detail: { name: p.operator } }))
+                        }
+                      >
+                        {p.operator}
+                      </button>
+                      {(() => {
+                        const tier = stats.get(p.operator)?.score;
+                        if (!tier) return null;
+                        const h = HEAT[tier];
+                        return (
+                          <Badge className={`${h.cls} text-[10px] px-1.5 shrink-0`}>
+                            <h.Icon className="h-3 w-3 mr-0.5" aria-hidden="true" />
+                            {h.label}
+                          </Badge>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="font-medium text-sm truncate">Unknown operator</div>
+                  )}
                   <div className="text-xs text-muted-foreground truncate">{well}</div>
                 </div>
                 <span className="flex items-center gap-1.5 text-xs shrink-0">
