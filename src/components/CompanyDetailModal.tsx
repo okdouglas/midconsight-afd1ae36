@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { CompanyPermitsMap } from '@/components/CompanyPermitsMap';
-import { windowLabel, formatHeat, HALF_LIFE_DAYS } from '@/lib/scoring';
+import { windowLabel, formatHeat } from '@/lib/scoring';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -628,8 +628,8 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                   <span className="font-medium capitalize">{company.score}</span>
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Heat {formatHeat(company.heat ?? 0)} from {company.windowCount ?? 0} permit{company.windowCount === 1 ? '' : 's'} in the last {windowLabel(windowDays)}.
-                  Each permit fades by half every {HALF_LIFE_DAYS} days.
+                  Pipeline {formatHeat(company.heat ?? 0)} expected wells from {company.windowCount ?? 0} permit{company.windowCount === 1 ? '' : 's'} in the last {windowLabel(windowDays)}.
+                  Weighted by how long permits typically take to reach first production (measured from OCC data).
                 </div>
               </div>
               <div className="border border-border rounded-lg p-4">

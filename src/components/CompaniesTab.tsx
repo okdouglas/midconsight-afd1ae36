@@ -368,7 +368,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
             Showing {filteredCompanies.length} of {activeView === 'clients' ? currentClients.length : activeView === 'prospects' ? prospects.length : companies.length} {activeView === 'clients' ? 'clients' : 'companies'} • Click to view details and add contacts
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Scores look back {windowLabel(windowDays)}. A permit counts most when it is new and fades by half every 60 days. Change the lookback at the top of the page.
+            Scores look back {windowLabel(windowDays)}. A permit counts most when it is new and fades on the measured permit-to-production curve (about 6 months for a horizontal well). Change the lookback at the top of the page.
             {hiddenCompanyCount > 0 && ` ${hiddenCompanyCount} older company records with no tracked permits are hidden.`}
           </p>
         </div>

@@ -39,12 +39,12 @@ export const FACTS = {
   imports: 8,
   firstImport: 'Aug 17',
   latestBatch: 17,
-  hot: 60,
-  warm: 52,
-  cold: 8,
-  hotOperators: 11,
-  warmOperators: 27,
-  coldOperators: 8,
+  hot: 66,
+  warm: 42,
+  cold: 12,
+  hotOperators: 13,
+  warmOperators: 21,
+  coldOperators: 12,
 } as const;
 
 export const KPIS = [
@@ -261,7 +261,7 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
   },
   {
     q: 'What does a lead score mean?',
-    a: 'Each permit is worth 1 point the day it is approved and loses half its weight every 60 days. An operator’s heat is the sum. Hot is 2.5 points or more, warm is 0.75 to 2.5, and cold is under 0.75. Wells take months to go from permit to producing well, so a permit fades instead of dropping off.',
+    a: 'Each permit is weighted by how likely its well is still on the way, using the real permit-to-production timeline we measured from Oklahoma Corporation Commission data. An operator’s pipeline is the sum. Hot is a pipeline of 1.6 wells or more with a permit in the last 30 days. Warm is 0.75 or more. Cold is everything else.',
   },
   {
     q: 'What can I do with a lead?',
@@ -311,12 +311,12 @@ export const NAV_LINKS = [
 /** The scoring rule, as the app applies it today (src/lib/scoring.ts). */
 export const SCORING = {
   eyebrow: 'How the score works',
-  h2: 'Hot, warm, cold. Heat that fades.',
-  lead: 'No black box. A permit is worth 1 point the day it is approved. It loses half its weight every 60 days. An operator’s heat is the sum of its permits.',
-  headers: { tier: 'Tier', rule: 'Heat points', meaning: 'What it looks like' },
+  h2: 'Hot, warm, cold. Built on how long wells really take.',
+  lead: 'No black box. We measured how long Oklahoma wells take to go from permit to first production. A permit is worth the chance its well is still coming, and that fades on the measured curve. An operator’s pipeline is the sum of its permits.',
+  headers: { tier: 'Tier', rule: 'Pipeline (expected wells)', meaning: 'What it looks like' },
   tiers: [
-    { tone: 'hot', name: 'Hot', rule: '2.5 or more', meaning: '3 permits this week, or 5 this month' },
-    { tone: 'warm', name: 'Warm', rule: '0.75 to 2.5', meaning: '3 permits 3 months ago, or 1 this month' },
+    { tone: 'hot', name: 'Hot', rule: '1.6 or more, with a permit in the last 30 days', meaning: '3 permits this week, or 2 this month' },
+    { tone: 'warm', name: 'Warm', rule: '0.75 or more', meaning: '3 permits 3 months ago, or 1 this month' },
     { tone: 'steady', name: 'Cold', rule: 'Under 0.75', meaning: '1 permit 6 months ago' },
   ],
   windows: ['7 days', '14 days', '30 days', '60 days', '90 days', '6 months', '12 months'],
@@ -327,7 +327,7 @@ export const SCORING = {
     caption: `As of ${FACTS.asOf}.`,
   },
   notes: [
-    'Wells take months to go from permit to producing well. A permit stays on the board while it fades. It drops out only when it expires.',
+    'The median horizontal well takes about 6 months from permit to first production. About 1 in 6 permits never becomes a producing well. The weights come from 6,590 Oklahoma permits.',
     'The lookback at the top of every screen caps how far back permits count. It starts at 12 months.',
     'The score belongs to the operator. Every permit it files carries that tier.',
     'Cold does not mean a bad lead. It means the filings are old.',
