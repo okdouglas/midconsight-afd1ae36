@@ -67,9 +67,9 @@ Deno.serve(async (req) => {
     if (Array.isArray(body.operators) && body.operators.length) {
       for (const n of body.operators) if (typeof n === 'string' && n.trim()) names.set(key(n), n.trim());
     } else {
-      const { data: permits, error: e1 } = await supabase.from('permits').select('operator').eq('is_shared', true);
-      if (e1) throw e1;
-      for (const p of permits ?? []) if (p.operator) names.set(key(p.operator), p.operator.trim());
+      const permits = await fetchAll((a, b) =>
+        supabase.from('permits').select('operator').eq('is_shared', true).order('id').range(a, b));
+      for (const p of permits) if (p.operator) names.set(key(p.operator), p.operator.trim());
       const { data: companies, error: e2 } = await supabase.from('companies').select('name');
       if (e2) throw e2;
       for (const c of companies ?? []) if (c.name) names.set(key(c.name), c.name.trim());
@@ -160,3 +160,18 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// Supabase returns at most 1,000 rows per request. Read every page.
+// deno-lint-ignore no-explicit-any
+async function fetchAll(build: (from: number, to: number) => any): Promise<any[]> {
+  const size = 1000;
+  // deno-lint-ignore no-explicit-any
+  const rows: any[] = [];
+  for (let from = 0; ; from += size) {
+    const { data, error } = await build(from, from + size - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < size) break;
+  }
+  return rows;
+}
