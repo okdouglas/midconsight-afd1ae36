@@ -33,11 +33,15 @@ interface ImportAddendumProps {
 
 export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAddendumProps) {
   const [isExporting, setIsExporting] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
 
   // Don't render if no data
   if (!metadata && skippedRows.length === 0) {
     return null;
   }
+
+  const duplicateCount = skippedRows.filter((r) => r.reason === 'Duplicate').length;
+  const visibleRows = showDuplicates ? skippedRows : skippedRows.filter((r) => r.reason !== 'Duplicate');
 
   const handleExportSkipped = () => {
     if (skippedRows.length === 0) return;
@@ -122,14 +126,25 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
           )}
 
           {/* Right Column: Skipped Rows Grid */}
-          {skippedRows.length > 0 && (
+          {(visibleRows.length > 0 || duplicateCount > 0) && (
             <div className="bg-destructive/5 border border-destructive/20 rounded-lg">
               <div className="flex items-center justify-between py-3 px-4 border-b border-destructive/10">
                 <div className="text-sm font-medium flex items-center gap-2 text-destructive/80">
                   <AlertTriangle className="h-4 w-4" />
-                  Skipped Rows ({skippedRows.length})
+                  Skipped Rows ({visibleRows.length})
                 </div>
                 <div className="flex items-center gap-2">
+                  {duplicateCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      aria-pressed={showDuplicates}
+                      onClick={() => setShowDuplicates((v) => !v)}
+                    >
+                      {showDuplicates ? 'Hide' : 'Show'} {duplicateCount} duplicates
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -162,7 +177,7 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {skippedRows.map((row, idx) => (
+                      {visibleRows.map((row, idx) => (
                         <TableRow 
                           key={idx} 
                           className="hover:bg-destructive/5 border-destructive/10"

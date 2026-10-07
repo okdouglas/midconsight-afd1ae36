@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { Database, BarChart3, Users, Map, DollarSign, LogOut, Settings, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
@@ -58,9 +58,12 @@ const Index = () => {
   const { user, signOut } = useAuth();
   const { profile, loading: profileLoading, plan, isPaid, hasStarter, isPro, refresh: refreshProfile } = useProfile();
   // Coming back from Stripe Checkout. The plan changes when Stripe's webhook lands, a few seconds
-  // after payment. Keep checking (up to a minute) until the plan is no longer Free.
+  // after payment. Keep checking (up to a minute) and confirm only once the plan has really changed.
   const planRef = useRef(plan);
   planRef.current = plan;
+  const awaitingPlan = useRef<{ from: string } | null>(null);
+  const checkoutTimer = useRef<number | null>(null);
+  const PAYMENT_TOAST_ID = 'checkout-payment';
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const result = params.get('checkout');
@@ -70,16 +73,42 @@ const Index = () => {
       toast('Checkout cancelled. You were not charged.');
       return;
     }
-    toast.success('Payment received. Your plan is updating.');
+    // Immediate, light acknowledgement. The success toast waits for the confirmed plan.
+    toast('Payment received. Confirming your plan...', { id: PAYMENT_TOAST_ID });
+    awaitingPlan.current = { from: planRef.current };
     let tries = 0;
-    const timer = window.setInterval(() => {
+    checkoutTimer.current = window.setInterval(() => {
       tries += 1;
       refreshProfile();
-      if (planRef.current !== 'free' || tries >= 20) window.clearInterval(timer);
+      if (tries >= 20 && checkoutTimer.current !== null) {
+        window.clearInterval(checkoutTimer.current);
+        checkoutTimer.current = null;
+        if (awaitingPlan.current) {
+          toast('This is taking longer than usual. Your payment went through. Refresh in a minute or contact us.', {
+            id: PAYMENT_TOAST_ID,
+            duration: 12000,
+          });
+        }
+      }
     }, 3000);
-    return () => window.clearInterval(timer);
+    return () => {
+      if (checkoutTimer.current !== null) window.clearInterval(checkoutTimer.current);
+      checkoutTimer.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Confirm once the plan differs from what it was when the user came back from Stripe.
+  useEffect(() => {
+    const waiting = awaitingPlan.current;
+    if (!waiting || plan === waiting.from) return;
+    awaitingPlan.current = null;
+    if (checkoutTimer.current !== null) {
+      window.clearInterval(checkoutTimer.current);
+      checkoutTimer.current = null;
+    }
+    const label = plan === 'pro' ? 'Pro' : plan === 'starter' ? 'Starter' : 'Free';
+    toast.success(`Plan updated to ${label}`, { id: PAYMENT_TOAST_ID });
+  }, [plan]);
 
   // A new plan changes which permits and tabs the user can see, so reload the data when it changes.
   const lastPlan = useRef(plan);
@@ -114,6 +143,16 @@ const Index = () => {
     windowDays,
     hiddenCompanyCount,
   } = useSupabaseData();
+
+  // Latest approval or import date across the permits loaded, shown as "Weekly feed: updated ..." on the Data tab.
+  const feedUpdatedAt = useMemo(() => {
+    let latest: string | null = null;
+    for (const p of permits) {
+      const d = p.approvalDate || p.dateImported;
+      if (d && (!latest || d > latest)) latest = d;
+    }
+    return latest;
+  }, [permits]);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
@@ -206,6 +245,8 @@ const Index = () => {
               size="icon"
               className="h-7 w-7 text-sidebar-foreground/60 hover:text-sidebar-foreground shrink-0"
               onClick={signOut}
+              aria-label="Sign out"
+              title="Sign out"
             >
               <LogOut className="h-3.5 w-3.5" />
             </Button>
@@ -324,7 +365,7 @@ const Index = () => {
             <TabsContent value="data" className="space-y-6 mt-0">
               {canAccess('pro') ? (
                 <>
-                  <DataImport onImportComplete={refresh} />
+                  <DataImport onImportComplete={refresh} feedUpdatedAt={feedUpdatedAt} />
                   <DatasetManager
                     datasets={datasets}
                     onDelete={removeDataset}
@@ -342,6 +383,7 @@ const Index = () => {
         open={upgradeDialogOpen}
         onOpenChange={setUpgradeDialogOpen}
         source={upgradeSource}
+        currentPlan={plan}
       />
     </div>
   );
