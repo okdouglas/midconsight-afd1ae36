@@ -15,6 +15,8 @@ import { DealsTab } from '@/components/DealsTab';
 import { ProductCatalog } from '@/components/ProductCatalog';
 import { ResearchDesk } from '@/components/ResearchDesk';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
+import { SCORE_WINDOWS } from '@/lib/scoring';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { incrementPaywallHits, markActivated } from '@/lib/supabase-data';
@@ -67,6 +69,9 @@ const Index = () => {
     removeDataset,
     newThisWeekPermits,
     stats,
+    windowDays,
+    setWindowDays,
+    hiddenCompanyCount,
   } = useSupabaseData();
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -156,7 +161,22 @@ const Index = () => {
       <div className="flex-1 min-w-0">
         <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-10">
           <h1 className="font-semibold text-lg tracking-tight">{activeLabel}</h1>
-          <span className="text-sm text-muted-foreground tabular-nums">{stats.totalPermits} permits loaded</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground hidden sm:inline" id="score-window-label">Lookback</span>
+              <Select value={String(windowDays)} onValueChange={(v) => setWindowDays(Number(v))}>
+                <SelectTrigger className="h-8 w-[130px] text-sm" aria-labelledby="score-window-label">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SCORE_WINDOWS.map((w) => (
+                    <SelectItem key={w.days} value={String(w.days)}>Last {w.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <span className="text-sm text-muted-foreground tabular-nums">{stats.totalPermits} permits loaded</span>
+          </div>
         </header>
 
         <main className="p-6">
@@ -221,7 +241,7 @@ const Index = () => {
             {/* Research Desk Tab */}
             <TabsContent value="research" className="space-y-6 mt-0">
               {hasStarter ? (
-                <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} />
+                <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} windowDays={windowDays} />
               ) : (
                 <UpgradePrompt label="Lead Research" tier="starter" onUpgradeClick={() => openUpgradeDialog('research_tab')} />
               )}
@@ -237,7 +257,7 @@ const Index = () => {
             {/* Companies Tab */}
             <TabsContent value="companies" className="space-y-6 mt-0">
               {isPro ? (
-                <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} />
+                <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} windowDays={windowDays} hiddenCompanyCount={hiddenCompanyCount} />
               ) : (
                 <UpgradePrompt label="Companies" tier="pro" onUpgradeClick={() => openUpgradeDialog('companies_tab')} />
               )}

@@ -3,11 +3,11 @@ import { Brackets, Eyebrow } from './Frames';
 
 /** Intent to Drill filings, scored hot or warm: a real lead card and the real score split. */
 export function ScoredLeads() {
-  const total = FACTS.hot + FACTS.warm + FACTS.steady;
+  const total = FACTS.hot + FACTS.warm + FACTS.cold;
   const seg = [
     { k: 'Hot', n: FACTS.hot, bg: '#c4262a', fg: '#c4262a' },
     { k: 'Warm', n: FACTS.warm, bg: '#c98a2e', fg: '#7a4b00' },
-    { k: 'Steady', n: FACTS.steady, bg: '#005a9c', fg: '#005a9c' },
+    { k: 'Cold', n: FACTS.cold, bg: '#005a9c', fg: '#005a9c' },
   ];
   return (
     <section className="bg-white lp-band" aria-labelledby="lead-h2">
@@ -22,7 +22,7 @@ export function ScoredLeads() {
 
             <div className="lp-reveal mt-12">
               <p className="lp-label mb-4 text-[#5b6f8a]">{LEAD.barTitle}</p>
-              <div className="flex h-5 overflow-hidden rounded-[3px]" role="img" aria-label={`${FACTS.hot} hot, ${FACTS.warm} warm, ${FACTS.steady} steady`}>
+              <div className="flex h-5 overflow-hidden rounded-[3px]" role="img" aria-label={`${FACTS.hot} hot, ${FACTS.warm} warm, ${FACTS.cold} cold`}>
                 {seg.map((s) => (
                   <div key={s.k} style={{ width: `${(s.n / total) * 100}%`, background: s.bg }} />
                 ))}

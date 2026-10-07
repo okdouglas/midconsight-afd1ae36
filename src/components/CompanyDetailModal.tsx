@@ -10,6 +10,8 @@ import {
   Package, Trash2 
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { CompanyPermitsMap } from '@/components/CompanyPermitsMap';
+import { windowLabel, formatHeat } from '@/lib/scoring';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,9 +57,10 @@ interface CompanyDetailModalProps {
   companyPermits?: Permit[];
   onClose: () => void;
   onUpdate?: () => void;
+  windowDays?: number;
 }
 
-export function CompanyDetailModal({ company, companyPermits = [], onClose, onUpdate }: CompanyDetailModalProps) {
+export function CompanyDetailModal({ company, companyPermits = [], onClose, onUpdate, windowDays = 30 }: CompanyDetailModalProps) {
   const [contacts, setContacts] = useState<DbContact[]>([]);
   const [deals, setDeals] = useState<DbDeal[]>([]);
   const [sellingOptions, setSellingOptions] = useState<DbSellingOption[]>([]);
@@ -399,12 +402,16 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
               <div className="border border-border rounded-lg p-4">
                 <div className="text-sm text-muted-foreground">Total Permits</div>
                 <div className="text-2xl font-semibold">{company.permitCount}</div>
+                <div className="text-xs text-muted-foreground mt-1">{company.windowCount ?? 0} in last {windowLabel(windowDays)}</div>
               </div>
               <div className="border border-border rounded-lg p-4">
                 <div className="text-sm text-muted-foreground">Est. Value</div>
                 <div className="text-2xl font-semibold text-primary">${company.totalValue.toLocaleString()}</div>
               </div>
             </div>
+
+            {/* Map of every permit we track for this operator */}
+            <CompanyPermitsMap permits={companyPermits} windowDays={windowDays} />
 
             {/* Primary Contact Card */}
             <div className="border border-border rounded-lg p-4">
@@ -620,11 +627,15 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
                   {getScoreIcon(company.score)}
                   <span className="font-medium capitalize">{company.score}</span>
                 </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Pipeline {formatHeat(company.heat ?? 0)} expected wells from {company.windowCount ?? 0} permit{company.windowCount === 1 ? '' : 's'} in the last {windowLabel(windowDays)}.
+                  Weighted by how long permits typically take to reach first production (measured from OCC data).
+                </div>
               </div>
               <div className="border border-border rounded-lg p-4">
                 <div className="text-sm text-muted-foreground mb-1">Last Permit</div>
                 <div className="font-medium">
-                  {new Date(company.lastPermitDate).toLocaleDateString()}
+                  {company.lastPermitDate ? new Date(company.lastPermitDate).toLocaleDateString() : 'None tracked'}
                 </div>
               </div>
             </div>

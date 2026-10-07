@@ -3,7 +3,7 @@
  * <noscript> copy in index.html (scripts/sync-landing-html.mjs writes those two).
  * Rules: Oklahoma only, weekly only, no customer logos, no testimonials, no
  * invented numbers. Real figures below come from the public shared feed
- * (115 permits, imports Aug 17 to Oct 5). Update FACTS when the data moves.
+ * (120 permits, imports Aug 17 to Oct 7). Update FACTS when the data moves.
  */
 
 export const SITE = {
@@ -30,18 +30,21 @@ export const HERO = {
   mapCaption: 'Real permits, Oklahoma Corporation Commission filings, imported through Oct 5.',
 } as const;
 
-/** Counted from the public shared feed export (permits-used.json), as of Oct 5, 2026. */
+/** Counted from the public shared feed export (permits-used.json), as of Oct 7, 2026, scored with a 12 month lookback. */
 export const FACTS = {
-  asOf: 'Oct 5',
-  permits: 115,
-  counties: 25,
-  operators: 45,
+  asOf: 'Oct 7',
+  permits: 120,
+  counties: 26,
+  operators: 46,
   imports: 8,
   firstImport: 'Aug 17',
   latestBatch: 17,
-  hot: 41,
-  warm: 30,
-  steady: 44,
+  hot: 66,
+  warm: 42,
+  cold: 12,
+  hotOperators: 13,
+  warmOperators: 21,
+  coldOperators: 12,
 } as const;
 
 export const KPIS = [
@@ -86,7 +89,7 @@ export const WEEK_START = {
 /** A real hot permit from the latest import (public filing fields only). */
 export const LEAD = {
   h2: 'Oklahoma Intent to Drill filings, scored hot or warm',
-  lead: 'Every filing carries its operator’s score. Strong ones show as hot. The next tier shows as warm. The rest stay steady.',
+  lead: 'Every filing carries its operator’s score. Hot means actively permitting. Warm means recent activity. Cold means the filings are old.',
   eyebrow: 'A real lead',
   score: 'Hot',
   operator: 'Camino Natural Resources LLC',
@@ -106,11 +109,11 @@ export const LEAD = {
 
 export const MAP_SECTION = {
   h2: 'Every permit on a county map',
-  lead: 'Hot in red. Warm in amber. Steady in blue. Click a dot for the operator, the API number, the county and the approval date.',
+  lead: 'Hot in red. Warm in amber. Cold in blue. Click a dot for the operator, the API number, the county and the approval date.',
   legend: [
     { tone: 'hot', label: 'Hot' },
     { tone: 'warm', label: 'Warm' },
-    { tone: 'steady', label: 'Steady' },
+    { tone: 'steady', label: 'Cold' },
   ],
   note: 'Filter the map. Export what you see to CSV or Excel.',
   popup: {
@@ -258,7 +261,7 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
   },
   {
     q: 'What does a lead score mean?',
-    a: 'Each operator is scored on its permit count and its recent filings. Hot is 5 or more permits, or 3 or more in the last 30 days. Warm is 3 or 4 permits, or 2 in the last 30 days. Everything else is steady.',
+    a: 'Each permit is weighted by how likely its well is still on the way, using the real permit-to-production timeline we measured from Oklahoma Corporation Commission data. An operator’s pipeline is the sum. Hot is a pipeline of 1.6 wells or more with a permit in the last 30 days. Warm is 0.75 or more. Cold is everything else.',
   },
   {
     q: 'What can I do with a lead?',
@@ -305,25 +308,28 @@ export const NAV_LINKS = [
   { href: '#faq', label: 'FAQ' },
 ] as const;
 
-/** The scoring rule, as the app applies it today (src/lib/data-processor.ts calculateScore). */
+/** The scoring rule, as the app applies it today (src/lib/scoring.ts). */
 export const SCORING = {
   eyebrow: 'How the score works',
-  h2: 'Hot, warm, steady. Here is the rule.',
-  lead: 'No black box. Each operator is scored on two numbers: how many permits it has in the feed, and how many arrived in the last 30 days.',
-  headers: { tier: 'Tier', total: 'Permits in the feed', joiner: '', recent: 'Imported in the last 30 days' },
+  h2: 'Hot, warm, cold. Built on how long wells really take.',
+  lead: 'No black box. We measured how long Oklahoma wells take to go from permit to first production. A permit is worth the chance its well is still coming, and that fades on the measured curve. An operator’s pipeline is the sum of its permits.',
+  headers: { tier: 'Tier', rule: 'Pipeline (expected wells)', meaning: 'What it looks like' },
   tiers: [
-    { tone: 'hot', name: 'Hot', total: '5 or more', joiner: 'or', recent: '3 or more' },
-    { tone: 'warm', name: 'Warm', total: '3 or 4', joiner: 'or', recent: '2' },
-    { tone: 'steady', name: 'Steady', total: 'Fewer than 3', joiner: 'and', recent: 'Fewer than 2' },
+    { tone: 'hot', name: 'Hot', rule: '1.6 or more, with a permit in the last 30 days', meaning: '3 permits this week, or 2 this month' },
+    { tone: 'warm', name: 'Warm', rule: '0.75 or more', meaning: '3 permits 3 months ago, or 1 this month' },
+    { tone: 'steady', name: 'Cold', rule: 'Under 0.75', meaning: '1 permit 6 months ago' },
   ],
+  windows: ['7 days', '14 days', '30 days', '60 days', '90 days', '6 months', '12 months'],
+  windowsLabel: 'Pick a lookback',
   example: {
     label: 'One real example',
-    text: 'Camino Natural Resources LLC has 5 permits in the feed. Five or more is hot.',
+    text: `Today, ${FACTS.hotOperators} of ${FACTS.operators} operators in the feed are hot, ${FACTS.warmOperators} are warm and ${FACTS.coldOperators} are cold.`,
     caption: `As of ${FACTS.asOf}.`,
   },
   notes: [
+    'The median horizontal well takes about 6 months from permit to first production. About 1 in 6 permits never becomes a producing well. The weights come from 6,590 Oklahoma permits.',
+    'The lookback at the top of every screen caps how far back permits count. It starts at 12 months.',
     'The score belongs to the operator. Every permit it files carries that tier.',
-    'In Lead Research, an operator that is not hot or warm moves up to warm when it has a permit approved in the last 7 days, or a horizontal or directional well.',
-    'The company list calls the bottom tier cold.',
+    'Cold does not mean a bad lead. It means the filings are old.',
   ],
 } as const;

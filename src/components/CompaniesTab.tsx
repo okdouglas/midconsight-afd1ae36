@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { windowLabel } from '@/lib/scoring';
 import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown, UserCheck } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -28,6 +29,8 @@ interface CompaniesTabProps {
   permits: Permit[];
   deals: Deal[];
   onRefresh: () => void;
+  windowDays: number;
+  hiddenCompanyCount?: number;
 }
 
 type SortField = 'name' | 'permitCount' | 'totalValue' | 'dealCount' | 'weightedRevenue' | 'score';
@@ -39,8 +42,15 @@ interface CompanyWithDetails extends Company {
   weightedRevenue: number;
 }
 
-export function CompaniesTab({ companies, permits, deals, onRefresh }: CompaniesTabProps) {
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays, hiddenCompanyCount = 0 }: CompaniesTabProps) {
+  const [pickedCompany, setSelectedCompany] = useState<Company | null>(null);
+  // The open company always reflects the live score, so moving the score window
+  // updates it while the modal is open.
+  const selectedCompany = useMemo<Company | null>(() => {
+    if (!pickedCompany) return null;
+    const live = companies.find((c) => c.name === pickedCompany.name);
+    return live ? { ...live, id: pickedCompany.id, isPreview: false } : pickedCompany;
+  }, [pickedCompany, companies]);
   const [promoting, setPromoting] = useState(false);
 
   const handleSelectCompany = async (company: Company) => {
@@ -357,6 +367,10 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
           <p className="text-sm text-muted-foreground">
             Showing {filteredCompanies.length} of {activeView === 'clients' ? currentClients.length : activeView === 'prospects' ? prospects.length : companies.length} {activeView === 'clients' ? 'clients' : 'companies'} • Click to view details and add contacts
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Scores look back {windowLabel(windowDays)}. A permit counts most when it is new and fades on the measured permit-to-production curve (about 6 months for a horizontal well). Change the lookback at the top of the page.
+            {hiddenCompanyCount > 0 && ` ${hiddenCompanyCount} older company records with no tracked permits are hidden.`}
+          </p>
         </div>
         
         <div className="overflow-x-auto">
@@ -421,7 +435,8 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
                             )}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            Last: {new Date(company.lastPermitDate).toLocaleDateString()}
+                            {company.lastPermitDate ? `Last: ${new Date(company.lastPermitDate).toLocaleDateString()}` : 'No permits tracked'}
+                            {company.permitCount > 0 && ` · ${company.windowCount ?? 0} in last ${windowLabel(windowDays)}`}
                           </div>
                         </div>
                       </div>
@@ -459,6 +474,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
       <CompanyDetailModal
         company={selectedCompany}
         companyPermits={permits.filter(p => p.operator === selectedCompany?.name)}
+        windowDays={windowDays}
         onClose={() => setSelectedCompany(null)}
         onUpdate={onRefresh}
       />
