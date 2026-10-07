@@ -294,6 +294,22 @@ export async function getContactsByCompany(companyId: string): Promise<DbContact
   return (data || []) as DbContact[];
 }
 
+/** Contacts for many companies in one query per 150 ids, newest first. */
+export async function getContactsForCompanies(companyIds: string[]): Promise<DbContact[]> {
+  const ids = Array.from(new Set(companyIds.filter(Boolean)));
+  const out: DbContact[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .in('company_id', ids.slice(i, i + 150))
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    out.push(...((data || []) as DbContact[]));
+  }
+  return out;
+}
+
 export async function getDealsByCompany(companyId: string): Promise<DbDeal[]> {
   const { data, error } = await supabase
     .from('deals')

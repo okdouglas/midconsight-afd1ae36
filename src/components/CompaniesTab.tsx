@@ -4,16 +4,15 @@
  * Includes Current Clients section
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { windowLabel, computeOperatorStats, whyLine } from '@/lib/scoring';
-import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown, UserCheck } from 'lucide-react';
+import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown, UserCheck, X, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
 import { type Permit } from '@/lib/schema-mapping';
 import { CompanyDetailModal } from './CompanyDetailModal';
-import { getContactsByCompany, getAllDeals, promoteCompanyPreview, type DbContact, type DbDeal } from '@/lib/supabase-data';
+import { getContactsForCompanies, promoteCompanyPreview, type DbContact } from '@/lib/supabase-data';
 import { toast } from 'sonner';
 import {
   Table,
@@ -31,6 +30,14 @@ interface CompaniesTabProps {
   onRefresh: () => void;
   windowDays: number;
   hiddenCompanyCount?: number;
+  /** Company records with no tracked permits, no deal and no client flag. Shown on request. */
+  hiddenCompanies?: Company[];
+  /** Open this company's modal once, then call onOpenCompanyHandled. Set by the open-company event. */
+  openCompanyName?: string | null;
+  onOpenCompanyHandled?: () => void;
+  /** Apply a hot, warm or cold filter once (the Hot Leads card on the dashboard). */
+  requestedScoreFilter?: 'hot' | 'warm' | 'cold' | null;
+  onRequestedScoreFilterHandled?: () => void;
 }
 
 type SortField = 'name' | 'permitCount' | 'heat' | 'dealCount' | 'weightedRevenue' | 'score';
@@ -42,7 +49,36 @@ interface CompanyWithDetails extends Company {
   weightedRevenue: number;
 }
 
-export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays, hiddenCompanyCount = 0 }: CompaniesTabProps) {
+function FilterChip({
+  active,
+  clearable = false,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  clearable?: boolean;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
+        active ? 'border-primary bg-primary/10 text-foreground font-medium' : 'border-border bg-card text-muted-foreground hover:border-primary/50 hover:text-foreground'
+      }`}
+    >
+      {icon}
+      {children}
+      {active && clearable && <X className="h-3.5 w-3.5" aria-label="Clear filter" />}
+    </button>
+  );
+}
+
+export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays, hiddenCompanyCount = 0, hiddenCompanies = [], openCompanyName = null, onOpenCompanyHandled, requestedScoreFilter = null, onRequestedScoreFilterHandled }: CompaniesTabProps) {
   const [pickedCompany, setSelectedCompany] = useState<Company | null>(null);
   // The open company always reflects the live score, so moving the score window
   // updates it while the modal is open.
@@ -51,9 +87,10 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
     const live = companies.find((c) => c.name === pickedCompany.name);
     return live ? { ...live, id: pickedCompany.id, isPreview: false } : pickedCompany;
   }, [pickedCompany, companies]);
-  const [promoting, setPromoting] = useState(false);
+  const [promotingName, setPromotingName] = useState<string | null>(null);
 
   const handleSelectCompany = async (company: Company) => {
+    if (promotingName) return;
     if (!company.isPreview) {
       setSelectedCompany(company);
       return;
@@ -61,7 +98,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
     // Turn the preview into a real record before opening the modal, since
     // the modal's contacts/deals/client-toggle actions all need a real
     // company_id to write against.
-    setPromoting(true);
+    setPromotingName(company.name);
     try {
       const real = await promoteCompanyPreview({
         name: company.name,
@@ -88,9 +125,9 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
       });
       onRefresh?.();
     } catch {
-      toast.error(`Couldn't open ${company.name} — please try again`);
+      toast.error(`Couldn't open ${company.name}. Please try again.`);
     } finally {
-      setPromoting(false);
+      setPromotingName(null);
     }
   };
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,27 +136,33 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [activeView, setActiveView] = useState<'all' | 'prospects' | 'clients'>('all');
+  const [showInactive, setShowInactive] = useState(false);
 
-  // Load contacts for all companies
+  // Load contacts for every real company with one query (preview rows have no record yet).
+  const realIdsKey = useMemo(
+    () => companies.filter((c) => !c.isPreview && !c.id.startsWith('preview-')).map((c) => c.id).sort().join(','),
+    [companies],
+  );
   useEffect(() => {
-    const loadContacts = async () => {
-      const contactMap: Record<string, DbContact[]> = {};
-      for (const company of companies) {
-        try {
-          const companyContacts = await getContactsByCompany(company.id);
-          if (companyContacts.length > 0) {
-            contactMap[company.id] = companyContacts;
-          }
-        } catch (error) {
-          // Silently fail for individual companies
-        }
-      }
-      setContacts(contactMap);
-    };
-    if (companies.length > 0) {
-      loadContacts();
+    if (!realIdsKey) {
+      setContacts({});
+      return;
     }
-  }, [companies]);
+    let cancelled = false;
+    getContactsForCompanies(realIdsKey.split(','))
+      .then((rows) => {
+        if (cancelled) return;
+        const map: Record<string, DbContact[]> = {};
+        for (const row of rows) (map[row.company_id] ||= []).push(row);
+        setContacts(map);
+      })
+      .catch(() => {
+        // The table still works without a primary contact column.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [realIdsKey]);
 
   const getScoreIcon = (score: Company['score']) => {
     switch (score) {
@@ -139,22 +182,28 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
   };
 
   // Split companies into clients and prospects
+  // Inactive records (no tracked permits, no deal, not a client) only show on request.
+  const allCompanies = useMemo(
+    () => (showInactive ? [...companies, ...hiddenCompanies] : companies),
+    [showInactive, companies, hiddenCompanies],
+  );
+
   const currentClients = useMemo(() => {
-    return companies.filter(c => c.isCurrentClient);
-  }, [companies]);
+    return allCompanies.filter(c => c.isCurrentClient);
+  }, [allCompanies]);
 
   const prospects = useMemo(() => {
-    return companies.filter(c => !c.isCurrentClient);
-  }, [companies]);
+    return allCompanies.filter(c => !c.isCurrentClient);
+  }, [allCompanies]);
 
   // Compute company details with deals and contacts
   const companiesWithDetails = useMemo<CompanyWithDetails[]>(() => {
-    const baseCompanies = activeView === 'clients' 
-      ? currentClients 
-      : activeView === 'prospects' 
-        ? prospects 
-        : companies;
-    
+    const baseCompanies = activeView === 'clients'
+      ? currentClients
+      : activeView === 'prospects'
+        ? prospects
+        : allCompanies;
+
     return baseCompanies.map(company => {
       const companyDeals = deals.filter(d => d.companyId === company.id && d.status === 'open');
       const dealCount = companyDeals.length;
@@ -162,7 +211,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
         return sum + Math.round(d.value * ((d.probability || 10) / 100));
       }, 0);
       const primaryContact = contacts[company.id]?.[0]?.name || '-';
-      
+
       return {
         ...company,
         primaryContact,
@@ -170,7 +219,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
         weightedRevenue
       };
     });
-  }, [activeView, companies, currentClients, prospects, deals, contacts]);
+  }, [activeView, allCompanies, currentClients, prospects, deals, contacts]);
 
   // Handle sorting
   const handleSort = (field: SortField) => {
@@ -182,12 +231,13 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
     }
   };
 
-  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <TableHead 
+  const SortHeader = ({ field, children, align = 'left' }: { field: SortField; children: React.ReactNode; align?: 'left' | 'right' }) => (
+    <TableHead
       className="cursor-pointer hover:bg-muted/50 select-none"
       onClick={() => handleSort(field)}
+      aria-sort={sortField === field ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <div className="flex items-center gap-1">
+      <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
         {children}
         {sortField === field ? (
           sortDirection === 'asc' ? (
@@ -220,7 +270,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
     .sort((a, b) => {
       const scorePriority = { hot: 3, warm: 2, cold: 1 };
       let comparison = 0;
-      
+
       switch (sortField) {
         case 'name':
           comparison = a.name.localeCompare(b.name);
@@ -243,22 +293,54 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
         default:
           comparison = 0;
       }
-      
+
       return sortDirection === 'asc' ? comparison : -comparison;
     });
 
-  const hotCount = prospects.filter(c => c.score === 'hot').length;
-  const warmCount = prospects.filter(c => c.score === 'warm').length;
-  const coldCount = prospects.filter(c => c.score === 'cold').length;
-  const totalPermits = permits.length;
+  // Score counts follow the view (All, Prospects or Clients), so they match the rows you would see.
+  const viewBase = activeView === 'clients' ? currentClients : activeView === 'prospects' ? prospects : allCompanies;
+  const hotCount = viewBase.filter(c => c.score === 'hot').length;
+  const warmCount = viewBase.filter(c => c.score === 'warm').length;
+  const coldCount = viewBase.filter(c => c.score === 'cold').length;
+
+  useEffect(() => {
+    if (!requestedScoreFilter) return;
+    setScoreFilter(requestedScoreFilter);
+    setActiveView('all');
+    setSearchQuery('');
+    onRequestedScoreFilterHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedScoreFilter]);
+
+  // Open a company when another screen asks (the open-company event, via Index).
+  const handledOpen = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openCompanyName || handledOpen.current === openCompanyName) return;
+    const wanted = openCompanyName.toLowerCase();
+    const match = companies.find((c) => c.name.toLowerCase() === wanted) ?? hiddenCompanies.find((c) => c.name.toLowerCase() === wanted);
+    if (!match) {
+      if (companies.length > 0) {
+        toast.error(`No company record for ${openCompanyName} yet.`);
+        handledOpen.current = openCompanyName;
+        onOpenCompanyHandled?.();
+      }
+      return;
+    }
+    handledOpen.current = openCompanyName;
+    handleSelectCompany(match).finally(() => {
+      handledOpen.current = null;
+      onOpenCompanyHandled?.();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCompanyName, companies, hiddenCompanies]);
 
   if (companies.length === 0) {
     return (
       <div className="text-center py-12">
         <Users className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-        <h2 className="text-xl font-semibold mb-2">No Companies Yet</h2>
+        <h2 className="text-xl font-semibold mb-2">No companies yet</h2>
         <p className="text-muted-foreground">
-          Import permit data to automatically identify and score companies based on activity.
+          Companies show up here as permits load. New permits load every Monday.
         </p>
       </div>
     );
@@ -266,91 +348,28 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
 
   return (
     <div className="space-y-6">
-      {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-6">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <div className="text-sm text-muted-foreground">Total Permits</div>
-          <div className="text-2xl font-semibold mt-1">{totalPermits}</div>
-        </div>
-        <div 
-          className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            activeView === 'all' ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/50'
-          }`}
-          onClick={() => setActiveView('all')}
-        >
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-primary" />
-            Total Companies
-          </div>
-          <div className="text-2xl font-semibold mt-1">{companies.length}</div>
-        </div>
-        <div 
-          className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            activeView === 'clients' ? 'border-foreground bg-foreground/10' : 'border-border bg-card hover:border-foreground/50'
-          }`}
-          onClick={() => setActiveView('clients')}
-        >
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <UserCheck className="h-4 w-4 text-foreground" />
-            Current Clients
-          </div>
-          <div className="text-2xl font-semibold text-foreground mt-1">{currentClients.length}</div>
-        </div>
-        <div 
-          className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            scoreFilter === 'hot' ? 'border-score-hot bg-score-hot/10' : 'border-border bg-card hover:border-score-hot/50'
-          }`}
-          onClick={() => setScoreFilter(scoreFilter === 'hot' ? 'all' : 'hot')}
-        >
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Flame className="h-4 w-4 text-score-hot" />
-            Hot Leads
-          </div>
-          <div className="text-2xl font-semibold text-score-hot mt-1">{hotCount}</div>
-        </div>
-        <div 
-          className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            scoreFilter === 'warm' ? 'border-score-warm-foreground bg-score-warm/40' : 'border-border bg-card hover:border-score-warm-foreground/50'
-          }`}
-          onClick={() => setScoreFilter(scoreFilter === 'warm' ? 'all' : 'warm')}
-        >
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Thermometer className="h-4 w-4 text-score-warm-foreground" />
-            Warm Leads
-          </div>
-          <div className="text-2xl font-semibold text-score-warm-foreground mt-1">{warmCount}</div>
-        </div>
-        <div 
-          className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            scoreFilter === 'cold' ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/50'
-          }`}
-          onClick={() => setScoreFilter(scoreFilter === 'cold' ? 'all' : 'cold')}
-        >
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Snowflake className="h-4 w-4 text-primary" />
-            Cold Leads
-          </div>
-          <div className="text-2xl font-semibold text-primary mt-1">{coldCount}</div>
-        </div>
+      {/* Filter chips. The active one shows an x that clears it. */}
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter companies">
+        <FilterChip active={activeView === 'all'} onClick={() => setActiveView('all')} icon={<Building2 className="h-3.5 w-3.5" />}>
+          All ({allCompanies.length})
+        </FilterChip>
+        <FilterChip active={activeView === 'prospects'} onClick={() => setActiveView(activeView === 'prospects' ? 'all' : 'prospects')} clearable icon={<Users className="h-3.5 w-3.5" />}>
+          Prospects ({prospects.length})
+        </FilterChip>
+        <FilterChip active={activeView === 'clients'} onClick={() => setActiveView(activeView === 'clients' ? 'all' : 'clients')} clearable icon={<UserCheck className="h-3.5 w-3.5" />}>
+          Current Clients ({currentClients.length})
+        </FilterChip>
+        <span className="mx-1 h-5 w-px bg-border" aria-hidden="true" />
+        <FilterChip active={scoreFilter === 'hot'} onClick={() => setScoreFilter(scoreFilter === 'hot' ? 'all' : 'hot')} clearable icon={<Flame className="h-3.5 w-3.5 text-score-hot" />}>
+          Hot ({hotCount})
+        </FilterChip>
+        <FilterChip active={scoreFilter === 'warm'} onClick={() => setScoreFilter(scoreFilter === 'warm' ? 'all' : 'warm')} clearable icon={<Thermometer className="h-3.5 w-3.5 text-score-warm-foreground" />}>
+          Warm ({warmCount})
+        </FilterChip>
+        <FilterChip active={scoreFilter === 'cold'} onClick={() => setScoreFilter(scoreFilter === 'cold' ? 'all' : 'cold')} clearable icon={<Snowflake className="h-3.5 w-3.5 text-primary" />}>
+          Cold ({coldCount})
+        </FilterChip>
       </div>
-
-      {/* View Toggle */}
-      <Tabs value={activeView} onValueChange={(v) => setActiveView(v as 'all' | 'prospects' | 'clients')}>
-        <TabsList>
-          <TabsTrigger value="all" className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            All Companies ({companies.length})
-          </TabsTrigger>
-          <TabsTrigger value="prospects" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Prospects ({prospects.length})
-          </TabsTrigger>
-          <TabsTrigger value="clients" className="flex items-center gap-2">
-            <UserCheck className="h-4 w-4" />
-            Current Clients ({currentClients.length})
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
 
       {/* Search and Filter */}
       <div className="flex gap-4">
@@ -372,14 +391,28 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
             {activeView === 'clients' ? 'Current Clients' : activeView === 'prospects' ? 'Prospects' : 'All Companies'}
           </h3>
           <p className="text-sm text-muted-foreground">
-            Showing {filteredCompanies.length} of {activeView === 'clients' ? currentClients.length : activeView === 'prospects' ? prospects.length : companies.length} {activeView === 'clients' ? 'clients' : 'companies'} • Click to view details and add contacts
+            Showing {filteredCompanies.length} of {viewBase.length} {activeView === 'clients' ? 'clients' : 'companies'}. Click a row to see details and add contacts.
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             Scores look back {windowLabel(windowDays)}. A permit counts most when it is new and fades on the measured permit-to-production curve (about 6 months for a horizontal well).
-            {hiddenCompanyCount > 0 && ` ${hiddenCompanyCount} older company records with no tracked permits are hidden.`}
+            {hiddenCompanyCount > 0 && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => setShowInactive((v) => !v)}
+                  aria-pressed={showInactive}
+                  className="text-primary hover:underline"
+                >
+                  {showInactive
+                    ? `Hide ${hiddenCompanyCount} inactive records`
+                    : `${hiddenCompanyCount} older records with no tracked permits are hidden. Show them.`}
+                </button>
+              </>
+            )}
           </p>
         </div>
-        
+
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -390,28 +423,33 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
                 <TableHead>Primary Contact</TableHead>
                 <SortHeader field="permitCount">Permits</SortHeader>
                 <SortHeader field="dealCount">Deals</SortHeader>
-                <SortHeader field="weightedRevenue">Weighted Revenue</SortHeader>
-                <SortHeader field="heat">Heat</SortHeader>
+                <SortHeader field="weightedRevenue" align="right">Weighted Revenue</SortHeader>
+                <SortHeader field="heat" align="right">Heat</SortHeader>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredCompanies.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                    {activeView === 'clients' 
-                      ? 'No current clients. Mark companies as clients from the Lead Research tab.'
-                      : activeView === 'prospects'
-                        ? 'No prospects found. Import permit data or adjust filters.'
-                        : 'No companies found. Import permit data or adjust filters.'
-                    }
+                    {activeView === 'clients'
+                      ? 'No current clients yet. Open a company and turn on Current Client.'
+                      : 'No companies match these filters. Clear a chip or the search to see more.'}
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredCompanies.map((company, index) => (
-                  <TableRow 
-                    key={company.id} 
+                  <TableRow
+                    key={company.id}
                     className="hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() => handleSelectCompany(company)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleSelectCompany(company);
+                      }
+                    }}
+                    tabIndex={0}
+                    aria-busy={promotingName === company.name}
                   >
                     <TableCell className="text-sm font-medium text-muted-foreground">
                       {index + 1}
@@ -430,6 +468,9 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
                         <div>
                           <div className="font-medium flex items-center gap-2">
                             {company.name}
+                            {promotingName === company.name && (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Opening" />
+                            )}
                             {company.isCurrentClient && (
                               <Badge className="bg-foreground/10 text-foreground border-foreground/20 text-xs">
                                 Client
