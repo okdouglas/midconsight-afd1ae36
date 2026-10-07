@@ -39,3 +39,7 @@ verify_jwt = false
 
 [functions.billing-portal]
 verify_jwt = false
+
+[functions.send-weekly-digest]
+# Called by pg_cron with the shared secret, same as import-itd-weekly.
+verify_jwt = false

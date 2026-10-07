@@ -771,8 +771,8 @@ function announceFreeLimit(err: unknown) {
 }
 
 /** Ask the app to open the upgrade dialog (used by locked buttons deep inside a module). */
-export function promptUpgrade() {
-  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('midconsight:free-limit'));
+export function promptUpgrade(source = 'free_limit') {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('midconsight:free-limit', { detail: { source } }));
 }
 
 export const FREE_IMPORT_ROW_LIMIT = 100;

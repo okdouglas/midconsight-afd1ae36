@@ -28,8 +28,8 @@ const TIERS = [
     annual: '$100/yr, two months free',
     features: [
       'Full permit history, not just 30 days',
+      'Operator scores for every operator',
       'Unlimited deals and products',
-      'Data and product import',
     ],
   },
   {
@@ -40,7 +40,8 @@ const TIERS = [
     annual: '$200/yr, two months free',
     features: [
       'Everything in Starter',
-      'Built for teams that work the pipeline daily',
+      'Import your own permit files',
+      'Import your product catalog from a spreadsheet',
     ],
   },
 ] as const;
@@ -56,7 +57,7 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
 
   useEffect(() => {
     if (open) {
-      const proSources = ['companies_tab', 'deals_tab', 'products_tab'];
+      const proSources = ['data_tab', 'product_import'];
       setTier(proSources.includes(source) ? 'pro' : 'starter');
     }
   }, [open, source]);

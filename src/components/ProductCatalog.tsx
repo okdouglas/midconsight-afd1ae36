@@ -57,8 +57,8 @@ type SortDirection = 'asc' | 'desc';
 
 export function ProductCatalog() {
   const { toast } = useToast();
-  const { isPaid } = useProfile();
-  const startImport = () => (isPaid ? fileInputRef.current?.click() : promptUpgrade());
+  const { isPro } = useProfile();
+  const startImport = () => (isPro ? fileInputRef.current?.click() : promptUpgrade('product_import'));
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [options, setOptions] = useState<DbSellingOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -298,7 +298,7 @@ export function ProductCatalog() {
                   <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFile} className="hidden" />
                   <Button variant="outline" onClick={startImport} disabled={importing}>
                     <FileSpreadsheet className="h-4 w-4 mr-2" />
-                    {importing ? 'Importing…' : isPaid ? 'Import' : 'Import (Pro)'}
+                    {importing ? 'Importing…' : isPro ? 'Import' : 'Import (Pro)'}
                   </Button>
                   <Button onClick={handleAddNew}>
                     <Plus className="h-4 w-4 mr-2" />

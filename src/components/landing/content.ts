@@ -228,7 +228,7 @@ export const PRICING = {
       price: '$10',
       per: '/mo',
       limit: 'Everything in Free, with the full history.',
-      features: ['Full permit history and operator scores', 'Unlimited deals and products', 'Data and product import'],
+      features: ['Full permit history', 'Operator scores for every operator', 'Unlimited deals and products'],
       cta: 'Get Starter',
     },
     {
@@ -237,7 +237,7 @@ export const PRICING = {
       price: '$20',
       per: '/mo',
       limit: 'Everything in Starter.',
-      features: ['Full permit history and operator scores', 'Unlimited deals and products', 'Data and product import'],
+      features: ['Import your own permit files', 'Import your product catalog from a spreadsheet'],
       cta: 'Get Pro',
       featured: true,
     },
@@ -269,7 +269,7 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
   },
   {
     q: 'What does the Free plan include?',
-    a: 'Free shows permits from the last 30 days, with up to 3 deals and 3 products. Starter is $10 a month and Pro is $20 a month. Both give the full history, scores and no limits.',
+    a: 'Free shows permits from the last 30 days, with up to 3 deals and 3 products. Starter is $10 a month and Pro is $20 a month. Both give the full history, scores and no limits. Pro adds importing your own permit files and product catalog.',
   },
   {
     q: 'The OCC publishes this data. Why use MidconSight?',

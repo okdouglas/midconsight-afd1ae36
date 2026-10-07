@@ -132,7 +132,7 @@ export function CompanyPermitsMap({ permits, windowDays }: Props) {
           <div className="absolute inset-0 z-[500] flex flex-col items-center justify-center gap-2 text-center px-6">
             <Lock className="h-6 w-6 text-muted-foreground" />
             <div className="text-sm font-medium">The permit map is on the paid plans</div>
-            <Button size="sm" onClick={promptUpgrade}>Upgrade</Button>
+            <Button size="sm" onClick={() => promptUpgrade('company_map')}>Upgrade</Button>
           </div>
         )}
       </div>

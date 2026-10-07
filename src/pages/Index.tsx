@@ -47,7 +47,7 @@ function UpgradePrompt({ label, tier, onUpgradeClick }: { label: string; tier: '
       <Lock className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
       <h2 className="text-xl font-semibold mb-2">{label} is on the {info.name} plan</h2>
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-        Importing your own permit data is part of the paid plans. The free plan shows the last 30 days of permits.
+        Importing your own permit files is on the Pro plan. Starter and Free use the shared Oklahoma feed, which updates every Monday.
       </p>
       <Button onClick={onUpgradeClick}>Upgrade to {info.name} ({info.price})</Button>
     </div>
@@ -125,7 +125,7 @@ const Index = () => {
   };
   // The database stops a free account at its limit (3 deals, 3 products); show the upgrade dialog.
   useEffect(() => {
-    const onLimit = () => openUpgradeDialog('free_limit');
+    const onLimit = (e: Event) => openUpgradeDialog((e as CustomEvent<{ source?: string }>).detail?.source ?? 'free_limit');
     window.addEventListener('midconsight:free-limit', onLimit);
     return () => window.removeEventListener('midconsight:free-limit', onLimit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
