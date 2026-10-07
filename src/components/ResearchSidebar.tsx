@@ -45,6 +45,7 @@ import {
 import { ensureRealCompany } from '@/lib/research-company';
 import { isNewDrill, permitDate } from '@/lib/scoring';
 import { toast } from 'sonner';
+import { STAGES } from '@/lib/deal-stages';
 
 type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
 
@@ -235,14 +236,14 @@ export function ResearchSidebar({
       await saveDeal({
         company_id: companyId,
         name: dealName,
-        stage: 'contacted', // Start in Contacted (30%)
+        stage: 'contacted', // Start in Contacted (30%), see STAGES in deal-stages.ts
         value: dealValue,
         expected_close_date: expectedClose.toISOString().split('T')[0],
         status: 'open',
         linked_permit_ids: allPermits.map(p => p.id),
         notes: dealNotes || `Created from Research Desk. ${allPermits.length} permits linked.`,
         selling_option_id: selectedProductId,
-        probability: 30, // Contacted stage probability
+        probability: STAGES.contacted.probability,
       });
 
       toast.success('Deal created in pipeline!');
