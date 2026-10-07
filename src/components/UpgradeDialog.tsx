@@ -27,9 +27,9 @@ const TIERS = [
     yearPrice: '$100',
     annual: '$100/yr, two months free',
     features: [
-      'Live permit feed, no 30-day delay',
-      'Lead Research triage',
-      'Manual data import',
+      'Full permit history, not just 30 days',
+      'Unlimited deals and products',
+      'Unlimited data import',
     ],
   },
   {
@@ -40,8 +40,7 @@ const TIERS = [
     annual: '$200/yr, two months free',
     features: [
       'Everything in Starter',
-      'Companies and deal pipeline',
-      'Product catalog and matching',
+      'Built for teams that work the pipeline daily',
     ],
   },
 ] as const;

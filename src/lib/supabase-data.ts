@@ -355,7 +355,10 @@ export async function saveDeal(deal: Omit<DbDeal, 'id' | 'user_id' | 'created_at
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    announceFreeLimit(error);
+    throw error;
+  }
   return data as DbDeal;
 }
 
@@ -572,6 +575,15 @@ export async function importFile(
   const existingApis = new Set(existingPermits.map(p => p.api));
   const newPermits = importResult.permits.filter(p => !existingApis.has(p.api));
   
+  // Free accounts can import a small file to try the workflow.
+  if (newPermits.length > FREE_IMPORT_ROW_LIMIT) {
+    const { data: prof } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle();
+    if ((prof?.plan ?? 'free') === 'free') {
+      window.dispatchEvent(new CustomEvent('midconsight:free-limit'));
+      throw new Error(`The free plan imports up to ${FREE_IMPORT_ROW_LIMIT} permits at a time. This file has ${newPermits.length}.`);
+    }
+  }
+
   // Track duplicates as skipped rows
   const duplicatePermits = importResult.permits.filter(p => existingApis.has(p.api));
   for (const dup of duplicatePermits) {
@@ -746,6 +758,20 @@ export async function getSellingOptions(): Promise<DbSellingOption[]> {
   return (data || []) as DbSellingOption[];
 }
 
+/** Raised by the database when a free account tries to go past its limit (3 deals, 3 products). */
+export function isFreeLimitError(err: unknown): boolean {
+  const msg = typeof err === 'object' && err && 'message' in err ? String((err as { message: unknown }).message) : String(err);
+  return msg.includes('FREE_LIMIT');
+}
+
+function announceFreeLimit(err: unknown) {
+  if (isFreeLimitError(err) && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('midconsight:free-limit'));
+  }
+}
+
+export const FREE_IMPORT_ROW_LIMIT = 100;
+
 export async function saveSellingOption(
   option: Omit<DbSellingOption, 'id' | 'user_id' | 'created_at' | 'updated_at'>
 ): Promise<DbSellingOption> {
@@ -761,7 +787,10 @@ export async function saveSellingOption(
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    announceFreeLimit(error);
+    throw error;
+  }
   return data as DbSellingOption;
 }
 

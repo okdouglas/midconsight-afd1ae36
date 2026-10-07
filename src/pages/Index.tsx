@@ -26,11 +26,11 @@ import { AccountSettings } from '@/components/AccountSettings';
 const NAV_ITEMS = [
   { value: 'dashboard', label: 'Dashboard', icon: BarChart3, minPlan: null },
   { value: 'map', label: 'Map', icon: Map, minPlan: null },
-  { value: 'companies', label: 'Companies', icon: Users, minPlan: 'pro' },
-  { value: 'research', label: 'Lead Research', icon: Search, minPlan: 'starter' },
-  { value: 'deals', label: 'Deals', icon: DollarSign, minPlan: 'pro' },
-  { value: 'products', label: 'Products', icon: Package, minPlan: 'pro' },
-  { value: 'data', label: 'Data', icon: Database, minPlan: 'starter' },
+  { value: 'companies', label: 'Companies', icon: Users, minPlan: null },
+  { value: 'research', label: 'Lead Research', icon: Search, minPlan: null },
+  { value: 'deals', label: 'Deals', icon: DollarSign, minPlan: null },
+  { value: 'products', label: 'Products', icon: Package, minPlan: null },
+  { value: 'data', label: 'Data', icon: Database, minPlan: null },
   { value: 'account', label: 'Account', icon: Settings, minPlan: null },
 ] as const;
 
@@ -126,6 +126,13 @@ const Index = () => {
     setUpgradeSource(source);
     setUpgradeDialogOpen(true);
   };
+  // The database stops a free account at its limit (3 deals, 3 products); show the upgrade dialog.
+  useEffect(() => {
+    const onLimit = () => openUpgradeDialog('free_limit');
+    window.addEventListener('midconsight:free-limit', onLimit);
+    return () => window.removeEventListener('midconsight:free-limit', onLimit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const activeItem = NAV_ITEMS.find((n) => n.value === activeTab);
   const activeLabel = activeItem?.label ?? 'Dashboard';
   const isGatedTab = !!activeItem && !canAccess(activeItem.minPlan);
@@ -217,7 +224,7 @@ const Index = () => {
               {!isPaid && (
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-4 py-2.5 text-sm text-muted-foreground">
                   <Clock className="h-4 w-4 shrink-0 text-primary" />
-                  Free plan shows permits 30+ days old. <button onClick={() => openUpgradeDialog('dashboard_banner')} className="text-primary font-medium hover:underline">Upgrade</button> to see this week's filings live.
+                  Free plan shows permits from the last 30 days. <button onClick={() => openUpgradeDialog('dashboard_banner')} className="text-primary font-medium hover:underline">Upgrade</button> for full history and more.
                 </div>
               )}
               {permits.length === 0 ? (
@@ -278,7 +285,7 @@ const Index = () => {
               )}
             </TabsContent>
 
-            {/* Map Tab - Full featured with filters (free plan sees permits 30+ days old, enforced server-side) */}
+            {/* Map Tab - Full featured with filters (free plan sees the last 30 days, enforced server-side) */}
             <TabsContent value="map" className="space-y-6 mt-0">
               <div className="h-[700px]">
                 <PermitMapAdvanced permits={permits} showFilters={true} />
