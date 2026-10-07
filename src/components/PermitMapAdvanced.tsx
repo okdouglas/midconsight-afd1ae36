@@ -205,7 +205,6 @@ export function PermitMapAdvanced({
   const [startDate, setStartDate] = useState<Date | undefined>(getDefaultStartDate());
   const [endDate, setEndDate] = useState<Date | undefined>(getDefaultEndDate());
   const [selectedStages, setSelectedStages] = useState<LifecycleStage[]>([]);
-  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([]);
   const [cursorPosition, setCursorPosition] = useState<{ lat: number; lng: number } | null>(null);
   const [viewportOperators, setViewportOperators] = useState<{ name: string; count: number }[]>([]);
 
@@ -277,23 +276,6 @@ export function PermitMapAdvanced({
       .filter((opt) => opt.count > 0);
   }, [processedPermits]);
 
-  // Only meaningful for active-producer / injection wells — an oil well
-  // and a water-injection well answer a different question than "what
-  // stage is this well in," so this stays a separate facet rather than
-  // folding into Stage.
-  const productTypeFilterOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    processedPermits.forEach((p) => {
-      const stage = classifyLifecycleStage(p);
-      if (stage !== 'active' && stage !== 'injection') return;
-      const status = (p.rbdmsWellStatus || '').trim();
-      if (!status) return;
-      counts.set(status, (counts.get(status) || 0) + 1);
-    });
-    return Array.from(counts.entries())
-      .map(([value, count]) => ({ value, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [processedPermits]);
 
   // Compute filtered permits
   const filteredPermits = useMemo(() => {
@@ -328,13 +310,8 @@ export function PermitMapAdvanced({
       filtered = filtered.filter((p) => selectedStages.includes(classifyLifecycleStage(p)));
     }
 
-    // Product type filter — sub-facet within active/injection wells only
-    if (selectedProductTypes.length > 0) {
-      filtered = filtered.filter((p) => selectedProductTypes.includes((p.rbdmsWellStatus || '').trim()));
-    }
-
     return filtered;
-  }, [processedPermits, startDate, endDate, searchQuery, selectedStages, selectedProductTypes]);
+  }, [processedPermits, startDate, endDate, searchQuery, selectedStages]);
 
   // Valid permits (with coordinates)
   const validPermits = useMemo(() => 
@@ -587,13 +564,6 @@ export function PermitMapAdvanced({
     );
   };
 
-  const toggleProductType = (type: string) => {
-    setSelectedProductTypes(prev =>
-      prev.includes(type)
-        ? prev.filter(t => t !== type)
-        : [...prev, type]
-    );
-  };
 
   // Handle layer change
   const handleLayerChange = (value: string) => {
@@ -758,28 +728,6 @@ export function PermitMapAdvanced({
                 )}
               </div>
 
-              {productTypeFilterOptions.length > 0 && (
-                <div className="space-y-2">
-                  <span className="text-xs text-muted-foreground">Product type</span>
-                  <div className="space-y-1.5">
-                    {productTypeFilterOptions.map(opt => (
-                      <div key={opt.value} className="flex items-center justify-between gap-2">
-                        <div className="flex items-center space-x-2 min-w-0">
-                          <Checkbox
-                            id={`ptype-${opt.value}`}
-                            checked={selectedProductTypes.includes(opt.value)}
-                            onCheckedChange={() => toggleProductType(opt.value)}
-                          />
-                          <label htmlFor={`ptype-${opt.value}`} className="text-xs cursor-pointer truncate">
-                            {opt.value}
-                          </label>
-                        </div>
-                        <Badge variant="secondary" className="text-[10px] shrink-0">{opt.count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* D. Export Engine */}
@@ -897,7 +845,7 @@ export function PermitMapAdvanced({
         <div className="absolute top-28 right-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000] shadow-lg">
           <div className="font-semibold">{validPermits.length} Permits Mapped</div>
           <div className="text-muted-foreground">of {permits.length} total</div>
-          {(selectedStages.length > 0 || selectedProductTypes.length > 0 || searchQuery) && (
+          {(selectedStages.length > 0 || searchQuery) && (
             <div className="text-primary mt-1 text-xs">Filters active</div>
           )}
         </div>

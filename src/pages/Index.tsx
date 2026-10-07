@@ -15,7 +15,6 @@ import { DealsTab } from '@/components/DealsTab';
 import { ProductCatalog } from '@/components/ProductCatalog';
 import { ResearchDesk } from '@/components/ResearchDesk';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
-import { SCORE_WINDOWS } from '@/lib/scoring';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
@@ -121,7 +120,6 @@ const Index = () => {
     newThisWeekPermits,
     stats,
     windowDays,
-    setWindowDays,
     hiddenCompanyCount,
   } = useSupabaseData();
 
@@ -223,19 +221,6 @@ const Index = () => {
         <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-10">
           <h1 className="font-semibold text-lg tracking-tight">{activeLabel}</h1>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground hidden sm:inline" id="score-window-label">Lookback</span>
-              <Select value={String(windowDays)} onValueChange={(v) => setWindowDays(Number(v))}>
-                <SelectTrigger className="h-8 w-[130px] text-sm" aria-labelledby="score-window-label">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SCORE_WINDOWS.map((w) => (
-                    <SelectItem key={w.days} value={String(w.days)}>Last {w.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
             <span className="text-sm text-muted-foreground tabular-nums">{stats.totalPermits} permits loaded</span>
           </div>
         </header>

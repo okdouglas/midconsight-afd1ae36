@@ -12,7 +12,7 @@ import {
   type DbDataset
 } from '@/lib/supabase-data';
 import type { Permit } from '@/lib/schema-mapping';
-import { computeOperatorStats, DEFAULT_WINDOW_DAYS, SCORE_WINDOWS } from '@/lib/scoring';
+import { computeOperatorStats, DEFAULT_WINDOW_DAYS } from '@/lib/scoring';
 
 // Frontend-friendly types (matching old indexeddb types for compatibility)
 export interface Company {
@@ -115,18 +115,6 @@ function mapDbDatasetToDataset(db: DbDataset): Dataset {
   };
 }
 
-const WINDOW_STORAGE_KEY = 'midconsight.scoreLookbackDays.v3';
-
-function loadWindowDays(): number {
-  try {
-    const raw = Number(localStorage.getItem(WINDOW_STORAGE_KEY));
-    if (SCORE_WINDOWS.some((w) => w.days === raw)) return raw;
-  } catch {
-    // storage unavailable, use the default
-  }
-  return DEFAULT_WINDOW_DAYS;
-}
-
 /**
  * Builds the company list live from the permits you can see.
  *
@@ -189,7 +177,7 @@ export function useSupabaseData() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [permits, setPermits] = useState<Permit[]>([]);
   const [realCompanies, setRealCompanies] = useState<Company[]>([]);
-  const [windowDays, setWindowDaysState] = useState<number>(loadWindowDays);
+  const windowDays = DEFAULT_WINDOW_DAYS;
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -233,15 +221,6 @@ export function useSupabaseData() {
   };
 
   // Computed values
-  const setWindowDays = useCallback((days: number) => {
-    setWindowDaysState(days);
-    try {
-      localStorage.setItem(WINDOW_STORAGE_KEY, String(days));
-    } catch {
-      // storage unavailable, the choice just will not persist
-    }
-  }, []);
-
   const { companies, hiddenCount: hiddenCompanyCount } = useMemo(
     () => buildLiveCompanies(permits, realCompanies, deals, windowDays),
     [permits, realCompanies, deals, windowDays],
@@ -267,7 +246,6 @@ export function useSupabaseData() {
     deals,
     loading,
     windowDays,
-    setWindowDays,
     hiddenCompanyCount,
     refresh,
     removeDataset,
