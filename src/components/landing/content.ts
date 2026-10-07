@@ -6,6 +6,8 @@
  * (1,394 permits, Oct 2024 to Oct 7, 2026). Update FACTS when the data moves.
  */
 
+import { ACTIVE_DAYS, HOT_MIN, WARM_MIN } from '../../lib/scoring';
+
 export const SITE = {
   url: 'https://midconsight.com/',
   title: 'Oklahoma Drilling Permits, Scored and Mapped | MidconSight',
@@ -18,17 +20,6 @@ export const SITE = {
 } as const;
 
 export const OCC_DATA_URL = 'https://oklahoma.gov/occ/divisions/oil-gas/oil-gas-data';
-
-export const HERO = {
-  eyebrow: 'Oklahoma drilling permits',
-  h1Lead: 'New permits, scored and on a map.',
-  h1Accent: 'Every week.',
-  support:
-    'Oklahoma drilling permits from the Corporation Commission, ranked as leads for land and business development teams.',
-  microcopy: 'Import runs every Monday. No credit card to start.',
-  mapAlt: 'MidconSight county map of new Oklahoma drilling permits, hot leads in red',
-  mapCaption: 'Real permits, Oklahoma Corporation Commission filings, imported through Oct 5.',
-} as const;
 
 /** Counted from the shared feed in the database, as of Oct 7, 2026: two years of new-drill and amendment permits, scored with rule v4.1 (12 month lookback). Permit counts per tier are all of an operator's feed permits. */
 export const FACTS = {
@@ -47,9 +38,20 @@ export const FACTS = {
   coldOperators: 96,
 } as const;
 
+export const HERO = {
+  eyebrow: 'Oklahoma drilling permits',
+  h1Lines: ['Know which operators', 'are about to spend.'],
+  h1Accent: 'Call them first.',
+  support:
+    'MidconSight scores every new Oklahoma drilling permit and rolls it up by operator. You see who is ramping up, so you call before the rig shows up.',
+  microcopy: 'Import runs every Monday. No credit card to start.',
+  mapAlt: 'MidconSight county map of new Oklahoma drilling permits, hot leads in red',
+  mapCaption: `Real permits, Oklahoma Corporation Commission filings, imported through ${FACTS.asOf}.`,
+} as const;
+
 export const KPIS = [
   { value: FACTS.permits.toLocaleString('en-US'), label: 'permits on the map' },
-  { value: FACTS.counties, label: 'counties with a filing' },
+  { value: FACTS.hotOperators, label: 'Hot operators this week' },
   { value: FACTS.monthsOfHistory, label: 'months of history' },
   { value: FACTS.latestBatch, label: 'in the latest import' },
 ] as const;
@@ -58,22 +60,27 @@ export const KPI_CAPTION = `Shared feed, ${FACTS.firstImport} to ${FACTS.asOf}. 
 
 export const WEEK_START = {
   h2: 'Start the week with a list, not a search.',
-  lead: 'Monday morning, the new permits are already in. Sorted, scored and on the map.',
+  lead: 'The Corporation Commission posts filings daily. MidconSight imports them every Monday, so the list is ready when you sit down.',
   facts: [
     {
       n: '01',
       title: 'Imported every Monday.',
-      body: 'New Intent to Drill filings from the Corporation Commission land in one list.',
+      body: 'New Intent to Drill filings arrive in one batch.',
     },
     {
       n: '02',
       title: 'Scored on arrival.',
-      body: 'Hot leads sort first. Warm leads sort next.',
+      body: 'Hot operators sort first. Warm operators sort next.',
     },
     {
       n: '03',
       title: 'Mapped by county.',
       body: 'Open the map and see where the week’s permits sit.',
+    },
+    {
+      n: '04',
+      title: 'The call list is yours.',
+      body: 'Pick the hot ones. Research each, then make the call.',
     },
   ],
   ladderTitle: 'How the page reads',
@@ -91,6 +98,8 @@ export const LEAD = {
   h2: 'Oklahoma Intent to Drill filings, scored hot or warm',
   lead: 'Every filing carries its operator’s score. Hot means actively permitting, with real volume on the way. Warm means wells still in the pipeline. Cold means most of the pipeline has played out.',
   eyebrow: 'A real lead',
+  headline: `${FACTS.hotOperators} of ${FACTS.operators} operators are hot`,
+  reason: `Hot means a pipeline of ${HOT_MIN} or more expected wells and a permit in the last ${ACTIVE_DAYS} days. This operator filed the permit below on Oct 2.`,
   score: 'Hot',
   operator: 'Camino Natural Resources LLC',
   well: 'Hartley S 0707 30-19-1WXH',
@@ -105,52 +114,6 @@ export const LEAD = {
   source: 'Oklahoma Corporation Commission filing, imported Oct 5.',
   barTitle: `The ${FACTS.permits.toLocaleString('en-US')} permits in the shared feed`,
   barCaption: `As of ${FACTS.asOf}.`,
-} as const;
-
-export const MAP_SECTION = {
-  h2: 'Every permit on a county map',
-  lead: 'Hot in red. Warm in amber. Cold in blue. Click a dot for the operator, the API number, the county and the approval date.',
-  legend: [
-    { tone: 'hot', label: 'Hot' },
-    { tone: 'warm', label: 'Warm' },
-    { tone: 'steady', label: 'Cold' },
-  ],
-  note: 'Filter the map. Export what you see to CSV or Excel.',
-  popup: {
-    title: 'Wilson 4-29',
-    rows: [
-      ['Operator', 'KODA OPERATING LLC'],
-      ['API', '35071004170000'],
-      ['County', 'KAY'],
-      ['Well type', 'OG'],
-      ['Approval date', '2026-09-28'],
-    ],
-  },
-} as const;
-
-export const DATA_SECTION = {
-  h2: 'County. Operator. Numbers.',
-  lead: 'Three columns do most of the work. These are the real ones from the shared feed.',
-  countiesTitle: 'Permits by county',
-  counties: [
-    ['Canadian', 17],
-    ['Custer', 16],
-    ['Roger Mills', 11],
-    ['Grady', 8],
-    ['Oklahoma', 7],
-    ['Kay', 6],
-    ['Kingfisher', 6],
-    ['Garvin', 5],
-  ],
-  operatorsTitle: 'Most active operators',
-  operators: [
-    ['Mewbourne Oil Company', 67],
-    ['Validus Energy II Midcon LLC', 60],
-    ['Continental Resources Inc', 58],
-    ['Devon Energy Production Company LP', 43],
-    ['Coterra Energy Operating Co.', 23],
-  ],
-  caption: `Two years of permits, ${FACTS.firstImport} to ${FACTS.asOf}. Counts as of ${FACTS.asOf}.`,
 } as const;
 
 export const COMPANIES = {
@@ -174,39 +137,6 @@ export const RESEARCH = {
       plan: 'Every plan',
     },
   ],
-} as const;
-
-export const MONDAY = {
-  h2: 'Import runs every Monday.',
-  lead: 'The Corporation Commission posts filings daily. MidconSight imports them once a week and sorts them for you.',
-  title: 'How a Monday goes',
-  steps: [
-    { n: '01', when: 'Monday', title: 'The import runs.', body: 'New Oklahoma filings arrive in one batch.' },
-    { n: '02', when: 'Then', title: 'The list is scored.', body: 'Hot first. Warm next. Everything on the map.' },
-    { n: '03', when: 'Then', title: 'The call list is yours.', body: 'Pick the hot ones. Research each, then make the call.' },
-  ],
-} as const;
-
-export const VOICE = {
-  h2: 'Voice you can count on.',
-  lines: [
-    { k: 'County.', v: 'Where the well will be.' },
-    { k: 'Operator.', v: 'Who filed it.' },
-    { k: 'Numbers.', v: 'Depth, dates and API. As filed.' },
-    { k: 'Weekly.', v: 'The import runs every Monday.' },
-  ],
-  sceneLabel: 'A pumpjack silhouetted against a dusk sky over an Oklahoma field',
-} as const;
-
-export const PLAIN = {
-  h2: 'Say it plain.',
-  lines: [
-    'Short sentences.',
-    'Numbers over adjectives.',
-    'Weekly, not real time.',
-    'Oklahoma, nothing else.',
-  ],
-  last: 'Facts you can act on.',
 } as const;
 
 export const PRICING = {
@@ -261,7 +191,7 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
   },
   {
     q: 'What does a lead score mean?',
-    a: 'Each permit is weighted by how likely its well is still on the way, using the real permit-to-production timeline we measured from Oklahoma Corporation Commission data. An operator’s pipeline is the sum. Hot is a pipeline of 1.6 wells or more with a permit in the last 30 days. Warm is 0.75 or more. Cold is everything else.',
+    a: `Each permit is weighted by how likely its well is still on the way, using the real permit-to-production timeline we measured from Oklahoma Corporation Commission data. An operator’s pipeline is the sum. Hot is a pipeline of ${HOT_MIN} wells or more with a permit in the last ${ACTIVE_DAYS} days. Warm is ${WARM_MIN} or more. Cold is everything else.`,
   },
   {
     q: 'What can I do with a lead?',
@@ -275,7 +205,11 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
     q: 'The OCC publishes this data. Why use MidconSight?',
     a: "The OCC posts the filings. MidconSight sorts each week's permits into scored leads on a map, with operators, companies and deals tracked beside them. Source files are the OCC's.",
   },
-  { q: 'Who builds MidconSight?', a: 'Mayberry Advisory.' },
+  {
+    q: 'Can I cancel any time?',
+    a: 'Yes. Cancel from the Account page. Your access runs to the end of the period you paid for.',
+  },
+  { q: 'How do I pay?', a: 'By card, through Stripe.' },
 ];
 
 export const CLOSING = {
@@ -295,7 +229,6 @@ export const FOOTER = {
   line: 'MidconSight is built by Mayberry Advisory.',
   links: [
     { href: '#platform', label: 'Platform' },
-    { href: '#how-it-works', label: 'How it works' },
     { href: '#pricing', label: 'Pricing' },
     { href: '#faq', label: 'Questions' },
   ],
@@ -303,7 +236,6 @@ export const FOOTER = {
 
 export const NAV_LINKS = [
   { href: '#platform', label: 'Platform' },
-  { href: '#how-it-works', label: 'How it works' },
   { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
 ] as const;
@@ -315,9 +247,9 @@ export const SCORING = {
   lead: 'No black box. We measured how long Oklahoma wells take to go from permit to first production. A permit is worth the chance its well is still coming, and that fades on the measured curve. An operator’s pipeline is the sum of its permits.',
   headers: { tier: 'Tier', rule: 'Pipeline (expected wells)', meaning: 'What it looks like' },
   tiers: [
-    { tone: 'hot', name: 'Hot', rule: '1.6 or more, with a permit in the last 30 days', meaning: '3 permits this week, or 2 this month' },
-    { tone: 'warm', name: 'Warm', rule: '0.75 or more', meaning: '3 permits 3 months ago, or 1 this month' },
-    { tone: 'steady', name: 'Cold', rule: 'Under 0.75', meaning: '1 permit 6 months ago' },
+    { tone: 'hot', name: 'Hot', rule: `${HOT_MIN} or more, with a permit in the last ${ACTIVE_DAYS} days`, meaning: '3 permits this week, or 2 this month' },
+    { tone: 'warm', name: 'Warm', rule: `${WARM_MIN} or more`, meaning: '3 permits 3 months ago, or 1 this month' },
+    { tone: 'steady', name: 'Cold', rule: `Under ${WARM_MIN}`, meaning: '1 permit 6 months ago' },
   ],
   example: {
     label: 'One real example',

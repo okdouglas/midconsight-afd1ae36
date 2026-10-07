@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,17 +7,30 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MailCheck } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
-const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
+const passwordSchema = z.string().min(8, 'Password must be at least 8 characters');
 const nameSchema = z.string().min(1, 'Name is required');
 
 export default function Auth() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const plan = searchParams.get('plan');
+  const paidPlan = plan === 'starter' || plan === 'pro' ? plan : null;
+  const isReset = searchParams.get('mode') === 'reset';
+  const defaultTab = searchParams.get('mode') === 'signup' ? 'signup' : 'signin';
+  const afterAuthPath = paidPlan ? `/app?upgrade=${paidPlan}` : '/app';
+  const [view, setView] = useState<'tabs' | 'forgot'>('tabs');
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+  const [recovery, setRecovery] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetError, setResetError] = useState('');
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,19 +41,26 @@ export default function Auth() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        navigate('/app', { replace: true });
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecovery(true);
+        return;
+      }
+      if (session && !isReset) {
+        navigate(afterAuthPath, { replace: true });
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate('/app', { replace: true });
+      setSessionChecked(true);
+      if (session && isReset) {
+        setRecovery(true);
+      } else if (session) {
+        navigate(afterAuthPath, { replace: true });
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, afterAuthPath, isReset]);
 
   const validateForm = (requireName: boolean) => {
     const newErrors: { email?: string; password?: string; fullName?: string } = {};
@@ -99,10 +119,62 @@ export default function Auth() {
       toast.success('Account created. Taking you to your dashboard.');
     } else {
       // Email confirmation is on: no session until the link in the email is clicked.
-      toast.success(`Check your email. We sent a confirmation link to ${email}.`);
+      setPendingEmail(email);
     }
     
     setLoading(false);
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail) return;
+    setResending(true);
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: pendingEmail,
+      options: { emailRedirectTo: `${window.location.origin}/` },
+    });
+    if (error) toast.error(error.message);
+    else toast.success('Email sent again.');
+    setResending(false);
+  };
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = emailSchema.safeParse(email);
+    if (!result.success) {
+      setErrors({ email: result.error.errors[0].message });
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth?mode=reset`,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('If that email has an account, a reset link is on its way.');
+      setView('tabs');
+    }
+    setLoading(false);
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const result = passwordSchema.safeParse(newPassword);
+    if (!result.success) {
+      setResetError(result.error.errors[0].message);
+      return;
+    }
+    setResetError('');
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setLoading(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success('Password updated.');
+    navigate('/app', { replace: true });
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -140,7 +212,88 @@ export default function Auth() {
           <CardDescription>Permit Intelligence Platform</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue={new URLSearchParams(window.location.search).get('mode') === 'signup' ? 'signup' : 'signin'} className="space-y-4">
+          {recovery ? (
+            <form onSubmit={handleReset} className="space-y-4">
+              <h2 className="text-lg font-semibold">Set a new password</h2>
+              <div className="space-y-2">
+                <Label htmlFor="reset-password">New password</Label>
+                <Input
+                  id="reset-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => { setNewPassword(e.target.value); setResetError(''); }}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">At least 8 characters.</p>
+                {resetError && <p className="text-sm text-destructive">{resetError}</p>}
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update password
+              </Button>
+            </form>
+          ) : isReset && !sessionChecked ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin" aria-label="Loading" /></div>
+          ) : isReset ? (
+            <div className="space-y-4 text-center" role="status">
+              <p className="text-sm text-muted-foreground">
+                This reset link has expired or was already used. Ask for a new one.
+              </p>
+              <Button className="w-full" onClick={() => { navigate('/auth', { replace: true }); setView('forgot'); }}>
+                Send a new link
+              </Button>
+            </div>
+          ) : pendingEmail ? (
+            <div className="space-y-4 text-center" role="status">
+              <MailCheck className="h-10 w-10 mx-auto text-primary" aria-hidden="true" />
+              <h2 className="text-lg font-semibold">Check your email</h2>
+              <p className="text-sm text-muted-foreground">
+                We sent a confirmation link to <span className="font-medium text-foreground">{pendingEmail}</span>.
+                Open it to finish setting up your account.
+              </p>
+              <Button variant="outline" className="w-full" onClick={handleResend} disabled={resending}>
+                {resending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Resend email
+              </Button>
+              <button
+                type="button"
+                onClick={() => setPendingEmail(null)}
+                className="text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+              >
+                Use a different email
+              </button>
+            </div>
+          ) : view === 'forgot' ? (
+            <form onSubmit={handleForgot} className="space-y-4">
+              <h2 className="text-lg font-semibold">Reset your password</h2>
+              <p className="text-sm text-muted-foreground">Enter your email. We will send you a link to set a new password.</p>
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email">Email</Label>
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setErrors({}); }}
+                  required
+                />
+                {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Send reset link
+              </Button>
+              <button
+                type="button"
+                onClick={() => setView('tabs')}
+                className="block w-full text-center text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+              >
+                Back to sign in
+              </button>
+            </form>
+          ) : (
+          <Tabs defaultValue={defaultTab} className="space-y-4">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -182,6 +335,13 @@ export default function Auth() {
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign In
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => { setErrors({}); setView('forgot'); }}
+                  className="block w-full text-center text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                >
+                  Forgot password?
+                </button>
               </form>
             </TabsContent>
 
@@ -240,6 +400,7 @@ export default function Auth() {
                     }}
                     required
                   />
+                  <p className="text-xs text-muted-foreground">At least 8 characters.</p>
                   {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
                 </div>
                 <div className="flex items-start gap-2">
@@ -259,6 +420,7 @@ export default function Auth() {
               </form>
             </TabsContent>
           </Tabs>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -22,6 +22,10 @@ export function Pricing() {
         <div className="mt-14 grid gap-5 lg:grid-cols-3">
           {PRICING.plans.map((p) => {
             const featured = 'featured' in p && p.featured;
+            const paid = p.id !== 'free';
+            const href = cta.signedIn
+              ? paid ? `/app?upgrade=${p.id}` : '/app'
+              : paid ? `/auth?mode=signup&plan=${p.id}` : '/auth?mode=signup';
             return (
               <article
                 key={p.id}
@@ -44,10 +48,10 @@ export function Pricing() {
                   ))}
                 </ul>
                 <Link
-                  to={cta.href}
+                  to={href}
                   className={`lp-btn mt-8 ${featured ? 'lp-btn-primary' : 'lp-btn-outline'}`}
                 >
-                  {cta.signedIn ? 'Go to dashboard' : p.cta}
+                  {cta.signedIn ? (paid ? `Upgrade to ${p.name}` : 'Go to dashboard') : p.cta}
                 </Link>
               </article>
             );

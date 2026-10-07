@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
-import { Database, BarChart3, Users, Map, DollarSign, LogOut, Settings, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
+import { Database, BarChart3, Users, Map, DollarSign, LogOut, Settings, Package, Search, ArrowLeft, Lock, Clock, Menu } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
@@ -21,6 +21,8 @@ import { incrementPaywallHits, markActivated } from '@/lib/supabase-data';
 import { toast } from 'sonner';
 import { UpgradeDialog } from '@/components/UpgradeDialog';
 import { AccountSettings } from '@/components/AccountSettings';
+import { FirstRunChecklist } from '@/components/FirstRunChecklist';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 
 const NAV_ITEMS = [
   { value: 'dashboard', label: 'Dashboard', icon: BarChart3, minPlan: null },
@@ -199,6 +201,8 @@ const Index = () => {
     setUpgradeSource(source);
     setUpgradeDialogOpen(true);
   };
+  const [navOpen, setNavOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   // The database stops a free account at its limit (3 deals, 3 products); show the upgrade dialog.
   useEffect(() => {
     const onLimit = (e: Event) => openUpgradeDialog((e as CustomEvent<{ source?: string }>).detail?.source ?? 'free_limit');
@@ -215,6 +219,19 @@ const Index = () => {
     window.addEventListener('midconsight:goto-tab', onGoto);
     return () => window.removeEventListener('midconsight:goto-tab', onGoto);
   }, []);
+
+  // /app?upgrade=starter|pro (from the landing page or sign-up): open the plan dialog once, then drop the param.
+  useEffect(() => {
+    const plan = searchParams.get('upgrade');
+    if (plan !== 'starter' && plan !== 'pro') return;
+    if (profileLoading) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('upgrade');
+    setSearchParams(next, { replace: true });
+    const alreadyHas = plan === 'starter' ? hasStarter : isPro;
+    if (!alreadyHas) openUpgradeDialog(`plan_link_${plan}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, profileLoading]);
   const activeItem = NAV_ITEMS.find((n) => n.value === activeTab);
   const activeLabel = activeTab === 'account' ? 'Account' : activeItem?.label ?? 'Dashboard';
   const isGatedTab = !!activeItem && !canAccess(activeItem.minPlan);
@@ -248,10 +265,8 @@ const Index = () => {
     }
   }, [permits.length]);
 
-  return (
-    <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-sidebar text-sidebar-foreground flex flex-col h-screen sticky top-0 border-r border-sidebar-border">
+  const renderSidebar = (onNavigate?: () => void) => (
+    <>
         <div className="flex items-center px-4 h-16 border-b border-sidebar-border shrink-0">
           <Logo variant="reversed" height={26} />
         </div>
@@ -263,8 +278,9 @@ const Index = () => {
             return (
               <button
                 key={item.value}
-                onClick={() => setActiveTab(item.value)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
+                onClick={() => { setActiveTab(item.value); onNavigate?.(); }}
+                aria-current={isActive ? 'page' : undefined}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${
                   isActive
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
                     : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
@@ -272,7 +288,7 @@ const Index = () => {
               >
                 <item.icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-sidebar-ring' : ''}`} />
                 <span className="flex-1 text-left">{item.label}</span>
-                {showLock && <Lock className="h-3 w-3 shrink-0 text-sidebar-foreground/40" />}
+                {showLock && <Lock className="h-3 w-3 shrink-0 text-sidebar-foreground/40" aria-label="Locked on your plan" />}
               </button>
             );
           })}
@@ -281,7 +297,7 @@ const Index = () => {
         <div className="border-t border-sidebar-border p-2.5 space-y-2 shrink-0">
           <Link
             to="/"
-            className="flex items-center gap-2 px-3 py-2 rounded-md text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-md text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to site
@@ -289,9 +305,10 @@ const Index = () => {
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
             <button
               type="button"
-              onClick={() => setActiveTab('account')}
+              onClick={() => { setActiveTab('account'); onNavigate?.(); }}
+              aria-current={activeTab === 'account' ? 'page' : undefined}
               title={user?.email ?? 'Account'}
-              className={`flex items-center gap-2 text-sm truncate transition-colors ${activeTab === 'account' ? 'text-sidebar-foreground font-medium' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'}`}
+              className={`flex items-center gap-2 text-sm truncate rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${activeTab === 'account' ? 'text-sidebar-foreground font-medium' : 'text-sidebar-foreground/60 hover:text-sidebar-foreground'}`}
             >
               <Settings className="h-4 w-4 shrink-0" />
               Account
@@ -299,29 +316,49 @@ const Index = () => {
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-sidebar-foreground/60 hover:text-sidebar-foreground shrink-0"
+              className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground shrink-0 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               onClick={signOut}
               aria-label="Sign out"
               title="Sign out"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
             </Button>
           </div>
         </div>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen bg-background flex">
+      {/* Sidebar: fixed column from md up, drawer below */}
+      <aside className="hidden md:flex w-60 shrink-0 bg-sidebar text-sidebar-foreground flex-col h-screen sticky top-0 border-r border-sidebar-border" aria-label="Main navigation">
+        {renderSidebar()}
       </aside>
+      <Sheet open={navOpen} onOpenChange={setNavOpen}>
+        <SheetContent side="left" className="md:hidden w-60 max-w-[80vw] p-0 bg-sidebar text-sidebar-foreground border-sidebar-border flex flex-col gap-0 [&>button]:text-sidebar-foreground">
+          <SheetTitle className="sr-only">Main navigation</SheetTitle>
+          <SheetDescription className="sr-only">Switch between sections of MidconSight.</SheetDescription>
+          {renderSidebar(() => setNavOpen(false))}
+        </SheetContent>
+      </Sheet>
 
       {/* Main Content */}
       <div className="flex-1 min-w-0">
-        <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-10">
-          <h1 className="font-semibold text-lg tracking-tight">{activeLabel}</h1>
-          <div className="flex items-center gap-4">
+        <header className="h-16 border-b border-border bg-card flex items-center justify-between gap-3 px-4 md:px-6 sticky top-0 z-10">
+          <div className="flex items-center gap-2 min-w-0">
+            <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 shrink-0" onClick={() => setNavOpen(true)} aria-label="Open navigation menu">
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </Button>
+            <h1 className="font-semibold text-lg tracking-tight truncate">{activeLabel}</h1>
+          </div>
+          <div className="flex items-center gap-3 md:gap-4 shrink-0">
             {latestApproval && (
-              <span className="text-sm text-muted-foreground tabular-nums">Permits through {latestApproval}</span>
+              <span className="text-sm text-muted-foreground tabular-nums hidden sm:inline">Permits through {latestApproval}</span>
             )}
           </div>
         </header>
 
-        <main className="p-6">
+        <main id="main" className="p-4 md:p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             {/* Dashboard Tab */}
             <TabsContent value="dashboard" className="space-y-4 mt-0">
@@ -331,6 +368,7 @@ const Index = () => {
                   Free plan shows permits from the last 30 days. <button onClick={() => openUpgradeDialog('dashboard_banner')} className="text-primary font-medium hover:underline">Upgrade</button> for full history and more.
                 </div>
               )}
+              <FirstRunChecklist dealCount={deals.length} contactCount={companies.filter((c) => !!c.primaryContactId).length} />
               {permits.length === 0 ? (
                 <div className="text-center py-12">
                   <Database className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />

@@ -59,7 +59,7 @@ export function UpgradeDialog({ open, onOpenChange, source, currentPlan = 'free'
 
   useEffect(() => {
     if (open) {
-      const proSources = ['data_tab', 'product_import'];
+      const proSources = ['data_tab', 'product_import', 'plan_link_pro'];
       setTier(proSources.includes(source) ? 'pro' : 'starter');
     }
   }, [open, source]);

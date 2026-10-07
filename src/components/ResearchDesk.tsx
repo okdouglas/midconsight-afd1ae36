@@ -491,6 +491,7 @@ export function ResearchDesk({ permits, companies, onRefresh, windowDays }: Rese
                 filteredLeads.map(lead => (
                   <TableRow 
                     key={lead.operator}
+                    role="button" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setSelectedOperator(lead.operator); } }}
                     className={`cursor-pointer transition-colors ${
                       selectedOperator === lead.operator 
                         ? 'bg-primary/10 border-l-2 border-l-primary' 
