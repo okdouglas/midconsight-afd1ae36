@@ -14,9 +14,11 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["Space Grotesk", "Inter", "system-ui", "sans-serif"],
-        mono: ["IBM Plex Mono", "ui-monospace", "monospace"],
+        // IBM Plex Sans only. No serif, no monospace. "display" and "mono" stay as
+        // aliases so older class names (e.g. in Landing.tsx) render in Plex, not a fallback.
+        sans: ['"IBM Plex Sans Variable"', "system-ui", "-apple-system", '"Segoe UI"', "Arial", "sans-serif"],
+        display: ['"IBM Plex Sans Variable"', "system-ui", "-apple-system", '"Segoe UI"', "Arial", "sans-serif"],
+        mono: ['"IBM Plex Sans Variable"', "system-ui", "-apple-system", '"Segoe UI"', "Arial", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -26,6 +28,7 @@ export default {
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
+          hover: "hsl(var(--primary-hover, var(--primary)))",
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {

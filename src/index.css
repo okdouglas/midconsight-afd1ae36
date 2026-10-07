@@ -2,119 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
-/* MidconSight Design System — "Type Log"
-   Palette drawn from the Midcontinent field: plat paper, drill-pipe rust,
-   gas-flare amber, core-sample slate, shale sage. Ink-slate replaces
-   pure black; rust replaces the generic SaaS blue as primary. */
+/* MidconSight brand foundation
+   Palette: Dodger blue #005A9C leads, navy #0B2545 for text and the sidebar,
+   mist #EEF4FA app background, white cards. Signal red #C4262A is for heat only
+   (hot scores, errors). Type: IBM Plex Sans only, tabular figures by default.
+   Every text pairing below is at or above 4.5:1 (checked by script). */
 
 @layer base {
   :root {
-    --background: 45 25% 90.6%;        /* plat paper */
-    --foreground: 218.2 19.3% 11.2%;   /* ink */
-
-    --card: 0 0% 100%;
-    --card-foreground: 218.2 19.3% 11.2%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 218.2 19.3% 11.2%;
-
-    --primary: 14.8 58.8% 44.7%;       /* rust */
-    --primary-foreground: 45 25% 96%;
-
-    --secondary: 45 22.2% 85.9%;       /* paper-2 */
-    --secondary-foreground: 218.2 19.3% 11.2%;
-
-    --muted: 45 18% 88%;
-    --muted-foreground: 213.8 12% 40%;
-
-    --accent: 213.8 21.1% 29.8%;       /* slate */
-    --accent-foreground: 45 25% 96%;
-
-    --destructive: 4 65% 42%;
-    --destructive-foreground: 45 25% 96%;
-
-    --border: 43.6 21.2% 79.6%;        /* line */
-    --input: 43.6 21.2% 79.6%;
-    --ring: 14.8 58.8% 44.7%;
+    --background: 210 54.5% 95.7%;  /* #EEF4FA */
+    --foreground: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --card: 0 0% 100%;  /* #FFFFFF */
+    --card-foreground: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --popover: 0 0% 100%;  /* #FFFFFF */
+    --popover-foreground: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --primary: 205.4 100% 30.6%;  /* #005A9C */
+    --primary-foreground: 0 0% 100%;  /* #FFFFFF */
+    --primary-hover: 207.1 100% 24.1%;  /* #00467A */
+    --secondary: 209.1 60% 89.2%;  /* #D3E4F4 */
+    --secondary-foreground: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --muted: 212.3 52% 95.1%;  /* #ECF2F9 */
+    --muted-foreground: 214.5 20.5% 44.9%;  /* #5B6F8A */
+    --accent: 209.1 60% 89.2%;  /* #D3E4F4 */
+    --accent-foreground: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --destructive: 358.5 67.5% 45.9%;  /* #C4262A */
+    --destructive-foreground: 0 0% 100%;  /* #FFFFFF */
+    --border: 211.4 33.3% 87.6%;  /* #D5DFEA */
+    --input: 211.4 33.3% 87.6%;  /* #D5DFEA */
+    --ring: 205.4 100% 30.6%;  /* #005A9C */
+    --score-hot: 358.5 67.5% 45.9%;  /* #C4262A */
+    --score-hot-foreground: 0 0% 100%;  /* #FFFFFF */
+    --score-warm: 39.3 75.3% 85.7%;  /* #F6E3BF */
+    --score-warm-foreground: 36.9 100% 23.9%;  /* #7A4B00 */
+    --score-cold: 209.1 60% 89.2%;  /* #D3E4F4 */
+    --score-cold-foreground: 205.6 100% 23.9%;  /* #00467A */
+    --success: 142.6 39.9% 30%;  /* #2E6B45 */
+    --success-foreground: 0 0% 100%;  /* #FFFFFF */
+    --warning: 39.3 100% 29%;  /* #946100 */
+    --warning-foreground: 0 0% 100%;  /* #FFFFFF */
+    --info: 207.7 70% 40.6%;  /* #1F6DB0 */
+    --info-foreground: 0 0% 100%;  /* #FFFFFF */
+    --sidebar-background: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --sidebar-foreground: 211 40.3% 84.9%;  /* #C9D8E8 */
+    --sidebar-primary: 205.4 100% 30.6%;  /* #005A9C */
+    --sidebar-primary-foreground: 0 0% 100%;  /* #FFFFFF */
+    --sidebar-accent: 215.1 61.4% 22.4%;  /* #16335C */
+    --sidebar-accent-foreground: 0 0% 100%;  /* #FFFFFF */
+    --sidebar-border: 215.3 55.7% 25.7%;  /* #1D3B66 */
+    --sidebar-ring: 208.8 53.2% 63.1%;  /* #6FA3D3 */
 
     --radius: 0.375rem;
-
-    /* MidconSight custom colors */
-    --score-hot: 14.8 58.8% 44.7%;     /* rust */
-    --score-hot-foreground: 45 25% 96%;
-    --score-warm: 39.1 66.7% 55.3%;    /* flare */
-    --score-warm-foreground: 218.2 19.3% 11.2%;
-    --score-cold: 213.8 21.1% 29.8%;   /* slate */
-    --score-cold-foreground: 45 25% 96%;
-
-    --success: 90 22% 33%;             /* sage, deepened for contrast */
-    --success-foreground: 45 25% 96%;
-
-    --warning: 39.1 66.7% 55.3%;
-    --warning-foreground: 218.2 19.3% 11.2%;
-
-    --info: 213.0 18.2% 43.1%;
-    --info-foreground: 45 25% 96%;
-
-    /* Sidebar */
-    --sidebar-background: 218.2 19.3% 11.2%;
-    --sidebar-foreground: 45 15% 88%;
-    --sidebar-primary: 14.8 58.8% 44.7%;
-    --sidebar-primary-foreground: 45 25% 96%;
-    --sidebar-accent: 216.0 19.5% 15.1%;
-    --sidebar-accent-foreground: 45 15% 92%;
-    --sidebar-border: 216.0 19.5% 18%;
-    --sidebar-ring: 14.8 58.8% 44.7%;
   }
 
+  /* Dark mode: the app never toggles it (no ThemeProvider, nothing adds .dark).
+     Kept as a navy-surface variant of the same family so shadcn components stay
+     sane if it is ever switched on. All text pairs checked at 4.5:1 or better. */
   .dark {
-    --background: 218.2 19.3% 11.2%;   /* ink */
-    --foreground: 45 20% 92%;
-
-    --card: 216.0 19.5% 15.1%;         /* ink-2 */
-    --card-foreground: 45 20% 92%;
-
-    --popover: 216.0 19.5% 15.1%;
-    --popover-foreground: 45 20% 92%;
-
-    --primary: 14.8 58.8% 52%;         /* rust, lifted for dark bg */
-    --primary-foreground: 45 25% 96%;
-
-    --secondary: 216.0 19.5% 19%;
-    --secondary-foreground: 45 20% 92%;
-
-    --muted: 216.0 19.5% 19%;
-    --muted-foreground: 45 10% 65%;
-
-    --accent: 213.0 18.2% 43.1%;       /* slate-lt */
-    --accent-foreground: 45 25% 96%;
-
-    --destructive: 4 60% 48%;
-    --destructive-foreground: 45 25% 96%;
-
-    --border: 216.0 19.5% 22%;
-    --input: 216.0 19.5% 22%;
-    --ring: 14.8 58.8% 52%;
-
-    /* MidconSight custom colors - dark */
-    --score-hot: 14.8 58.8% 52%;
-    --score-hot-foreground: 45 25% 96%;
-    --score-warm: 39.1 66.7% 58%;
-    --score-warm-foreground: 218.2 19.3% 11.2%;
-    --score-cold: 213.0 18.2% 50%;
-    --score-cold-foreground: 218.2 19.3% 11.2%;
-
-    --success: 90 18% 45%;
-    --success-foreground: 218.2 19.3% 11.2%;
-
-    --sidebar-background: 218.2 19.3% 8%;
-    --sidebar-foreground: 45 15% 85%;
-    --sidebar-primary: 14.8 58.8% 52%;
-    --sidebar-primary-foreground: 45 25% 96%;
-    --sidebar-accent: 216.0 19.5% 15.1%;
-    --sidebar-accent-foreground: 45 15% 92%;
-    --sidebar-border: 216.0 19.5% 18%;
-    --sidebar-ring: 14.8 58.8% 52%;
+    --background: 213.8 70.9% 10.8%;  /* #08192F */
+    --foreground: 210 54.5% 95.7%;  /* #EEF4FA */
+    --card: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --card-foreground: 210 54.5% 95.7%;  /* #EEF4FA */
+    --popover: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --popover-foreground: 210 54.5% 95.7%;  /* #EEF4FA */
+    --primary: 208.8 53.2% 63.1%;  /* #6FA3D3 */
+    --primary-foreground: 213.1 72.5% 15.7%;  /* #0B2545 */
+    --secondary: 215.1 61.4% 22.4%;  /* #16335C */
+    --secondary-foreground: 210 54.5% 95.7%;  /* #EEF4FA */
+    --muted: 215.1 61.4% 22.4%;  /* #16335C */
+    --muted-foreground: 211.8 33.3% 71.2%;  /* #9DB4CE */
+    --accent: 215.1 61.4% 22.4%;  /* #16335C */
+    --accent-foreground: 210 54.5% 95.7%;  /* #EEF4FA */
+    --destructive: 358.4 81.3% 64.3%;  /* #EE5A5E */
+    --destructive-foreground: 213.8 70.9% 10.8%;  /* #08192F */
+    --border: 215.3 55.7% 25.7%;  /* #1D3B66 */
+    --input: 215.3 55.7% 25.7%;  /* #1D3B66 */
+    --ring: 208.8 53.2% 63.1%;  /* #6FA3D3 */
+    --score-hot: 358.4 81.3% 64.3%;  /* #EE5A5E */
+    --score-hot-foreground: 213.8 70.9% 10.8%;  /* #08192F */
+    --score-warm: 39.3 75.3% 85.7%;  /* #F6E3BF */
+    --score-warm-foreground: 36.9 100% 23.9%;  /* #7A4B00 */
+    --score-cold: 215.1 61.4% 22.4%;  /* #16335C */
+    --score-cold-foreground: 210.5 57.8% 78.6%;  /* #A9C8E8 */
+    --success: 140.9 36.8% 54.1%;  /* #5FB57D */
+    --success-foreground: 213.8 70.9% 10.8%;  /* #08192F */
+    --warning: 40 72.7% 55.5%;  /* #E0A93B */
+    --warning-foreground: 213.8 70.9% 10.8%;  /* #08192F */
+    --info: 208.8 53.2% 63.1%;  /* #6FA3D3 */
+    --info-foreground: 213.8 70.9% 10.8%;  /* #08192F */
+    --sidebar-background: 216.7 75% 9.4%;  /* #06142A */
+    --sidebar-foreground: 211 40.3% 84.9%;  /* #C9D8E8 */
+    --sidebar-primary: 205.4 100% 30.6%;  /* #005A9C */
+    --sidebar-primary-foreground: 0 0% 100%;  /* #FFFFFF */
+    --sidebar-accent: 215.1 61.4% 22.4%;  /* #16335C */
+    --sidebar-accent-foreground: 0 0% 100%;  /* #FFFFFF */
+    --sidebar-border: 215.1 61.4% 22.4%;  /* #16335C */
+    --sidebar-ring: 208.8 53.2% 63.1%;  /* #6FA3D3 */
   }
 }
 
@@ -125,14 +107,16 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    /* Tabular, lining figures everywhere. Plex is tabular by default; this makes it explicit. */
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display tracking-tight;
+    @apply font-semibold tracking-tight text-foreground;
   }
 
-  .font-mono, code, kbd {
-    font-feature-settings: "tnum" 1, "zero" 1;
+  code, kbd {
+    font-family: inherit;
   }
 }
 
