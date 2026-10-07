@@ -273,7 +273,7 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                     <div className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5">
                       <div>
                         <span className="text-muted-foreground text-xs">From:</span>
-                        <p className="font-mono font-medium">{suggestedDateRange.from}</p>
+                        <p className="tabular-nums font-medium">{suggestedDateRange.from}</p>
                       </div>
                       <Button
                         variant="ghost"
@@ -287,7 +287,7 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                     <div className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5">
                       <div>
                         <span className="text-muted-foreground text-xs">To:</span>
-                        <p className="font-mono font-medium">{suggestedDateRange.to}</p>
+                        <p className="tabular-nums font-medium">{suggestedDateRange.to}</p>
                       </div>
                       <Button
                         variant="ghost"

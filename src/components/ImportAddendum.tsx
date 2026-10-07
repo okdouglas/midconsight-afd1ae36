@@ -87,7 +87,7 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
               {metadata.searchCriteria && (
                 <div className="text-sm">
                   <span className="text-muted-foreground">Criteria:</span>{' '}
-                  <span className="font-mono text-xs bg-background/50 px-2 py-0.5 rounded">
+                  <span className="tabular-nums text-xs bg-background/50 px-2 py-0.5 rounded">
                     {metadata.searchCriteria}
                   </span>
                 </div>
@@ -95,7 +95,7 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
               {metadata.dateRange && (
                 <div className="text-sm">
                   <span className="text-muted-foreground">Date Range:</span>{' '}
-                  <span className="font-mono text-xs bg-background/50 px-2 py-0.5 rounded">
+                  <span className="tabular-nums text-xs bg-background/50 px-2 py-0.5 rounded">
                     {metadata.dateRange}
                   </span>
                 </div>
@@ -109,7 +109,7 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
               {metadata.rawHeaderRows && metadata.rawHeaderRows.length > 0 && (
                 <div className="mt-2">
                   <span className="text-xs text-muted-foreground block mb-1">File Header:</span>
-                  <div className="font-mono text-xs bg-background/50 p-2 rounded max-h-20 overflow-y-auto">
+                  <div className="tabular-nums text-xs bg-background/50 p-2 rounded max-h-20 overflow-y-auto">
                     {metadata.rawHeaderRows.map((row, idx) => (
                       <div key={idx} className="text-muted-foreground/70 truncate">
                         {row || '(empty row)'}
@@ -167,7 +167,7 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
                           key={idx} 
                           className="hover:bg-destructive/5 border-destructive/10"
                         >
-                          <TableCell className="font-mono text-xs py-1.5 text-muted-foreground">
+                          <TableCell className="tabular-nums text-xs py-1.5 text-muted-foreground">
                             {row.rowNumber}
                           </TableCell>
                           <TableCell className="text-xs py-1.5">
@@ -181,7 +181,7 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
                               {row.reason}
                             </span>
                           </TableCell>
-                          <TableCell className="font-mono text-xs py-1.5 text-muted-foreground truncate max-w-[300px]">
+                          <TableCell className="tabular-nums text-xs py-1.5 text-muted-foreground truncate max-w-[300px]">
                             {row.rawContent}
                           </TableCell>
                         </TableRow>

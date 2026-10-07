@@ -632,7 +632,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
             {company.operatorNumber && (
               <div className="border border-border rounded-lg p-4">
                 <div className="text-sm text-muted-foreground">Operator Number</div>
-                <div className="font-mono">{company.operatorNumber}</div>
+                <div className="tabular-nums">{company.operatorNumber}</div>
               </div>
             )}
           </TabsContent>

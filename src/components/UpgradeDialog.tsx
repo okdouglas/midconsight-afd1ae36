@@ -102,7 +102,7 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
                     tier === t.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'
                   }`}
                 >
-                  <p className="font-display font-semibold">{t.name}</p>
+                  <p className="font-semibold">{t.name}</p>
                   <p className="text-2xl font-semibold mt-1">
                     {t.price}
                     <span className="text-sm font-normal text-muted-foreground">/mo</span>

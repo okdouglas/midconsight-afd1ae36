@@ -108,7 +108,7 @@ const Index = () => {
             <Database className="h-4.5 w-4.5 text-primary-foreground" />
           </div>
           <div className="min-w-0">
-            <p className="font-display font-semibold text-sm leading-tight truncate">MidconSight</p>
+            <p className="font-semibold text-sm leading-tight truncate">MidconSight</p>
             <p className="text-[11px] text-sidebar-foreground/60 leading-tight truncate">Permit Intelligence</p>
           </div>
         </div>
@@ -160,8 +160,8 @@ const Index = () => {
       {/* Main Content */}
       <div className="flex-1 min-w-0">
         <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-10">
-          <h1 className="font-display font-semibold text-lg tracking-tight">{activeLabel}</h1>
-          <span className="text-sm text-muted-foreground font-mono">{stats.totalPermits} permits loaded</span>
+          <h1 className="font-semibold text-lg tracking-tight">{activeLabel}</h1>
+          <span className="text-sm text-muted-foreground tabular-nums">{stats.totalPermits} permits loaded</span>
         </header>
 
         <main className="p-6">

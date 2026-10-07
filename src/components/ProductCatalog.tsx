@@ -379,8 +379,8 @@ export function ProductCatalog() {
                                 <span className="text-xs text-muted-foreground">General — no criteria set</span>
                               )}
                             </TableCell>
-                            <TableCell className="font-mono text-sm">{formatCurrency(option.default_price)}</TableCell>
-                            <TableCell className="font-mono text-sm">{formatCurrency(option.annual_rental)}</TableCell>
+                            <TableCell className="tabular-nums text-sm">{formatCurrency(option.default_price)}</TableCell>
+                            <TableCell className="tabular-nums text-sm">{formatCurrency(option.annual_rental)}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(option)}>

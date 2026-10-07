@@ -817,7 +817,7 @@ export function PermitMapAdvanced({
             <MapPin className="h-3.5 w-3.5 text-primary" />
             <span className="text-muted-foreground">Lat/Lon:</span>
             {cursorPosition ? (
-              <span className="font-mono">
+              <span className="tabular-nums">
                 {cursorPosition.lat.toFixed(5)}, {cursorPosition.lng.toFixed(5)}
               </span>
             ) : (
