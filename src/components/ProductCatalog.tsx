@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { useProfile } from '@/hooks/useProfile';
-import { promptUpgrade } from '@/lib/supabase-data';
+import { promptUpgrade, isFreeLimitError } from '@/lib/supabase-data';
 import {
   getSellingOptions,
   saveSellingOption,
@@ -242,7 +242,8 @@ export function ProductCatalog() {
       setShowEditModal(false);
       setEditingOption(null);
       loadOptions();
-    } catch {
+    } catch (err) {
+      if (isFreeLimitError(err)) return;
       toast({ title: 'Error', description: 'Failed to save product', variant: 'destructive' });
     }
   };

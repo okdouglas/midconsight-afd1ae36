@@ -34,6 +34,7 @@ import {
   saveDeal, 
   saveContact,
   getContactsByCompany,
+  promoteCompanyPreview,
   suggestBestProduct,
   type DbSellingOption,
   type DbContact 
@@ -78,6 +79,25 @@ export function ResearchSidebar({
   // Find matching company
   const company = companies.find(c => c.name === permit.operator);
 
+  // Companies built from the shared feed are previews with no database row yet.
+  // Save one before writing a contact or deal against it.
+  const ensureRealCompanyId = async (): Promise<string | null> => {
+    if (!company) return null;
+    if (!company.isPreview) return company.id;
+    const real = await promoteCompanyPreview({
+      name: company.name,
+      operatorNumber: company.operatorNumber,
+      permitCount: company.permitCount,
+      totalValue: company.totalValue,
+      score: company.score,
+      lastPermitDate: company.lastPermitDate,
+      city: company.city,
+      state: company.state,
+    });
+    onRefresh();
+    return real.id;
+  };
+
   // Calculate totals for this operator
   const totalPermits = allPermits.length;
   const estimatedValue = allPermits.reduce((sum, p) => sum + (p.estimatedValue || 5000), 0);
@@ -95,7 +115,7 @@ export function ResearchSidebar({
       }
     });
 
-    if (company) {
+    if (company && !company.isPreview) {
       getContactsByCompany(company.id).then(setExistingContacts);
     }
   }, [permit, company]);
@@ -115,8 +135,10 @@ export function ResearchSidebar({
     }
 
     try {
+      const companyId = await ensureRealCompanyId();
+      if (!companyId) throw new Error('No company');
       await saveContact({
-        company_id: company.id,
+        company_id: companyId,
         name: contactName,
         email: contactEmail || undefined,
         phone: contactPhone || undefined,
@@ -130,7 +152,7 @@ export function ResearchSidebar({
       setContactRole('');
       
       // Refresh contacts
-      const contacts = await getContactsByCompany(company.id);
+      const contacts = await getContactsByCompany(companyId);
       setExistingContacts(contacts);
       onRefresh();
     } catch (error) {
@@ -157,8 +179,10 @@ export function ResearchSidebar({
       const expectedClose = new Date();
       expectedClose.setDate(expectedClose.getDate() + 30);
 
+      const companyId = await ensureRealCompanyId();
+      if (!companyId) throw new Error('No company');
       await saveDeal({
-        company_id: company.id,
+        company_id: companyId,
         name: dealName,
         stage: 'contacted', // Start in Contacted (30%)
         value: dealValue,

@@ -236,7 +236,7 @@ const Index = () => {
                 <div className="text-center py-12">
                   <Database className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
                   <h2 className="text-xl font-semibold mb-2">No Data Loaded</h2>
-                  {canAccess('starter') ? (
+                  {canAccess('pro') ? (
                     <>
                       <p className="text-muted-foreground mb-6">
                         Import your ITD wells/formations data to get started with permit intelligence.
@@ -283,11 +283,7 @@ const Index = () => {
 
             {/* Research Desk Tab */}
             <TabsContent value="research" className="space-y-6 mt-0">
-              {canAccess('starter') ? (
-                <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} windowDays={windowDays} />
-              ) : (
-                <UpgradePrompt label="Lead Research" tier="starter" onUpgradeClick={() => openUpgradeDialog('research_tab')} />
-              )}
+              <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} windowDays={windowDays} />
             </TabsContent>
 
             {/* Map Tab - Full featured with filters (free plan sees the last 30 days, enforced server-side) */}
@@ -299,20 +295,12 @@ const Index = () => {
 
             {/* Companies Tab */}
             <TabsContent value="companies" className="space-y-6 mt-0">
-              {canAccess('pro') ? (
-                <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} windowDays={windowDays} hiddenCompanyCount={hiddenCompanyCount} />
-              ) : (
-                <UpgradePrompt label="Companies" tier="pro" onUpgradeClick={() => openUpgradeDialog('companies_tab')} />
-              )}
+              <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} windowDays={windowDays} hiddenCompanyCount={hiddenCompanyCount} />
             </TabsContent>
 
             {/* Deals Tab */}
             <TabsContent value="deals" className="space-y-6 mt-0">
-              {canAccess('pro') ? (
-                <DealsTab deals={deals} companies={companies} onRefresh={refresh} />
-              ) : (
-                <UpgradePrompt label="Deals" tier="pro" onUpgradeClick={() => openUpgradeDialog('deals_tab')} />
-              )}
+              <DealsTab deals={deals} companies={companies} onRefresh={refresh} />
             </TabsContent>
 
             {/* Account Tab */}
@@ -329,7 +317,7 @@ const Index = () => {
 
             {/* Products Tab */}
             <TabsContent value="products" className="space-y-6 mt-0">
-              {canAccess('pro') ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" tier="pro" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
+              <ProductCatalog />
             </TabsContent>
 
             {/* Data Management Tab */}
