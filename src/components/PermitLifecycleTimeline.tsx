@@ -10,7 +10,7 @@
  */
 import { useMemo } from 'react';
 import type { Permit } from '@/lib/schema-mapping';
-import { permitDate, ageInDays } from '@/lib/scoring';
+import { permitDate, ageInDays, isNewDrill } from '@/lib/scoring';
 import {
   MILESTONES,
   drillGroup,
@@ -57,10 +57,16 @@ export function PermitLifecycleTimeline({ permits }: Props) {
     const today = new Date().toISOString().split('T')[0];
     let expired = 0;
     let older = 0;
+    let amendments = 0;
     const open: { age: number; drillType?: string }[] = [];
     for (const p of permits) {
       const d = permitDate(p);
       if (!d) continue;
+      // Amendments and recompletions re-approve a well that already has a permit.
+      if (!isNewDrill(p)) {
+        amendments += 1;
+        continue;
+      }
       if (p.expireDate && p.expireDate < today) {
         expired += 1;
         continue;
@@ -76,7 +82,7 @@ export function PermitLifecycleTimeline({ permits }: Props) {
     const counts = { HH: 0, SH: 0, ALL: 0 } as Record<DrillGroup, number>;
     open.forEach((o) => (counts[drillGroup(o.drillType)] += 1));
     const group = (Object.keys(counts) as DrillGroup[]).sort((a, b) => counts[b] - counts[a])[0];
-    return { open, expired, older, group };
+    return { open, expired, older, amendments, group };
   }, [permits]);
 
   if (!bench || view.open.length === 0) return null;
@@ -121,6 +127,7 @@ export function PermitLifecycleTimeline({ permits }: Props) {
 
   const notes: string[] = [];
   if (view.expired) notes.push(`${view.expired} expired permit${view.expired === 1 ? '' : 's'} left out`);
+  if (view.amendments) notes.push(`${view.amendments} amendment${view.amendments === 1 ? '' : 's'} and recompletion${view.amendments === 1 ? '' : 's'} left out`);
   if (view.older) notes.push(`${view.older} older than 24 months left out`);
 
   return (
