@@ -444,3 +444,22 @@ html:has(.lp) {
     transform: none !important;
   }
 }
+
+/* ---------- hero over the pumpjack scene ---------- */
+.lp-hero .lp-h1 { color: #fff; }
+.lp-hero .lp-hero-accent { color: #8cc4f5; }
+.lp-hero .lp-label { color: #8cc4f5; }
+.lp-hero-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(11, 37, 69, 0.88) 0%, rgba(11, 37, 69, 0.62) 55%, rgba(11, 37, 69, 0.15) 100%);
+}
+@media (max-width: 767px) {
+  .lp-hero-shade { background: rgba(11, 37, 69, 0.72); }
+}
+.lp-btn-ghost {
+  background: transparent;
+  color: #fff;
+  border-color: #fff;
+}
+.lp-btn-ghost:hover { background: rgba(255, 255, 255, 0.14); }

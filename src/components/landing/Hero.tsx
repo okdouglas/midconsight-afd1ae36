@@ -3,13 +3,16 @@ import { ArrowRight } from 'lucide-react';
 import { HERO, KPIS, KPI_CAPTION } from './content';
 import { Brackets, Eyebrow } from './Frames';
 import { useCta } from './useCta';
+import { PumpjackScene } from './PumpjackScene';
 
 export function Hero() {
   const cta = useCta();
   return (
     <>
-      <section id="top" className="bg-[#eef4fa] pb-16 pt-14 md:pb-24 md:pt-24" aria-labelledby="hero-h1">
-        <div className="lp-wrap">
+      <section id="top" className="lp-hero lp-on-dark relative overflow-hidden pb-16 pt-14 md:pb-24 md:pt-24" aria-labelledby="hero-h1">
+        <PumpjackScene align="xMaxYMax slice" />
+        <div className="lp-hero-shade" aria-hidden="true" />
+        <div className="lp-wrap relative">
           <Eyebrow className="lp-enter mb-6">{HERO.eyebrow}</Eyebrow>
           <h1 id="hero-h1" className="lp-h1 lp-enter d1 max-w-5xl">
             {HERO.h1Lines.map((line) => (
@@ -17,7 +20,7 @@ export function Hero() {
                 {line}{' '}
               </span>
             ))}
-            <span className="text-[#005a9c] md:block">{HERO.h1Accent}</span>
+            <span className="lp-hero-accent md:block">{HERO.h1Accent}</span>
           </h1>
           <div className="lp-enter d2 mt-10 flex flex-col gap-8 md:mt-14 md:flex-row md:items-end md:justify-between md:gap-16">
             <p className="lp-lead max-w-xl">{HERO.support}</p>
@@ -27,15 +30,19 @@ export function Hero() {
                   {cta.label}
                   <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
-                <a href="#platform" className="lp-btn lp-btn-outline">
+                <a href="#platform" className="lp-btn lp-btn-ghost">
                   See the platform
                 </a>
               </div>
-              <p className="mt-4 text-sm text-[#5b6f8a]">{HERO.microcopy}</p>
+              <p className="mt-4 text-sm text-[#c9d8e8]">{HERO.microcopy}</p>
             </div>
           </div>
+        </div>
+      </section>
 
-          <figure className="lp-enter d3 mt-14 md:mt-20">
+      <section className="bg-[#eef4fa] pb-16 pt-12 md:pb-24 md:pt-16" aria-label="Permit map preview">
+        <div className="lp-wrap">
+          <figure className="lp-enter d3">
             <Brackets>
               <div className="lp-frame">
                 <div className="lp-frame-bar" aria-hidden="true">
