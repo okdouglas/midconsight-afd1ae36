@@ -1069,7 +1069,35 @@ export async function markActivated(): Promise<void> {
   if (error) throw error;
 }
 
-/** Records upgrade intent (Stripe checkout doesn't exist yet — this is the honest interim). */
+/** Result of asking the server for a Stripe page. `notConfigured` means billing is not switched on yet. */
+export type BillingResult = { url: string } | { notConfigured: true } | { error: string };
+
+async function callBilling(fn: 'create-checkout' | 'billing-portal', body: Record<string, unknown>): Promise<BillingResult> {
+  const { data, error } = await supabase.functions.invoke(fn, {
+    body: { ...body, returnOrigin: window.location.origin },
+  });
+  if (error) {
+    // supabase-js hides the response body in `error.context`; read it to see our own error code.
+    const ctx = (error as { context?: Response }).context;
+    const payload = ctx && typeof ctx.json === 'function' ? await ctx.json().catch(() => null) : null;
+    if (payload?.error === 'billing_not_configured') return { notConfigured: true };
+    return { error: payload?.error ?? error.message };
+  }
+  if (data?.url) return { url: data.url as string };
+  return { error: data?.error ?? 'No checkout link came back.' };
+}
+
+/** Starts Stripe Checkout for a plan. The plan itself is only changed by the server after Stripe confirms payment. */
+export function startCheckout(tier: 'starter' | 'pro', interval: 'month' | 'year'): Promise<BillingResult> {
+  return callBilling('create-checkout', { tier, interval });
+}
+
+/** Opens Stripe's billing portal (card, plan change, cancel). */
+export function openBillingPortal(): Promise<BillingResult> {
+  return callBilling('billing-portal', {});
+}
+
+/** Records upgrade intent. Used only while Stripe billing is not switched on yet. */
 export async function requestUpgrade(source: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');

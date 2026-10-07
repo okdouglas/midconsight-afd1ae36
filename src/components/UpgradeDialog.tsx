@@ -9,7 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { requestUpgrade } from '@/lib/supabase-data';
+import { requestUpgrade, startCheckout } from '@/lib/supabase-data';
 
 interface UpgradeDialogProps {
   open: boolean;
@@ -24,6 +24,7 @@ const TIERS = [
     id: 'starter',
     name: 'Starter',
     price: '$10',
+    yearPrice: '$100',
     annual: '$100/yr, two months free',
     features: [
       'Live permit feed, no 30-day delay',
@@ -35,6 +36,7 @@ const TIERS = [
     id: 'pro',
     name: 'Pro',
     price: '$20',
+    yearPrice: '$200',
     annual: '$200/yr, two months free',
     features: [
       'Everything in Starter',
@@ -49,6 +51,9 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
   const [sent, setSent] = useState(false);
   // Default to the tier that unlocks the feature the user clicked on.
   const [tier, setTier] = useState<'starter' | 'pro'>('starter');
+  const [interval, setInterval] = useState<'month' | 'year'>('month');
+  // Set once the server says Stripe is not switched on, so we fall back to the interest form.
+  const [manual, setManual] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -60,10 +65,27 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
   const handleRequest = async () => {
     setLoading(true);
     try {
+      if (!manual) {
+        const result = await startCheckout(tier, interval);
+        if ('url' in result) {
+          window.location.href = result.url;
+          return;
+        }
+        if ('error' in result) {
+          toast.error(
+            result.error === 'already_subscribed'
+              ? 'You already have a plan. Use Manage billing to change it.'
+              : "Couldn't open checkout. Please try again.",
+          );
+          return;
+        }
+        // Billing is not switched on yet: keep the old "request access" path working.
+        setManual(true);
+      }
       await requestUpgrade(`${source}:${tier}`);
       setSent(true);
     } catch {
-      toast.error("Couldn't send that — please try again.");
+      toast.error("Couldn't send that. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -88,10 +110,26 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
             <DialogHeader>
               <DialogTitle>Choose your plan</DialogTitle>
               <DialogDescription>
-                Self-serve checkout is coming soon. For now, tell us you're interested and
-                we'll set your account up directly.
+                {manual
+                  ? "Checkout isn't open yet. Tell us you're interested and we'll set your account up directly."
+                  : 'Pick a plan and pay securely with Stripe. Cancel any time.'}
               </DialogDescription>
             </DialogHeader>
+            {!manual && (
+              <div className="flex gap-2" role="group" aria-label="Billing period">
+                {(['month', 'year'] as const).map((i) => (
+                  <Button
+                    key={i}
+                    type="button"
+                    size="sm"
+                    variant={interval === i ? 'default' : 'outline'}
+                    onClick={() => setInterval(i)}
+                  >
+                    {i === 'month' ? 'Monthly' : 'Annual, two months free'}
+                  </Button>
+                ))}
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 my-4">
               {TIERS.map((t) => (
                 <button
@@ -104,8 +142,8 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
                 >
                   <p className="font-semibold">{t.name}</p>
                   <p className="text-2xl font-semibold mt-1">
-                    {t.price}
-                    <span className="text-sm font-normal text-muted-foreground">/mo</span>
+                    {interval === 'year' && !manual ? t.yearPrice : t.price}
+                    <span className="text-sm font-normal text-muted-foreground">{interval === 'year' && !manual ? '/yr' : '/mo'}</span>
                   </p>
                   <p className="text-xs text-muted-foreground mb-3">{t.annual}</p>
                   <ul className="space-y-1.5">
@@ -121,7 +159,7 @@ export function UpgradeDialog({ open, onOpenChange, source }: UpgradeDialogProps
             </div>
             <Button onClick={handleRequest} disabled={loading} className="w-full">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Request {tier === 'pro' ? 'Pro' : 'Starter'} access
+              {manual ? `Request ${tier === 'pro' ? 'Pro' : 'Starter'} access` : `Continue to checkout`}
             </Button>
           </>
         )}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
-import { Database, BarChart3, Users, Map, DollarSign, LogOut, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
+import { Database, BarChart3, Users, Map, DollarSign, LogOut, CreditCard, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
@@ -19,7 +19,8 @@ import { SCORE_WINDOWS } from '@/lib/scoring';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { incrementPaywallHits, markActivated } from '@/lib/supabase-data';
+import { incrementPaywallHits, markActivated, openBillingPortal } from '@/lib/supabase-data';
+import { toast } from 'sonner';
 import { UpgradeDialog } from '@/components/UpgradeDialog';
 
 const NAV_ITEMS = [
@@ -57,7 +58,36 @@ function UpgradePrompt({ label, tier, onUpgradeClick }: { label: string; tier: '
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const { profile, isPaid, hasStarter, isPro } = useProfile();
+  const { profile, isPaid, hasStarter, isPro, refresh: refreshProfile } = useProfile();
+  // Coming back from Stripe Checkout. The plan changes when Stripe's webhook lands, a few seconds
+  // after payment, so check the profile a few times before giving up.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get('checkout');
+    if (!result) return;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (result === 'cancelled') {
+      toast('Checkout cancelled. You were not charged.');
+      return;
+    }
+    toast.success('Payment received. Your plan is updating.');
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      refreshProfile();
+      if (tries >= 6) window.clearInterval(timer);
+    }, 3000);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleManageBilling = async () => {
+    const result = await openBillingPortal();
+    if ('url' in result) window.location.href = result.url;
+    else if ('notConfigured' in result) toast('Billing is not switched on yet.');
+    else toast.error("Couldn't open billing. Please try again.");
+  };
+
   const canAccess = (min: MinPlan) => min === null || (min === 'starter' ? hasStarter : isPro);
   const {
     permits,
@@ -143,6 +173,16 @@ const Index = () => {
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to site
           </Link>
+          {isPaid && (
+            <button
+              type="button"
+              onClick={handleManageBilling}
+              className="flex w-full items-center gap-2 px-3 py-2 rounded-md text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors"
+            >
+              <CreditCard className="h-3.5 w-3.5" />
+              Manage billing
+            </button>
+          )}
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
             <span className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</span>
             <Button
