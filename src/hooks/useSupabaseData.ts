@@ -34,8 +34,10 @@ export interface Company {
    *  live data on day one instead of an empty CRM. Becomes a real record
    *  the moment you act on it (mark as client, create a deal). */
   isPreview?: boolean;
-  /** Permits in the scoring window. Drives the live score. */
+  /** Permits inside the lookback. */
   windowCount?: number;
+  /** Heat points: recent permits count more, old ones fade. Drives the live score. */
+  heat?: number;
 }
 
 export interface Deal {
@@ -113,7 +115,7 @@ function mapDbDatasetToDataset(db: DbDataset): Dataset {
   };
 }
 
-const WINDOW_STORAGE_KEY = 'midconsight.scoreWindowDays';
+const WINDOW_STORAGE_KEY = 'midconsight.scoreLookbackDays.v3';
 
 function loadWindowDays(): number {
   try {
@@ -156,6 +158,7 @@ function buildLiveCompanies(
       operatorNumber: real?.operatorNumber ?? first?.operatorNumber,
       permitCount: st.total,
       windowCount: st.inWindow,
+      heat: st.heat,
       totalValue: st.total * AVG_PERMIT_VALUE,
       score: st.score,
       lastPermitDate: st.lastPermitDate || real?.lastPermitDate || '',
@@ -173,7 +176,7 @@ function buildLiveCompanies(
   for (const real of realCompanies) {
     if (used.has(real.id)) continue;
     if (real.isCurrentClient || dealCompanyIds.has(real.id)) {
-      out.push({ ...real, permitCount: 0, windowCount: 0, totalValue: 0, score: 'cold' });
+      out.push({ ...real, permitCount: 0, windowCount: 0, heat: 0, totalValue: 0, score: 'cold' });
     } else {
       hiddenCount += 1;
     }

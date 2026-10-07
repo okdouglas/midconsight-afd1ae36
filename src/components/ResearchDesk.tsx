@@ -44,7 +44,7 @@ import { ResearchSidebar } from './ResearchSidebar';
 import { type Permit } from '@/lib/schema-mapping';
 import { type Company } from '@/hooks/useSupabaseData';
 import { toast } from 'sonner';
-import { scoreForCount, windowStart, permitDate, windowLabel } from '@/lib/scoring';
+import { scoreOperator, windowStart, permitDate, windowLabel } from '@/lib/scoring';
 import { updateCompany, getAllResearchStatuses, setResearchStatus as persistResearchStatus } from '@/lib/supabase-data';
 
 type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
@@ -83,11 +83,9 @@ const PRIORITY_CONFIG: Record<Priority, { label: string; icon: React.ReactNode; 
   cold: { label: 'Cold', icon: <Layers className="h-3 w-3" />, color: 'text-primary' },
 };
 
-// Priority is the live lead score: permits inside the global score window.
+// Priority is the live lead score: heat from permits inside the lookback, newer permits count more.
 function calculatePriority(permits: Permit[], windowDays: number): Priority {
-  const start = windowStart(windowDays);
-  const inWindow = permits.filter(p => permitDate(p) >= start).length;
-  return scoreForCount(inWindow);
+  return scoreOperator(permits, windowDays).score;
 }
 
 // Research status now persists server-side via Supabase (operator_research_status

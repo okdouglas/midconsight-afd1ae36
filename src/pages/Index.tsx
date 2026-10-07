@@ -163,7 +163,7 @@ const Index = () => {
           <h1 className="font-semibold text-lg tracking-tight">{activeLabel}</h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground hidden sm:inline" id="score-window-label">Score window</span>
+              <span className="text-sm text-muted-foreground hidden sm:inline" id="score-window-label">Lookback</span>
               <Select value={String(windowDays)} onValueChange={(v) => setWindowDays(Number(v))}>
                 <SelectTrigger className="h-8 w-[130px] text-sm" aria-labelledby="score-window-label">
                   <SelectValue />

@@ -8,7 +8,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { createBasemapLayer } from '@/lib/basemap';
 import { BRAND } from '@/lib/brand-colors';
-import { permitDate, windowStart, windowLabel } from '@/lib/scoring';
+import { permitDate, windowStart, windowLabel, ageInDays, permitHeat } from '@/lib/scoring';
+import { classifyLifecycleStage, STAGE_LABELS } from '@/components/PermitMapAdvanced';
 import type { Permit } from '@/lib/schema-mapping';
 
 const esc = (v: unknown) =>
@@ -36,6 +37,12 @@ export function CompanyPermitsMap({ permits, windowDays }: Props) {
   const located = permits.filter((p) => p.lat && p.lon && !isNaN(p.lat) && !isNaN(p.lon));
   const start = windowStart(windowDays);
   const recentCount = located.filter((p) => permitDate(p) >= start).length;
+  const stageCounts = located.reduce<Record<string, number>>((acc, p) => {
+    const label = STAGE_LABELS[classifyLifecycleStage(p)];
+    acc[label] = (acc[label] ?? 0) + 1;
+    return acc;
+  }, {});
+  const stageLine = Object.entries(stageCounts).map(([k, n]) => `${n} ${k.toLowerCase()}`).join(' · ');
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -72,14 +79,16 @@ export function CompanyPermitsMap({ permits, windowDays }: Props) {
           <div>API ${esc(p.api)}</div>
           <div>${esc(p.county)} County</div>
           <div>${esc(p.drillType || p.wellType || '')}</div>
-          <div>Permit date ${esc(permitDate(p) || 'n/a')}</div>
+          <div>Permit date ${esc(permitDate(p) || 'n/a')}${permitDate(p) ? ' (' + ageInDays(permitDate(p)) + ' days ago)' : ''}</div>
+          <div>OCC status: ${esc(STAGE_LABELS[classifyLifecycleStage(p)])}</div>
+          <div>Heat now: ${permitHeat(p, windowDays).toFixed(2)}</div>
         </div>`,
       );
       layer.addLayer(marker);
       points.push([p.lat, p.lon]);
     });
     map.fitBounds(L.latLngBounds(points), { padding: [28, 28], maxZoom: 11 });
-  }, [located, start]);
+  }, [located, start, windowDays]);
 
   return (
     <div className="border border-border rounded-lg overflow-hidden">
@@ -89,6 +98,7 @@ export function CompanyPermitsMap({ permits, windowDays }: Props) {
           <div className="text-xs text-muted-foreground">
             {located.length} tracked permit{located.length === 1 ? '' : 's'} · {recentCount} in last {windowLabel(windowDays)}
           </div>
+          {stageLine && <div className="text-xs text-muted-foreground">OCC status: {stageLine}</div>}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">

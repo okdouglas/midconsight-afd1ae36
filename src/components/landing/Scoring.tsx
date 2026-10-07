@@ -27,7 +27,7 @@ export function ScoringLogic() {
 
           <div className="lp-reveal">
             <table className="w-full border-collapse text-left">
-              <caption className="sr-only">Score tiers and the permit counts that set them</caption>
+              <caption className="sr-only">Score tiers and the heat points that set them</caption>
               <thead>
                 <tr className="border-b border-[#2b3f5c]">
                   <th scope="col" className="lp-label pb-4 pr-4 font-semibold text-[#6fa3d3]">{SCORING.headers.tier}</th>
@@ -50,8 +50,8 @@ export function ScoringLogic() {
                 ))}
               </tbody>
             </table>
-            <p className="lp-label mt-8 text-[#6fa3d3]">Pick a window</p>
-            <ul className="mt-3 flex flex-wrap gap-2" aria-label="Time windows">
+            <p className="lp-label mt-8 text-[#6fa3d3]">{SCORING.windowsLabel}</p>
+            <ul className="mt-3 flex flex-wrap gap-2" aria-label="Lookback options">
               {SCORING.windows.map((w) => (
                 <li key={w} className="rounded-full border border-[#2b3f5c] px-3 py-1 text-sm text-[#c9d8e8]">{w}</li>
               ))}

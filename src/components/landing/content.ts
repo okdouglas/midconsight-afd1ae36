@@ -30,7 +30,7 @@ export const HERO = {
   mapCaption: 'Real permits, Oklahoma Corporation Commission filings, imported through Oct 5.',
 } as const;
 
-/** Counted from the public shared feed export (permits-used.json), as of Oct 7, 2026, scored over the last 30 days. */
+/** Counted from the public shared feed export (permits-used.json), as of Oct 7, 2026, scored with a 12 month lookback. */
 export const FACTS = {
   asOf: 'Oct 7',
   permits: 120,
@@ -39,11 +39,12 @@ export const FACTS = {
   imports: 8,
   firstImport: 'Aug 17',
   latestBatch: 17,
-  hot: 55,
-  warm: 28,
-  cold: 37,
-  hotOperators: 10,
-  hotOperators7: 2,
+  hot: 60,
+  warm: 52,
+  cold: 8,
+  hotOperators: 11,
+  warmOperators: 27,
+  coldOperators: 8,
 } as const;
 
 export const KPIS = [
@@ -88,7 +89,7 @@ export const WEEK_START = {
 /** A real hot permit from the latest import (public filing fields only). */
 export const LEAD = {
   h2: 'Oklahoma Intent to Drill filings, scored hot or warm',
-  lead: 'Every filing carries its operator’s score. Hot means actively permitting. Warm means some activity. Cold means the filings are old.',
+  lead: 'Every filing carries its operator’s score. Hot means actively permitting. Warm means recent activity. Cold means the filings are old.',
   eyebrow: 'A real lead',
   score: 'Hot',
   operator: 'Camino Natural Resources LLC',
@@ -260,7 +261,7 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
   },
   {
     q: 'What does a lead score mean?',
-    a: 'Each operator is scored on how many permits it filed in a time window you pick, from 7 days to 12 months. Hot is 3 or more permits in the window. Warm is 1 or 2. Cold is none, which means the activity is old. Change the window and every score changes with it.',
+    a: 'Each permit is worth 1 point the day it is approved and loses half its weight every 60 days. An operator’s heat is the sum. Hot is 2.5 points or more, warm is 0.75 to 2.5, and cold is under 0.75. Wells take months to go from permit to producing well, so a permit fades instead of dropping off.',
   },
   {
     q: 'What can I do with a lead?',
@@ -310,23 +311,25 @@ export const NAV_LINKS = [
 /** The scoring rule, as the app applies it today (src/lib/scoring.ts). */
 export const SCORING = {
   eyebrow: 'How the score works',
-  h2: 'Hot, warm, cold. Here is the rule.',
-  lead: 'No black box. Pick a time window. Each operator is scored on how many permits it filed inside it.',
-  headers: { tier: 'Tier', rule: 'Permits in the window', meaning: 'What it means' },
+  h2: 'Hot, warm, cold. Heat that fades.',
+  lead: 'No black box. A permit is worth 1 point the day it is approved. It loses half its weight every 60 days. An operator’s heat is the sum of its permits.',
+  headers: { tier: 'Tier', rule: 'Heat points', meaning: 'What it looks like' },
   tiers: [
-    { tone: 'hot', name: 'Hot', rule: '3 or more', meaning: 'Actively permitting' },
-    { tone: 'warm', name: 'Warm', rule: '1 or 2', meaning: 'Some activity' },
-    { tone: 'steady', name: 'Cold', rule: 'None', meaning: 'The activity is old' },
+    { tone: 'hot', name: 'Hot', rule: '2.5 or more', meaning: '3 permits this week, or 5 this month' },
+    { tone: 'warm', name: 'Warm', rule: '0.75 to 2.5', meaning: '3 permits 3 months ago, or 1 this month' },
+    { tone: 'steady', name: 'Cold', rule: 'Under 0.75', meaning: '1 permit 6 months ago' },
   ],
   windows: ['7 days', '14 days', '30 days', '60 days', '90 days', '6 months', '12 months'],
+  windowsLabel: 'Pick a lookback',
   example: {
     label: 'One real example',
-    text: `Over the last 30 days, ${FACTS.hotOperators} operators in the feed are hot. Over the last 7 days, ${FACTS.hotOperators7} are.`,
+    text: `Today, ${FACTS.hotOperators} of ${FACTS.operators} operators in the feed are hot, ${FACTS.warmOperators} are warm and ${FACTS.coldOperators} are cold.`,
     caption: `As of ${FACTS.asOf}.`,
   },
   notes: [
-    'One setting at the top of every screen. Change it and the score changes everywhere.',
+    'Wells take months to go from permit to producing well. A permit stays on the board while it fades. It drops out only when it expires.',
+    'The lookback at the top of every screen caps how far back permits count. It starts at 12 months.',
     'The score belongs to the operator. Every permit it files carries that tier.',
-    'Cold does not mean a bad lead. It means no permits in the window yet.',
+    'Cold does not mean a bad lead. It means the filings are old.',
   ],
 } as const;
