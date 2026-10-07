@@ -220,14 +220,55 @@ Deno.serve(async (req) => {
   }
 });
 
+
+// Lead score, rule v4. Keep in sync with src/lib/scoring.ts (the app computes the
+// same rule live; this only fills the stored companies.score column).
+// weight(t) = (1 - c) / (1 + (t / a)^b), t = days since approval, by drill type.
+const CURVES = {
+  HH: { c: 0.168, a: 181.9, b: 2.431 },
+  SH: { c: 0.426, a: 132.7, b: 2.141 },
+  ALL: { c: 0.248, a: 179.3, b: 2.307 },
+};
+const HOT_MIN = 1.6;
+const WARM_MIN = 0.75;
+const ACTIVE_DAYS = 30;
+const LOOKBACK_DAYS = 365;
+
+function curveFor(drillType?: string | null) {
+  const t = (drillType || '').trim().toUpperCase();
+  if (t === 'HH' || t.startsWith('MU')) return CURVES.HH;
+  if (t === 'SH' || t === 'DH') return CURVES.SH;
+  return CURVES.ALL;
+}
+
+// deno-lint-ignore no-explicit-any
+function scoreOperatorRows(permits: any[]): 'hot' | 'warm' | 'cold' {
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const todayStr = now.toISOString().split('T')[0];
+  let pipeline = 0;
+  let recent = 0;
+  for (const p of permits) {
+    const d: string = p.approval_date || p.date_imported || '';
+    if (!d) continue;
+    if (p.expire_date && p.expire_date < todayStr) continue;
+    const t = new Date(`${d}T00:00:00Z`).getTime();
+    if (isNaN(t)) continue;
+    const age = Math.max(0, Math.round((today - t) / 86_400_000));
+    if (age > LOOKBACK_DAYS) continue;
+    const c = curveFor(p.drill_type);
+    pipeline += (1 - c.c) / (1 + Math.pow(age / c.a, c.b));
+    if (age <= ACTIVE_DAYS) recent += 1;
+  }
+  if (pipeline >= HOT_MIN && recent > 0) return 'hot';
+  if (pipeline >= WARM_MIN) return 'warm';
+  return 'cold';
+}
+
 // deno-lint-ignore no-explicit-any
 async function rebuildCompanies(supabase: any, userId: string, avgPermitValue: number) {
   const { data: permits } = await supabase.from('permits').select('*').eq('user_id', userId);
   if (!permits || permits.length === 0) return;
-
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
 
   // deno-lint-ignore no-explicit-any
   const operatorMap = new Map<string, any[]>();
@@ -245,17 +286,10 @@ async function rebuildCompanies(supabase: any, userId: string, avgPermitValue: n
   // deno-lint-ignore no-explicit-any
   const existingCompanyMap = new Map((existingCompanies || []).map((c: any) => [c.name, c]));
 
-  function calculateScore(permitCount: number, recentPermits: number): 'hot' | 'warm' | 'cold' {
-    if (permitCount >= 5 || recentPermits >= 3) return 'hot';
-    if (permitCount >= 3 || recentPermits >= 2) return 'warm';
-    return 'cold';
-  }
-
   // deno-lint-ignore no-explicit-any
   const companiesToUpsert: any[] = [];
   operatorMap.forEach((operatorPermits, operatorName) => {
     const existingCompany = existingCompanyMap.get(operatorName) as { id: string } | undefined;
-    const recentPermits = operatorPermits.filter((p) => p.date_imported >= thirtyDaysAgoStr).length;
     const lastPermitDate = operatorPermits.reduce((latest, p) => {
       const date = p.approval_date || p.date_imported;
       return date > latest ? date : latest;
@@ -269,7 +303,7 @@ async function rebuildCompanies(supabase: any, userId: string, avgPermitValue: n
       operator_number: operatorPermits[0]?.operator_number,
       permit_count: operatorPermits.length,
       total_value: totalValue,
-      score: calculateScore(operatorPermits.length, recentPermits),
+      score: scoreOperatorRows(operatorPermits),
       last_permit_date: lastPermitDate,
       city: operatorPermits[0]?.city,
       state: operatorPermits[0]?.state,

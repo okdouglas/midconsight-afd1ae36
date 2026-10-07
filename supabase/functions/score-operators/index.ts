@@ -1,6 +1,6 @@
 // Recomputes every operator's lead tier and the reasons behind it.
-// Rule v1 lives in the SQL function compute_operator_scores (see the
-// 20261007100100 migration). Called by pg_cron after the Monday import,
+// Rule v4 lives in the SQL function compute_operator_scores (see the
+// 20261007130000 migration). Called by pg_cron after the Monday import,
 // guarded by the shared secret like the other cron functions.
 
 import { createClient } from 'npm:@supabase/supabase-js@2.89.0';
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     if (stale.length) await supabase.from('operator_scores').delete().in('operator_key', stale);
 
     const { data: tiers } = await supabase.from('operator_scores').select('tier');
-    const counts = { hot: 0, warm: 0, steady: 0 } as Record<string, number>;
+    const counts = { hot: 0, warm: 0, cold: 0 } as Record<string, number>;
     for (const row of tiers ?? []) counts[row.tier] = (counts[row.tier] ?? 0) + 1;
 
     return new Response(JSON.stringify({ success: true, scored: data, tiers: counts }), {

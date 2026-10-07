@@ -83,7 +83,7 @@ const PRIORITY_CONFIG: Record<Priority, { label: string; icon: React.ReactNode; 
   cold: { label: 'Cold', icon: <Layers className="h-3 w-3" />, color: 'text-primary' },
 };
 
-// Priority is the live lead score: heat from permits inside the lookback, newer permits count more.
+// Priority is the live lead score (rule v4, src/lib/scoring.ts): expected wells still coming from permits inside the lookback.
 function calculatePriority(permits: Permit[], windowDays: number): Priority {
   return scoreOperator(permits, windowDays).score;
 }
