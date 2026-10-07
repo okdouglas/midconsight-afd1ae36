@@ -73,9 +73,9 @@ export function DatasetManager({ datasets, onDelete }: DatasetManagerProps) {
                     </div>
                     
                     <div className="flex gap-4 mt-2 text-sm">
-                      <span className="text-green-500">{dataset.validRows} permits</span>
+                      <span className="text-success">{dataset.validRows} permits</span>
                       {dataset.skippedRows > 0 && (
-                        <span className="text-amber-500">{dataset.skippedRows} skipped</span>
+                        <span className="text-score-warm-foreground">{dataset.skippedRows} skipped</span>
                       )}
                     </div>
                   </div>

@@ -167,19 +167,19 @@ export function DealDetailModal({
                 <div className="text-sm text-muted-foreground">Deal Value</div>
                 {isEditingValue ? (
                   <div className="flex items-center gap-1">
-                    <span className="text-xl font-bold text-primary">$</span>
+                    <span className="text-xl font-semibold text-primary">$</span>
                     <Input
                       type="number"
                       value={dealValue}
                       onChange={(e) => setDealValue(Number(e.target.value) || 0)}
                       onBlur={() => setIsEditingValue(false)}
                       onKeyDown={(e) => e.key === 'Enter' && setIsEditingValue(false)}
-                      className="text-xl font-bold h-8 w-28"
+                      className="text-xl font-semibold h-8 w-28"
                       autoFocus
                     />
                   </div>
                 ) : (
-                  <div className="text-2xl font-bold text-primary">
+                  <div className="text-2xl font-semibold text-primary">
                     ${formatCurrency(dealValue)}
                   </div>
                 )}
@@ -210,7 +210,7 @@ export function DealDetailModal({
             <Card>
               <CardContent className="pt-4">
                 <div className="text-sm text-muted-foreground">Weighted Value</div>
-                <div className="text-2xl font-bold text-green-500">
+                <div className="text-2xl font-semibold text-success">
                   ${formatCurrency(weightedValue)}
                 </div>
               </CardContent>
@@ -263,8 +263,8 @@ export function DealDetailModal({
                           <Badge 
                             className={
                               selectedProduct.type === 'Network'
-                                ? 'bg-blue-500/20 text-blue-600 border-blue-500/30'
-                                : 'bg-green-500/20 text-green-600 border-green-500/30'
+                                ? 'bg-secondary text-primary-hover border-primary/20'
+                                : 'bg-success/10 text-success border-success/30'
                             }
                           >
                             {selectedProduct.type}

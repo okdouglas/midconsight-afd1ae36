@@ -42,12 +42,12 @@ type ReportingPeriod = 'weekly' | 'monthly' | 'quarterly';
 const STAGE_ORDER: DealStage[] = ['new_lead', 'contacted', 'qualified', 'proposal', 'closed_won', 'closed_lost'];
 
 const STAGE_CONFIG: Record<DealStage, { label: string; color: string; icon: React.ReactNode }> = {
-  new_lead: { label: 'New Lead', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: <ArrowRight className="h-4 w-4" /> },
-  contacted: { label: 'Contacted', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: <ArrowRight className="h-4 w-4" /> },
-  qualified: { label: 'Qualified', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: <ArrowRight className="h-4 w-4" /> },
-  proposal: { label: 'Proposal', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: <ArrowRight className="h-4 w-4" /> },
-  closed_won: { label: 'Closed Won', color: 'bg-green-500/20 text-green-400 border-green-500/30', icon: <CheckCircle2 className="h-4 w-4" /> },
-  closed_lost: { label: 'Closed Lost', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: <XCircle className="h-4 w-4" /> },
+  new_lead: { label: 'New Lead', color: 'bg-secondary text-primary-hover border-primary/20', icon: <ArrowRight className="h-4 w-4" /> },
+  contacted: { label: 'Contacted', color: 'bg-foreground/10 text-foreground border-foreground/20', icon: <ArrowRight className="h-4 w-4" /> },
+  qualified: { label: 'Qualified', color: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30', icon: <ArrowRight className="h-4 w-4" /> },
+  proposal: { label: 'Proposal', color: 'bg-primary/10 text-primary border-primary/30', icon: <ArrowRight className="h-4 w-4" /> },
+  closed_won: { label: 'Closed Won', color: 'bg-success/10 text-success border-success/30', icon: <CheckCircle2 className="h-4 w-4" /> },
+  closed_lost: { label: 'Closed Lost', color: 'bg-muted text-muted-foreground border-border', icon: <XCircle className="h-4 w-4" /> },
 };
 
 // Stage-to-probability mapping
@@ -61,12 +61,12 @@ const STAGE_PROBABILITY: Record<DealStage, number> = {
 };
 
 const PROBABILITY_COLORS: Record<number, string> = {
-  0: 'text-red-500',
-  10: 'text-red-400',
-  30: 'text-orange-400',
-  60: 'text-amber-400',
-  90: 'text-green-400',
-  100: 'text-green-500',
+  0: 'text-muted-foreground',
+  10: 'text-muted-foreground',
+  30: 'text-score-warm-foreground',
+  60: 'text-score-warm-foreground',
+  90: 'text-success',
+  100: 'text-success',
 };
 
 const PERIOD_CONFIG: Record<ReportingPeriod, { label: string; description: string }> = {
@@ -206,7 +206,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Pipeline</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-primary">${totalPipeline.toLocaleString()}</div>
+            <div className="text-2xl font-semibold text-primary">${totalPipeline.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{openDeals.length} open deals</p>
           </CardContent>
         </Card>
@@ -219,7 +219,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-amber-500">${weightedPipeline.toLocaleString()}</div>
+            <div className="text-2xl font-semibold text-primary">${weightedPipeline.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">Based on probability</p>
           </CardContent>
         </Card>
@@ -229,7 +229,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
             <CardTitle className="text-sm font-medium text-muted-foreground">Won Revenue</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">${wonValue.toLocaleString()}</div>
+            <div className="text-2xl font-semibold text-success">${wonValue.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{deals.filter(d => d.stage === 'closed_won').length} closed won</p>
           </CardContent>
         </Card>
@@ -239,7 +239,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
             <CardTitle className="text-sm font-medium text-muted-foreground">In Proposal</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-semibold">
               ${dealsByStage['proposal'].reduce((sum, d) => sum + d.value, 0).toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground">{dealsByStage['proposal'].length} deals</p>
@@ -251,7 +251,7 @@ export function DealsTab({ deals, companies, onRefresh }: DealsTabProps) {
             <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-semibold">
               {closedDeals.length > 0 
                 ? Math.round((deals.filter(d => d.stage === 'closed_won').length / closedDeals.length) * 100) 
                 : 0}%

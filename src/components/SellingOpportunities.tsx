@@ -219,13 +219,13 @@ export function SellingOpportunities({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Lightbulb className="h-4 w-4 text-amber-500" />
+        <Lightbulb className="h-4 w-4 text-score-warm-foreground" />
         <span>{suggestedDeals.length} suggested opportunities based on permit activity</span>
       </div>
 
       <div className="grid gap-3">
         {suggestedDeals.map((suggestion, idx) => (
-          <Card key={idx} className="border-amber-500/30 bg-amber-500/5">
+          <Card key={idx} className="border-score-warm-foreground/30 bg-score-warm/20">
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
@@ -235,8 +235,8 @@ export function SellingOpportunities({
                     <Badge
                       className={
                         suggestion.sellingOption.type === 'Network'
-                          ? 'bg-blue-500/20 text-blue-600 border-blue-500/30'
-                          : 'bg-green-500/20 text-green-600 border-green-500/30'
+                          ? 'bg-secondary text-primary-hover border-primary/20'
+                          : 'bg-success/10 text-success border-success/30'
                       }
                     >
                       {suggestion.sellingOption.type}

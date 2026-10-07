@@ -113,17 +113,17 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
 
   const getScoreIcon = (score: Company['score']) => {
     switch (score) {
-      case 'hot': return <Flame className="h-4 w-4 text-red-500" />;
-      case 'warm': return <Thermometer className="h-4 w-4 text-amber-500" />;
-      case 'cold': return <Snowflake className="h-4 w-4 text-blue-500" />;
+      case 'hot': return <Flame className="h-4 w-4 text-score-hot" />;
+      case 'warm': return <Thermometer className="h-4 w-4 text-score-warm-foreground" />;
+      case 'cold': return <Snowflake className="h-4 w-4 text-primary" />;
     }
   };
 
   const getScoreBadge = (score: Company['score']) => {
     const variants: Record<Company['score'], string> = {
-      hot: 'bg-red-500/20 text-red-400 border-red-500/30',
-      warm: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-      cold: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      hot: 'bg-score-hot/10 text-score-hot border-score-hot/30',
+      warm: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30',
+      cold: 'bg-secondary text-primary-hover border-primary/20',
     };
     return variants[score];
   };
@@ -253,7 +253,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
       <div className="grid gap-4 md:grid-cols-6">
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="text-sm text-muted-foreground">Total Permits</div>
-          <div className="text-2xl font-bold mt-1">{totalPermits}</div>
+          <div className="text-2xl font-semibold mt-1">{totalPermits}</div>
         </div>
         <div 
           className={`rounded-xl border p-4 cursor-pointer transition-colors ${
@@ -265,55 +265,55 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
             <Building2 className="h-4 w-4 text-primary" />
             Total Companies
           </div>
-          <div className="text-2xl font-bold mt-1">{companies.length}</div>
+          <div className="text-2xl font-semibold mt-1">{companies.length}</div>
         </div>
         <div 
           className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            activeView === 'clients' ? 'border-purple-500 bg-purple-500/10' : 'border-border bg-card hover:border-purple-500/50'
+            activeView === 'clients' ? 'border-foreground bg-foreground/10' : 'border-border bg-card hover:border-foreground/50'
           }`}
           onClick={() => setActiveView('clients')}
         >
           <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <UserCheck className="h-4 w-4 text-purple-500" />
+            <UserCheck className="h-4 w-4 text-foreground" />
             Current Clients
           </div>
-          <div className="text-2xl font-bold text-purple-500 mt-1">{currentClients.length}</div>
+          <div className="text-2xl font-semibold text-foreground mt-1">{currentClients.length}</div>
         </div>
         <div 
           className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            scoreFilter === 'hot' ? 'border-red-500 bg-red-500/10' : 'border-border bg-card hover:border-red-500/50'
+            scoreFilter === 'hot' ? 'border-score-hot bg-score-hot/10' : 'border-border bg-card hover:border-score-hot/50'
           }`}
           onClick={() => setScoreFilter(scoreFilter === 'hot' ? 'all' : 'hot')}
         >
           <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Flame className="h-4 w-4 text-red-500" />
+            <Flame className="h-4 w-4 text-score-hot" />
             Hot Leads
           </div>
-          <div className="text-2xl font-bold text-red-500 mt-1">{hotCount}</div>
+          <div className="text-2xl font-semibold text-score-hot mt-1">{hotCount}</div>
         </div>
         <div 
           className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            scoreFilter === 'warm' ? 'border-amber-500 bg-amber-500/10' : 'border-border bg-card hover:border-amber-500/50'
+            scoreFilter === 'warm' ? 'border-score-warm-foreground bg-score-warm/40' : 'border-border bg-card hover:border-score-warm-foreground/50'
           }`}
           onClick={() => setScoreFilter(scoreFilter === 'warm' ? 'all' : 'warm')}
         >
           <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Thermometer className="h-4 w-4 text-amber-500" />
+            <Thermometer className="h-4 w-4 text-score-warm-foreground" />
             Warm Leads
           </div>
-          <div className="text-2xl font-bold text-amber-500 mt-1">{warmCount}</div>
+          <div className="text-2xl font-semibold text-score-warm-foreground mt-1">{warmCount}</div>
         </div>
         <div 
           className={`rounded-xl border p-4 cursor-pointer transition-colors ${
-            scoreFilter === 'cold' ? 'border-blue-500 bg-blue-500/10' : 'border-border bg-card hover:border-blue-500/50'
+            scoreFilter === 'cold' ? 'border-primary bg-primary/10' : 'border-border bg-card hover:border-primary/50'
           }`}
           onClick={() => setScoreFilter(scoreFilter === 'cold' ? 'all' : 'cold')}
         >
           <div className="text-sm text-muted-foreground flex items-center gap-2">
-            <Snowflake className="h-4 w-4 text-blue-500" />
+            <Snowflake className="h-4 w-4 text-primary" />
             Cold Leads
           </div>
-          <div className="text-2xl font-bold text-blue-500 mt-1">{coldCount}</div>
+          <div className="text-2xl font-semibold text-primary mt-1">{coldCount}</div>
         </div>
       </div>
 
@@ -398,10 +398,10 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
-                          company.isCurrentClient ? 'bg-purple-500/10' : 'bg-primary/10'
+                          company.isCurrentClient ? 'bg-foreground/10' : 'bg-primary/10'
                         }`}>
                           {company.isCurrentClient ? (
-                            <UserCheck className="h-4 w-4 text-purple-500" />
+                            <UserCheck className="h-4 w-4 text-foreground" />
                           ) : (
                             <Building2 className="h-4 w-4 text-primary" />
                           )}
@@ -410,7 +410,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
                           <div className="font-medium flex items-center gap-2">
                             {company.name}
                             {company.isCurrentClient && (
-                              <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-xs">
+                              <Badge className="bg-foreground/10 text-foreground border-foreground/20 text-xs">
                                 Client
                               </Badge>
                             )}
@@ -441,7 +441,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh }: Companies
                     <TableCell className="text-sm font-medium">
                       {company.dealCount}
                     </TableCell>
-                    <TableCell className="text-right font-semibold text-green-600">
+                    <TableCell className="text-right font-semibold text-success">
                       ${company.weightedRevenue.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right font-semibold text-primary">

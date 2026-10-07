@@ -264,8 +264,8 @@ export function DataImport({ onImportComplete }: DataImportProps) {
             {selectedState === 'TX' && (
               <div className="space-y-4">
                 {/* Date Range Helper */}
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <div className="bg-score-warm/40 border border-score-warm-foreground/30 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-score-warm-foreground">
                     <Calendar className="h-4 w-4" />
                     <span className="text-sm font-medium">Suggested Date Range</span>
                   </div>

@@ -65,17 +65,17 @@ interface ResearchDeskProps {
 }
 
 const STATUS_CONFIG: Record<ResearchStatus, { label: string; color: string }> = {
-  new: { label: 'New', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  researching: { label: 'Researching', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
-  verified: { label: 'Verified', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  current_client: { label: 'Current Client', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  new: { label: 'New', color: 'bg-secondary text-primary-hover border-primary/20' },
+  researching: { label: 'Researching', color: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30' },
+  verified: { label: 'Verified', color: 'bg-success/10 text-success border-success/30' },
+  current_client: { label: 'Current Client', color: 'bg-foreground/10 text-foreground border-foreground/20' },
   archived: { label: 'Archived', color: 'bg-muted text-muted-foreground border-muted' },
 };
 
 const PRIORITY_CONFIG: Record<Priority, { label: string; icon: React.ReactNode; color: string }> = {
-  hot: { label: 'Hot', icon: <Flame className="h-3 w-3" />, color: 'text-red-500' },
-  warm: { label: 'Warm', icon: <Thermometer className="h-3 w-3" />, color: 'text-amber-500' },
-  cold: { label: 'Cold', icon: <Layers className="h-3 w-3" />, color: 'text-blue-400' },
+  hot: { label: 'Hot', icon: <Flame className="h-3 w-3" />, color: 'text-score-hot' },
+  warm: { label: 'Warm', icon: <Thermometer className="h-3 w-3" />, color: 'text-score-warm-foreground' },
+  cold: { label: 'Cold', icon: <Layers className="h-3 w-3" />, color: 'text-primary' },
 };
 
 // Calculate priority based on permit characteristics
@@ -307,23 +307,23 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
         {/* Header Stats */}
         <div className="grid gap-3 grid-cols-5 mb-4">
           <div className="rounded-lg border border-border bg-card p-3">
-            <div className="text-2xl font-bold text-blue-400">{newCount}</div>
+            <div className="text-2xl font-semibold text-primary">{newCount}</div>
             <div className="text-xs text-muted-foreground">New Leads</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
-            <div className="text-2xl font-bold text-red-500">{hotCount}</div>
+            <div className="text-2xl font-semibold text-score-hot">{hotCount}</div>
             <div className="text-xs text-muted-foreground">Hot Leads</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
-            <div className="text-2xl font-bold text-purple-400">{currentClientCount}</div>
+            <div className="text-2xl font-semibold text-foreground">{currentClientCount}</div>
             <div className="text-xs text-muted-foreground">Current Clients</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
-            <div className="text-2xl font-bold text-amber-400">{researchingCount}</div>
+            <div className="text-2xl font-semibold text-score-warm-foreground">{researchingCount}</div>
             <div className="text-xs text-muted-foreground">Researching</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-3">
-            <div className="text-2xl font-bold text-green-400">{verifiedCount}</div>
+            <div className="text-2xl font-semibold text-success">{verifiedCount}</div>
             <div className="text-xs text-muted-foreground">Verified</div>
           </div>
         </div>

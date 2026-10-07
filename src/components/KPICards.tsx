@@ -44,7 +44,7 @@ export function KPICards({ totalPermits, newThisWeek, hotLeads, pipelineValue }:
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{card.title}</p>
-                <p className="text-3xl font-bold mt-1 tabular-nums">{card.value}</p>
+                <p className="text-3xl font-semibold mt-1 tabular-nums">{card.value}</p>
               </div>
               <card.icon className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
             </div>

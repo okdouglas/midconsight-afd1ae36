@@ -175,7 +175,7 @@ export function ImportAddendum({ metadata, skippedRows, onClearLogs }: ImportAdd
                               row.reason === 'Header/Metadata' 
                                 ? 'bg-muted text-muted-foreground' 
                                 : row.reason === 'Duplicate'
-                                ? 'bg-amber-500/10 text-amber-600'
+                                ? 'bg-score-warm/40 text-score-warm-foreground'
                                 : 'bg-destructive/10 text-destructive'
                             }`}>
                               {row.reason}

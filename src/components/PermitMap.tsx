@@ -8,6 +8,7 @@ import L from 'leaflet';
 import { createBasemapLayer } from '@/lib/basemap';
 import 'leaflet/dist/leaflet.css';
 import type { Permit } from '@/lib/schema-mapping';
+import { WELL_TYPE_COLORS, wellTypeKey } from '@/lib/brand-colors';
 
 // Fix default marker icons for Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -24,11 +25,7 @@ interface PermitMapProps {
 
 // Custom marker icon based on well type
 const getMarkerIcon = (wellType: string): L.DivIcon => {
-  let color = '#10b981'; // Default green
-  if (wellType?.toLowerCase().includes('oil')) color = '#22c55e';
-  if (wellType?.toLowerCase().includes('gas')) color = '#3b82f6';
-  if (wellType?.toLowerCase().includes('injection')) color = '#f59e0b';
-  if (wellType?.toLowerCase().includes('disposal')) color = '#ef4444';
+  const color = WELL_TYPE_COLORS[wellTypeKey(wellType)];
 
   return L.divIcon({
     className: 'custom-marker',
@@ -96,7 +93,7 @@ export function PermitMap({ permits, onPermitClick }: PermitMapProps) {
       // Create popup content
       const popupContent = `
         <div style="font-family: system-ui; font-size: 12px; min-width: 200px;">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #16a34a;">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #0B2545;">
             ${permit.wellName || 'Unknown Well'}
           </div>
           <div style="display: grid; gap: 4px;">
@@ -139,19 +136,19 @@ export function PermitMap({ permits, onPermitClick }: PermitMapProps) {
         <div className="font-semibold mb-2">Well Types</div>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500 border border-white" />
+            <div className="w-3 h-3 rounded-full border border-white" style={{ background: WELL_TYPE_COLORS.oil }} />
             <span>Oil</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500 border border-white" />
+            <div className="w-3 h-3 rounded-full border border-white" style={{ background: WELL_TYPE_COLORS.gas }} />
             <span>Gas</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-amber-500 border border-white" />
+            <div className="w-3 h-3 rounded-full border border-white" style={{ background: WELL_TYPE_COLORS.injection }} />
             <span>Injection</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500 border border-white" />
+            <div className="w-3 h-3 rounded-full border border-white" style={{ background: WELL_TYPE_COLORS.disposal }} />
             <span>Disposal</span>
           </div>
         </div>

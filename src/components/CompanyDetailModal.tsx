@@ -310,17 +310,17 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
 
   const getScoreIcon = (score: Company['score']) => {
     switch (score) {
-      case 'hot': return <Flame className="h-4 w-4 text-red-500" />;
-      case 'warm': return <Thermometer className="h-4 w-4 text-amber-500" />;
-      case 'cold': return <Snowflake className="h-4 w-4 text-blue-500" />;
+      case 'hot': return <Flame className="h-4 w-4 text-score-hot" />;
+      case 'warm': return <Thermometer className="h-4 w-4 text-score-warm-foreground" />;
+      case 'cold': return <Snowflake className="h-4 w-4 text-primary" />;
     }
   };
 
   const getScoreBadge = (score: Company['score']) => {
     const variants: Record<Company['score'], string> = {
-      hot: 'bg-red-500/20 text-red-400 border-red-500/30',
-      warm: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-      cold: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      hot: 'bg-score-hot/10 text-score-hot border-score-hot/30',
+      warm: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30',
+      cold: 'bg-secondary text-primary-hover border-primary/20',
     };
     return variants[score];
   };
@@ -374,11 +374,11 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "h-10 w-10 rounded-full flex items-center justify-center",
-                  isCurrentClient ? "bg-green-500/20" : "bg-muted"
+                  isCurrentClient ? "bg-success/10" : "bg-muted"
                 )}>
                   <Building2 className={cn(
                     "h-5 w-5",
-                    isCurrentClient ? "text-green-500" : "text-muted-foreground"
+                    isCurrentClient ? "text-success" : "text-muted-foreground"
                   )} />
                 </div>
                 <div>
@@ -398,11 +398,11 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
             <div className="grid grid-cols-2 gap-4">
               <div className="border border-border rounded-lg p-4">
                 <div className="text-sm text-muted-foreground">Total Permits</div>
-                <div className="text-2xl font-bold">{company.permitCount}</div>
+                <div className="text-2xl font-semibold">{company.permitCount}</div>
               </div>
               <div className="border border-border rounded-lg p-4">
                 <div className="text-sm text-muted-foreground">Est. Value</div>
-                <div className="text-2xl font-bold text-primary">${company.totalValue.toLocaleString()}</div>
+                <div className="text-2xl font-semibold text-primary">${company.totalValue.toLocaleString()}</div>
               </div>
             </div>
 

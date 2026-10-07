@@ -25,6 +25,7 @@ import {
   ChevronLeft, ChevronRight, FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BRAND } from '@/lib/brand-colors';
 
 // Fix default marker icons for Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -98,14 +99,14 @@ export type LifecycleStage =
   | 'temp_abandoned' | 'plugged' | 'orphan' | 'other';
 
 const STAGE_COLORS: Record<LifecycleStage, string> = {
-  permitted: '#888780',       // neutral gray — filed, not yet resolved
-  active: '#639922',          // green — producing
-  injection: '#378ADD',       // blue — injection/water
-  dry: '#E24B4A',             // red — non-productive
-  temp_abandoned: '#BA7517',  // amber — inactive, unresolved
-  plugged: '#5F5E5A',         // dark gray — end of life
-  orphan: '#D85A30',          // coral — kept distinct from dry: regulatory/liability signal, not just "didn't produce"
-  other: '#888780',
+  permitted: BRAND.blue300,   // light blue: filed, not yet resolved
+  active: BRAND.blue,         // Dodger blue: producing
+  injection: BRAND.navy,      // navy: injection / water
+  dry: '#8FA3BC',             // pale slate: non-productive
+  temp_abandoned: BRAND.amber, // amber: warm, inactive and unresolved
+  plugged: BRAND.muted,       // slate: end of life
+  orphan: BRAND.red,          // signal red: the one heat signal, a regulatory / liability flag
+  other: '#B4C3D4',           // light slate: unclassified
 };
 
 export const STAGE_LABELS: Record<LifecycleStage, string> = {
@@ -477,7 +478,7 @@ export function PermitMapAdvanced({
         ? 'Source: County Estimate' 
         : 'Source: State GPS';
       
-      const sourceColor = permit.isCentroidMapped ? '#f97316' : '#16a34a';
+      const sourceColor = BRAND.navy;
 
       const stage = classifyLifecycleStage(permit);
       const stageColor = STAGE_COLORS[stage];
@@ -492,9 +493,9 @@ export function PermitMapAdvanced({
       const statusLine = isEnriched
         ? `<div style="margin-top: 6px; padding: 6px 8px; background: ${stageColor}1a; border-left: 3px solid ${stageColor}; border-radius: 2px;">
              <div style="font-weight: 600; color: ${stageColor};">${STAGE_LABELS[stage]}</div>
-             <div style="font-size: 10px; color: #6b7280;">RBDMS, checked ${permit.rbdmsEnrichedAt?.split('T')[0]}</div>
+             <div style="font-size: 10px; color: #5B6F8A;">RBDMS, checked ${permit.rbdmsEnrichedAt?.split('T')[0]}</div>
            </div>`
-        : `<div style="margin-top: 6px; padding: 6px 8px; background: #f3f4f6; border-left: 3px solid #9ca3af; border-radius: 2px; color: #6b7280;">
+        : `<div style="margin-top: 6px; padding: 6px 8px; background: #EEF4FA; border-left: 3px solid #9DB4CE; border-radius: 2px; color: #5B6F8A;">
              Not yet matched to a well record
            </div>`;
 
@@ -503,7 +504,7 @@ export function PermitMapAdvanced({
         : '';
 
       const wellFileLink = permit.rbdmsWellRecordsUrl
-        ? `<div style="margin-top: 6px;"><a href="${permit.rbdmsWellRecordsUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb;">View well file →</a></div>`
+        ? `<div style="margin-top: 6px;"><a href="${permit.rbdmsWellRecordsUrl}" target="_blank" rel="noopener noreferrer" style="color: #005A9C;">View well file →</a></div>`
         : '';
 
       const popupContent = `
@@ -511,7 +512,7 @@ export function PermitMapAdvanced({
           <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px; color: ${sourceColor};">
             ${permit.wellName || 'Unknown Well'}
           </div>
-          <div style="font-size: 11px; color: #6b7280; margin-bottom: 8px;">${filedLine}</div>
+          <div style="font-size: 11px; color: #5B6F8A; margin-bottom: 8px;">${filedLine}</div>
           <div style="display: grid; gap: 4px;">
             <div><strong>Operator:</strong> ${permit.operator || 'N/A'}</div>
             <div><strong>API:</strong> ${permit.api || 'N/A'}</div>
@@ -521,7 +522,7 @@ export function PermitMapAdvanced({
           </div>
           ${statusLine}
           ${wellFileLink}
-          <div style="background: ${permit.isCentroidMapped ? '#fef3c7' : '#dcfce7'}; color: ${permit.isCentroidMapped ? '#92400e' : '#166534'}; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
+          <div style="background: ${permit.isCentroidMapped ? BRAND.amberTint : BRAND.blue100}; color: ${permit.isCentroidMapped ? BRAND.amberText : BRAND.blue700}; padding: 4px 8px; border-radius: 4px; margin-top: 8px; font-size: 11px;">
             ${permit.isCentroidMapped ? '⚠️' : '📍'} ${sourceLabel}
           </div>
         </div>

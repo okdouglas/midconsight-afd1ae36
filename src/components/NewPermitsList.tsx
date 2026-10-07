@@ -2,15 +2,17 @@ import { useMemo, useState } from 'react';
 import { Calendar, MapPin, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type Permit } from '@/lib/schema-mapping';
+import { WELL_TYPE_COLORS, wellTypeKey } from '@/lib/brand-colors';
 
 // Dot colors match the Well Types legend on the dashboard map.
+const DOT_LABELS = { oil: 'Oil', gas: 'Gas', injection: 'Injection', disposal: 'Disposal' } as const;
+
 function wellTypeDot(wellType?: string): { color: string; label: string } {
-  const t = (wellType || '').toLowerCase();
-  if (t.includes('gas')) return { color: 'bg-blue-500', label: 'Gas' };
-  if (t.includes('inj')) return { color: 'bg-amber-500', label: 'Injection' };
-  if (t.includes('disp')) return { color: 'bg-red-500', label: 'Disposal' };
-  if (t.includes('oil')) return { color: 'bg-green-500', label: 'Oil' };
-  return { color: 'bg-muted-foreground', label: wellType || 'Other' };
+  const key = wellTypeKey(wellType);
+  return {
+    color: WELL_TYPE_COLORS[key],
+    label: key === 'other' ? wellType || 'Other' : DOT_LABELS[key],
+  };
 }
 
 function formatDate(d?: string): string {
@@ -55,7 +57,7 @@ export function NewPermitsList({ permits }: { permits: Permit[] }) {
                   <div className="text-xs text-muted-foreground truncate">{well}</div>
                 </div>
                 <span className="flex items-center gap-1.5 text-xs shrink-0">
-                  <span className={`h-2 w-2 rounded-full ${dot.color}`} aria-hidden="true" />
+                  <span className="h-2 w-2 rounded-full" style={{ background: dot.color }} aria-hidden="true" />
                   {dot.label}
                 </span>
               </div>
