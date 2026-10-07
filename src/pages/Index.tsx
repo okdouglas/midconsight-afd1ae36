@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
-import { Database, BarChart3, Users, Map, DollarSign, LogOut, CreditCard, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
+import { Database, BarChart3, Users, Map, DollarSign, LogOut, Settings, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
@@ -18,9 +18,10 @@ import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { incrementPaywallHits, markActivated, openBillingPortal } from '@/lib/supabase-data';
+import { incrementPaywallHits, markActivated } from '@/lib/supabase-data';
 import { toast } from 'sonner';
 import { UpgradeDialog } from '@/components/UpgradeDialog';
+import { AccountSettings } from '@/components/AccountSettings';
 
 const NAV_ITEMS = [
   { value: 'dashboard', label: 'Dashboard', icon: BarChart3, minPlan: null },
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { value: 'deals', label: 'Deals', icon: DollarSign, minPlan: 'pro' },
   { value: 'products', label: 'Products', icon: Package, minPlan: 'pro' },
   { value: 'data', label: 'Data', icon: Database, minPlan: 'starter' },
+  { value: 'account', label: 'Account', icon: Settings, minPlan: null },
 ] as const;
 
 type MinPlan = 'starter' | 'pro' | null;
@@ -57,7 +59,7 @@ function UpgradePrompt({ label, tier, onUpgradeClick }: { label: string; tier: '
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const { profile, plan, isPaid, hasStarter, isPro, refresh: refreshProfile } = useProfile();
+  const { profile, loading: profileLoading, plan, isPaid, hasStarter, isPro, refresh: refreshProfile } = useProfile();
   // Coming back from Stripe Checkout. The plan changes when Stripe's webhook lands, a few seconds
   // after payment. Keep checking (up to a minute) until the plan is no longer Free.
   const planRef = useRef(plan);
@@ -101,14 +103,7 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleManageBilling = async () => {
-    const result = await openBillingPortal();
-    if ('url' in result) window.location.href = result.url;
-    else if ('notConfigured' in result) toast('Billing is not switched on yet.');
-    else toast.error("Couldn't open billing. Please try again.");
-  };
-
-  const canAccess = (min: MinPlan) => min === null || (min === 'starter' ? hasStarter : isPro);
+  const canAccess = (min: MinPlan) => min === null || profileLoading || (min === 'starter' ? hasStarter : isPro);
   const {
     permits,
     datasets,
@@ -144,7 +139,7 @@ const Index = () => {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, hasStarter, isPro]);
+  }, [activeTab, hasStarter, isPro, profileLoading]);
 
   // Mark activation the first time the user has any permits to look at
   // (server-side no-op after the first call, safe to fire repeatedly).
@@ -192,16 +187,6 @@ const Index = () => {
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to site
           </Link>
-          {isPaid && (
-            <button
-              type="button"
-              onClick={handleManageBilling}
-              className="flex w-full items-center gap-2 px-3 py-2 rounded-md text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60 transition-colors"
-            >
-              <CreditCard className="h-3.5 w-3.5" />
-              Manage billing
-            </button>
-          )}
           <div className="flex items-center justify-between gap-2 px-3 py-1.5">
             <span className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</span>
             <Button
@@ -239,7 +224,7 @@ const Index = () => {
                 <div className="text-center py-12">
                   <Database className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
                   <h2 className="text-xl font-semibold mb-2">No Data Loaded</h2>
-                  {hasStarter ? (
+                  {canAccess('starter') ? (
                     <>
                       <p className="text-muted-foreground mb-6">
                         Import your ITD wells/formations data to get started with permit intelligence.
@@ -286,7 +271,7 @@ const Index = () => {
 
             {/* Research Desk Tab */}
             <TabsContent value="research" className="space-y-6 mt-0">
-              {hasStarter ? (
+              {canAccess('starter') ? (
                 <ResearchDesk permits={permits} companies={companies} onRefresh={refresh} windowDays={windowDays} />
               ) : (
                 <UpgradePrompt label="Lead Research" tier="starter" onUpgradeClick={() => openUpgradeDialog('research_tab')} />
@@ -302,7 +287,7 @@ const Index = () => {
 
             {/* Companies Tab */}
             <TabsContent value="companies" className="space-y-6 mt-0">
-              {isPro ? (
+              {canAccess('pro') ? (
                 <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} windowDays={windowDays} hiddenCompanyCount={hiddenCompanyCount} />
               ) : (
                 <UpgradePrompt label="Companies" tier="pro" onUpgradeClick={() => openUpgradeDialog('companies_tab')} />
@@ -311,21 +296,33 @@ const Index = () => {
 
             {/* Deals Tab */}
             <TabsContent value="deals" className="space-y-6 mt-0">
-              {isPro ? (
+              {canAccess('pro') ? (
                 <DealsTab deals={deals} companies={companies} onRefresh={refresh} />
               ) : (
                 <UpgradePrompt label="Deals" tier="pro" onUpgradeClick={() => openUpgradeDialog('deals_tab')} />
               )}
             </TabsContent>
 
+            {/* Account Tab */}
+            <TabsContent value="account" className="space-y-6 mt-0">
+              <AccountSettings
+                email={user?.email}
+                profile={profile}
+                plan={plan}
+                onProfileSaved={refreshProfile}
+                onUpgrade={() => openUpgradeDialog('account_page')}
+                onSignOut={signOut}
+              />
+            </TabsContent>
+
             {/* Products Tab */}
             <TabsContent value="products" className="space-y-6 mt-0">
-              {isPro ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" tier="pro" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
+              {canAccess('pro') ? <ProductCatalog /> : <UpgradePrompt label="Product Catalog" tier="pro" onUpgradeClick={() => openUpgradeDialog('products_tab')} />}
             </TabsContent>
 
             {/* Data Management Tab */}
             <TabsContent value="data" className="space-y-6 mt-0">
-              {hasStarter ? (
+              {canAccess('starter') ? (
                 <>
                   <DataImport onImportComplete={refresh} />
                   <DatasetManager
