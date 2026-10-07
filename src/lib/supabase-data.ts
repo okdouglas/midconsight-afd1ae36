@@ -228,14 +228,26 @@ function dbPermitToApp(p: DbPermit): Permit {
 
 // ============ FETCH OPERATIONS ============
 
-export async function getAllPermits(): Promise<Permit[]> {
-  const { data, error } = await supabase
-    .from('permits')
-    .select('*')
-    .order('created_at', { ascending: false });
+// Supabase returns at most 1,000 rows per request. Read every page.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAllRows<T = any>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const size = 1000;
+  const rows: T[] = [];
+  for (let from = 0; ; from += size) {
+    const { data, error } = await build(from, from + size - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < size) break;
+  }
+  return rows;
+}
 
-  if (error) throw error;
-  return (data || []).map(dbPermitToApp);
+export async function getAllPermits(): Promise<Permit[]> {
+  const data = await fetchAllRows((a, b) =>
+    supabase.from('permits').select('*').order('created_at', { ascending: false }).order('id').range(a, b));
+  return data.map(dbPermitToApp);
 }
 
 export async function getAllCompanies(): Promise<DbCompany[]> {
@@ -554,11 +566,10 @@ export async function importFile(
   }
 
   // Check for existing permits by API to avoid duplicates
-  const { data: existingPermits } = await supabase
-    .from('permits')
-    .select('api');
-  
-  const existingApis = new Set((existingPermits || []).map(p => p.api));
+  const existingPermits = await fetchAllRows<{ api: string }>((a, b) =>
+    supabase.from('permits').select('api').order('id').range(a, b));
+
+  const existingApis = new Set(existingPermits.map(p => p.api));
   const newPermits = importResult.permits.filter(p => !existingApis.has(p.api));
   
   // Track duplicates as skipped rows
@@ -664,12 +675,10 @@ export async function importFile(
 
 async function rebuildCompanies(userId: string): Promise<void> {
   // Get all permits
-  const { data: permits } = await supabase
-    .from('permits')
-    .select('*')
-    .eq('user_id', userId);
+  const permits = await fetchAllRows((a, b) =>
+    supabase.from('permits').select('*').eq('user_id', userId).order('id').range(a, b));
 
-  if (!permits || permits.length === 0) return;
+  if (permits.length === 0) return;
 
   // Group permits by operator
   const operatorMap = new Map<string, typeof permits>();

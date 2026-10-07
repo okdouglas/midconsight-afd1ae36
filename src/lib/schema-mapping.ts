@@ -207,7 +207,7 @@ export function normalizeDate(value: unknown): string | undefined {
   if (!value) return undefined;
   
   const strValue = String(value).trim();
-  if (!strValue || strValue === '1900-01-00 00:00:00') return undefined;
+  if (!strValue || strValue === '1900-01-01 00:00:00') return undefined;
   
   // Handle Excel serial date numbers
   if (typeof value === 'number') {

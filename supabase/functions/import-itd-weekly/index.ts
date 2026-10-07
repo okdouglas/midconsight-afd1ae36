@@ -108,11 +108,8 @@ Deno.serve(async (req) => {
     const importResult = processExcelData(rawRows, datasetId, AVG_PERMIT_VALUE, 'OK');
 
     // 4. Dedupe against existing permits for this account
-    const { data: existingPermits, error: existingErr } = await supabase
-      .from('permits')
-      .select('api')
-      .eq('user_id', autoImportUserId);
-    if (existingErr) throw existingErr;
+    const existingPermits = await fetchAll((a, b) =>
+      supabase.from('permits').select('api').eq('user_id', autoImportUserId).order('id').range(a, b));
 
     const existingApis = new Set((existingPermits || []).map((p: { api: string }) => p.api));
     const newPermits = importResult.permits.filter((p) => !existingApis.has(p.api));
@@ -268,10 +265,27 @@ function scoreOperatorRows(permits: any[]): 'hot' | 'warm' | 'cold' {
   return 'cold';
 }
 
+
+// Supabase returns at most 1,000 rows per request. Read every page.
+// deno-lint-ignore no-explicit-any
+async function fetchAll(build: (from: number, to: number) => any): Promise<any[]> {
+  const size = 1000;
+  // deno-lint-ignore no-explicit-any
+  const rows: any[] = [];
+  for (let from = 0; ; from += size) {
+    const { data, error } = await build(from, from + size - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < size) break;
+  }
+  return rows;
+}
+
 // deno-lint-ignore no-explicit-any
 async function rebuildCompanies(supabase: any, userId: string, avgPermitValue: number) {
-  const { data: permits } = await supabase.from('permits').select('*').eq('user_id', userId);
-  if (!permits || permits.length === 0) return;
+  const permits = await fetchAll((a, b) =>
+    supabase.from('permits').select('*').eq('user_id', userId).order('id').range(a, b));
+  if (permits.length === 0) return;
 
   // deno-lint-ignore no-explicit-any
   const operatorMap = new Map<string, any[]>();
@@ -282,10 +296,8 @@ async function rebuildCompanies(supabase: any, userId: string, avgPermitValue: n
     operatorMap.set(permit.operator, existing);
   });
 
-  const { data: existingCompanies } = await supabase
-    .from('companies')
-    .select('*')
-    .eq('user_id', userId);
+  const existingCompanies = await fetchAll((a, b) =>
+    supabase.from('companies').select('*').eq('user_id', userId).order('id').range(a, b));
   // deno-lint-ignore no-explicit-any
   const existingCompanyMap = new Map((existingCompanies || []).map((c: any) => [c.name, c]));
 
@@ -314,6 +326,7 @@ async function rebuildCompanies(supabase: any, userId: string, avgPermitValue: n
   });
 
   for (const company of companiesToUpsert) {
-    await supabase.from('companies').upsert(company, { onConflict: 'id' });
+    const { error } = await supabase.from('companies').upsert(company, { onConflict: 'id' });
+    if (error) console.error(`companies upsert failed for ${company.name}: ${error.message}`);
   }
 }

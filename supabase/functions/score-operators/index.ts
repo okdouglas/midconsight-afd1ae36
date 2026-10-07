@@ -1,6 +1,6 @@
 // Recomputes every operator's lead tier and the reasons behind it.
-// Rule v4 lives in the SQL function compute_operator_scores (see the
-// 20261007130000 migration). Called by pg_cron after the Monday import,
+// Rule v4.1 lives in the SQL function compute_operator_scores (see the
+// 20261007140000 migration). Called by pg_cron after the Monday import,
 // guarded by the shared secret like the other cron functions.
 
 import { createClient } from 'npm:@supabase/supabase-js@2.89.0';
@@ -33,8 +33,9 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     // Operators that left the shared feed no longer carry a score.
-    const { data: feedOps } = await supabase.from('permits').select('operator').eq('is_shared', true);
-    const live = new Set((feedOps ?? []).map((r) => String(r.operator ?? '').trim().toUpperCase()));
+    const feedOps = await fetchAll((a, b) =>
+      supabase.from('permits').select('operator').eq('is_shared', true).order('id').range(a, b));
+    const live = new Set(feedOps.map((r) => String(r.operator ?? '').trim().toUpperCase()));
     const { data: scored } = await supabase.from('operator_scores').select('operator_key');
     const stale = (scored ?? []).map((r) => r.operator_key).filter((k) => !live.has(k));
     if (stale.length) await supabase.from('operator_scores').delete().in('operator_key', stale);
@@ -55,3 +56,18 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// Supabase returns at most 1,000 rows per request. Read every page.
+// deno-lint-ignore no-explicit-any
+async function fetchAll(build: (from: number, to: number) => any): Promise<any[]> {
+  const size = 1000;
+  // deno-lint-ignore no-explicit-any
+  const rows: any[] = [];
+  for (let from = 0; ; from += size) {
+    const { data, error } = await build(from, from + size - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < size) break;
+  }
+  return rows;
+}
