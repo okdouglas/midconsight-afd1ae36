@@ -35,6 +35,9 @@ interface CompaniesTabProps {
   /** Open this company's modal once, then call onOpenCompanyHandled. Set by the open-company event. */
   openCompanyName?: string | null;
   onOpenCompanyHandled?: () => void;
+  /** Apply a hot, warm or cold filter once (the Hot Leads card on the dashboard). */
+  requestedScoreFilter?: 'hot' | 'warm' | 'cold' | null;
+  onRequestedScoreFilterHandled?: () => void;
 }
 
 type SortField = 'name' | 'permitCount' | 'heat' | 'dealCount' | 'weightedRevenue' | 'score';
@@ -75,7 +78,7 @@ function FilterChip({
   );
 }
 
-export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays, hiddenCompanyCount = 0, hiddenCompanies = [], openCompanyName = null, onOpenCompanyHandled }: CompaniesTabProps) {
+export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays, hiddenCompanyCount = 0, hiddenCompanies = [], openCompanyName = null, onOpenCompanyHandled, requestedScoreFilter = null, onRequestedScoreFilterHandled }: CompaniesTabProps) {
   const [pickedCompany, setSelectedCompany] = useState<Company | null>(null);
   // The open company always reflects the live score, so moving the score window
   // updates it while the modal is open.
@@ -299,6 +302,15 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
   const hotCount = viewBase.filter(c => c.score === 'hot').length;
   const warmCount = viewBase.filter(c => c.score === 'warm').length;
   const coldCount = viewBase.filter(c => c.score === 'cold').length;
+
+  useEffect(() => {
+    if (!requestedScoreFilter) return;
+    setScoreFilter(requestedScoreFilter);
+    setActiveView('all');
+    setSearchQuery('');
+    onRequestedScoreFilterHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedScoreFilter]);
 
   // Open a company when another screen asks (the open-company event, via Index).
   const handledOpen = useRef<string | null>(null);

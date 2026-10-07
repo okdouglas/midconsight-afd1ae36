@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { Database, BarChart3, Users, Map, DollarSign, LogOut, Settings, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { DataImport } from '@/components/DataImport';
 import { DatasetManager } from '@/components/DatasetManager';
 import { KPICards } from '@/components/KPICards';
-import { PermitMap } from '@/components/PermitMap';
 import { NewPermitsList } from '@/components/NewPermitsList';
 import { PermitMapAdvanced } from '@/components/PermitMapAdvanced';
 import { CompaniesTab } from '@/components/CompaniesTab';
@@ -113,11 +112,49 @@ const Index = () => {
     stats,
     windowDays,
     hiddenCompanyCount,
+    hiddenCompanies,
   } = useSupabaseData();
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
   const [upgradeSource, setUpgradeSource] = useState('');
+
+  // Cross-module links (audit): open a company from anywhere, or jump to a tab.
+  //   window.dispatchEvent(new CustomEvent('midconsight:open-company', { detail: { name } }))
+  //   window.dispatchEvent(new CustomEvent('midconsight:goto-tab', { detail: { tab } }))
+  const [pendingCompany, setPendingCompany] = useState<string | null>(null);
+  const [pendingScoreFilter, setPendingScoreFilter] = useState<'hot' | 'warm' | 'cold' | null>(null);
+  useEffect(() => {
+    const onOpenCompany = (e: Event) => {
+      const name = (e as CustomEvent<{ name?: string }>).detail?.name;
+      if (!name) return;
+      setPendingCompany(name);
+      setActiveTab('companies');
+    };
+    window.addEventListener('midconsight:open-company', onOpenCompany);
+    return () => window.removeEventListener('midconsight:open-company', onOpenCompany);
+  }, []);
+  useEffect(() => {
+    const onGotoTab = (e: Event) => {
+      const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
+      if (tab && (tab === 'account' || NAV_ITEMS.some((n) => n.value === tab))) setActiveTab(tab);
+    };
+    window.addEventListener('midconsight:goto-tab', onGotoTab);
+    return () => window.removeEventListener('midconsight:goto-tab', onGotoTab);
+  }, []);
+
+  // Dashboard numbers that are not in the shared stats.
+  const activeOperators = useMemo(
+    () => new Set(newThisWeekPermits.map((p) => p.operator).filter(Boolean)).size,
+    [newThisWeekPermits],
+  );
+  const latestApproval = useMemo(() => {
+    let latest = '';
+    for (const p of permits) if (p.approvalDate && p.approvalDate > latest) latest = p.approvalDate;
+    if (!latest) return '';
+    const d = new Date(`${latest.slice(0, 10)}T00:00:00`);
+    return Number.isNaN(d.getTime()) ? latest : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }, [permits]);
 
   const openUpgradeDialog = (source: string) => {
     setUpgradeSource(source);
@@ -218,7 +255,9 @@ const Index = () => {
         <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6 sticky top-0 z-10">
           <h1 className="font-semibold text-lg tracking-tight">{activeLabel}</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground tabular-nums">{stats.totalPermits} permits loaded</span>
+            {latestApproval && (
+              <span className="text-sm text-muted-foreground tabular-nums">Permits through {latestApproval}</span>
+            )}
           </div>
         </header>
 
@@ -226,7 +265,7 @@ const Index = () => {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             {/* Dashboard Tab */}
             <TabsContent value="dashboard" className="space-y-4 mt-0">
-              {!isPaid && (
+              {!profileLoading && !isPaid && (
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-4 py-2.5 text-sm text-muted-foreground">
                   <Clock className="h-4 w-4 shrink-0 text-primary" />
                   Free plan shows permits from the last 30 days. <button onClick={() => openUpgradeDialog('dashboard_banner')} className="text-primary font-medium hover:underline">Upgrade</button> for full history and more.
@@ -245,21 +284,25 @@ const Index = () => {
                     </>
                   ) : (
                     <p className="text-muted-foreground mb-6">
-                      The shared permit feed hasn't populated yet — check back soon, or{' '}
-                      <button onClick={() => openUpgradeDialog('dashboard_empty_state')} className="text-primary font-medium hover:underline">
-                        upgrade
-                      </button>{' '}
-                      for full access once it does.
+                      No permits in the last 30 days yet. New permits load every Monday.
                     </p>
                   )}
                 </div>
               ) : (
                 <>
-                  <KPICards 
-                    totalPermits={stats.totalPermits}
+                  <KPICards
                     newThisWeek={stats.newThisWeek}
+                    activeOperators={activeOperators}
                     hotLeads={stats.hotLeads}
                     pipelineValue={stats.pipelineValue}
+                    onNewThisWeek={() =>
+                      document.getElementById('new-permits-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                    onHotLeads={() => {
+                      setPendingScoreFilter('hot');
+                      setActiveTab('companies');
+                    }}
+                    onPipeline={() => setActiveTab('deals')}
                   />
                   
                   {/* New This Week Map - Expanded to 60-70% viewport */}
@@ -270,13 +313,13 @@ const Index = () => {
                         New This Week ({newThisWeekPermits.length} permits)
                       </h3>
                       <div className="h-[calc(60vh-120px)] min-h-[400px] relative z-0">
-                        <PermitMap permits={newThisWeekPermits} />
+                        <PermitMapAdvanced permits={newThisWeekPermits} showFilters={false} windowDays={windowDays} />
                       </div>
                     </div>
                   )}
                   
                   {/* New permits as tiles */}
-                  <NewPermitsList permits={newThisWeekPermits} />
+                  <NewPermitsList permits={newThisWeekPermits} allPermits={permits} windowDays={windowDays} />
                 </>
               )}
             </TabsContent>
@@ -289,13 +332,25 @@ const Index = () => {
             {/* Map Tab - Full featured with filters (free plan sees the last 30 days, enforced server-side) */}
             <TabsContent value="map" className="space-y-6 mt-0">
               <div className="h-[700px]">
-                <PermitMapAdvanced permits={permits} showFilters={true} />
+                <PermitMapAdvanced permits={permits} showFilters={true} windowDays={windowDays} />
               </div>
             </TabsContent>
 
             {/* Companies Tab */}
             <TabsContent value="companies" className="space-y-6 mt-0">
-              <CompaniesTab companies={companies} permits={permits} deals={deals} onRefresh={refresh} windowDays={windowDays} hiddenCompanyCount={hiddenCompanyCount} />
+              <CompaniesTab
+                companies={companies}
+                permits={permits}
+                deals={deals}
+                onRefresh={refresh}
+                windowDays={windowDays}
+                hiddenCompanyCount={hiddenCompanyCount}
+                hiddenCompanies={hiddenCompanies}
+                openCompanyName={pendingCompany}
+                onOpenCompanyHandled={() => setPendingCompany(null)}
+                requestedScoreFilter={pendingScoreFilter}
+                onRequestedScoreFilterHandled={() => setPendingScoreFilter(null)}
+              />
             </TabsContent>
 
             {/* Deals Tab */}
