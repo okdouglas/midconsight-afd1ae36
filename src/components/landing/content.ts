@@ -89,7 +89,7 @@ export const WEEK_START = {
 /** A real hot permit from the latest import (public filing fields only). */
 export const LEAD = {
   h2: 'Oklahoma Intent to Drill filings, scored hot or warm',
-  lead: 'Every filing carries its operator’s score. Hot means actively permitting. Warm means recent activity. Cold means the filings are old.',
+  lead: 'Every filing carries its operator’s score. Hot means actively permitting, with real volume on the way. Warm means wells still in the pipeline. Cold means most of the pipeline has played out.',
   eyebrow: 'A real lead',
   score: 'Hot',
   operator: 'Camino Natural Resources LLC',
@@ -330,6 +330,6 @@ export const SCORING = {
     'The median horizontal well takes about 6 months from permit to first production. About 1 in 6 permits never becomes a producing well. The weights come from 6,590 Oklahoma permits.',
     'The lookback at the top of every screen caps how far back permits count. It starts at 12 months.',
     'The score belongs to the operator. Every permit it files carries that tier.',
-    'Cold does not mean a bad lead. It means the filings are old.',
+    'Cold does not mean a bad operator. It means little of its pipeline is left. A new filing moves it back up.',
   ],
 } as const;

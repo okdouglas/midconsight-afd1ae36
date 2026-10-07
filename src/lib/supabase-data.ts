@@ -3,6 +3,7 @@
  * Replaces IndexedDB with persistent cloud storage
  */
 
+import { scoreOperator, DEFAULT_WINDOW_DAYS } from '@/lib/scoring';
 import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { processExcelData, generateId, type Permit, type ImportResult } from './schema-mapping';
@@ -384,12 +385,6 @@ export async function deleteDataset(datasetId: string): Promise<void> {
 
 // ============ IMPORT OPERATIONS ============
 
-export function calculateScore(permitCount: number, recentPermits: number): 'hot' | 'warm' | 'cold' {
-  if (permitCount >= 5 || recentPermits >= 3) return 'hot';
-  if (permitCount >= 3 || recentPermits >= 2) return 'warm';
-  return 'cold';
-}
-
 interface ParsedFileResult {
   data: Record<string, unknown>[];
   metadata: ImportMetadata;
@@ -676,9 +671,6 @@ async function rebuildCompanies(userId: string): Promise<void> {
 
   if (!permits || permits.length === 0) return;
 
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30)).toISOString().split('T')[0];
-
   // Group permits by operator
   const operatorMap = new Map<string, typeof permits>();
   permits.forEach(permit => {
@@ -700,8 +692,6 @@ async function rebuildCompanies(userId: string): Promise<void> {
 
   operatorMap.forEach((operatorPermits, operatorName) => {
     const existingCompany = existingCompanyMap.get(operatorName);
-    const recentPermits = operatorPermits.filter(p => p.date_imported >= thirtyDaysAgo).length;
-
     const lastPermitDate = operatorPermits.reduce((latest, p) => {
       const date = p.approval_date || p.date_imported;
       return date > latest ? date : latest;
@@ -716,7 +706,8 @@ async function rebuildCompanies(userId: string): Promise<void> {
       operator_number: operatorPermits[0]?.operator_number,
       permit_count: operatorPermits.length,
       total_value: totalValue,
-      score: calculateScore(operatorPermits.length, recentPermits),
+      // Same rule the app shows live (src/lib/scoring.ts, v4).
+      score: scoreOperator(operatorPermits.map((p) => dbPermitToApp(p as DbPermit)), DEFAULT_WINDOW_DAYS).score,
       last_permit_date: lastPermitDate,
       city: operatorPermits[0]?.city,
       state: operatorPermits[0]?.state

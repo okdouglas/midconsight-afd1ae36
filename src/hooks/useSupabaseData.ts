@@ -36,7 +36,7 @@ export interface Company {
   isPreview?: boolean;
   /** Permits inside the lookback. */
   windowCount?: number;
-  /** Heat points: recent permits count more, old ones fade. Drives the live score. */
+  /** Pipeline: expected wells still coming, weighted by the measured permit-to-production curve. Drives the live score. */
   heat?: number;
 }
 
