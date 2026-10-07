@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { CompanyPermitsMap } from '@/components/CompanyPermitsMap';
+import { PermitLifecycleTimeline } from '@/components/PermitLifecycleTimeline';
 import { windowLabel, formatHeat } from '@/lib/scoring';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -412,6 +413,9 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
 
             {/* Map of every permit we track for this operator */}
             <CompanyPermitsMap permits={companyPermits} windowDays={windowDays} />
+
+            {/* Where those permits should be on the permit-to-production curve */}
+            <PermitLifecycleTimeline permits={companyPermits} />
 
             {/* Primary Contact Card */}
             <div className="border border-border rounded-lg p-4">
