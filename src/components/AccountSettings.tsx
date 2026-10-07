@@ -58,8 +58,19 @@ export function AccountSettings({ email, profile, plan, onProfileSaved, onUpgrad
     const result = await openBillingPortal();
     if ('url' in result) window.location.href = result.url;
     else if ('notConfigured' in result) toast('Billing is not switched on yet.');
-    else toast.error("Couldn't open billing. Please try again.");
+    else if (result.error === 'no_billing_account') {
+      toast.error("There is no billing account on file for you yet. If you paid, email us and we'll sort it out.");
+    } else toast.error("Couldn't open billing. Please try again.");
   };
+
+  // These columns may not exist yet, so read them defensively.
+  const periodEnd = profile?.current_period_end ? new Date(profile.current_period_end) : null;
+  const periodEndText =
+    periodEnd && !Number.isNaN(periodEnd.getTime())
+      ? periodEnd.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : null;
+  const cancelling = profile?.cancel_at_period_end === true;
+  const pastDue = plan !== 'free' && profile?.subscription_status === 'past_due';
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -70,11 +81,26 @@ export function AccountSettings({ email, profile, plan, onProfileSaved, onUpgrad
           </CardTitle>
           <CardDescription>{PLAN_NOTE[plan]}</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {plan === 'pro' ? null : <Button onClick={onUpgrade}>{plan === 'free' ? 'Upgrade' : 'Change plan'}</Button>}
+        <CardContent className="space-y-3">
+          {pastDue && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+              <span>Your last payment failed. Update your card to keep your plan.</span>
+              <Button size="sm" onClick={manageBilling}>Manage billing</Button>
+            </div>
+          )}
+          {plan !== 'free' && periodEndText && (
+            <p className="text-sm text-muted-foreground">
+              {cancelling ? `Cancels on ${periodEndText}. You keep access until then.` : `Renews on ${periodEndText}.`}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+          {plan === 'pro' ? null : (
+            <Button onClick={plan === 'free' ? onUpgrade : manageBilling}>{plan === 'free' ? 'Upgrade' : 'Change plan'}</Button>
+          )}
           {plan !== 'free' && (
             <Button variant="outline" onClick={manageBilling}>Manage billing and invoices</Button>
           )}
+          </div>
         </CardContent>
       </Card>
 

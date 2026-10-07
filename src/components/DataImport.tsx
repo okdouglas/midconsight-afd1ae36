@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
+import type { DragEvent, KeyboardEvent } from 'react';
 import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Info, ExternalLink, BookOpen, HelpCircle, Calendar, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,19 +16,29 @@ import { ImportAddendum, type ImportMetadata, type SkippedRow } from './ImportAd
 
 interface DataImportProps {
   onImportComplete: () => void;
+  /** Latest shared permit approval or import date (YYYY-MM-DD), for the weekly feed row. */
+  feedUpdatedAt?: string | null;
 }
 
-export function DataImport({ onImportComplete }: DataImportProps) {
+function formatFeedDate(value: string): string | null {
+  const d = new Date(value.length === 10 ? `${value}T12:00:00` : value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function DataImport({ onImportComplete, feedUpdatedAt }: DataImportProps) {
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<{
     success: boolean;
-    validRows: number;
-    skippedRows: number;
+    newCount: number;
+    duplicateCount: number;
+    invalidCount: number;
     errors: ValidationError[];
   } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [datasetName, setDatasetName] = useState('');
-  const [selectedState, setSelectedState] = useState('OK');
+  const [selectedState, setSelectedState] = useState('TX');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Import addendum state
@@ -58,14 +69,34 @@ export function DataImport({ onImportComplete }: DataImportProps) {
     toast.success(`${label} copied to clipboard`);
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) processFile(file);
+  };
 
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (isImporting) return;
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) {
+      toast.error('Please drop an Excel or CSV file (.xlsx, .xls or .csv).');
+      return;
+    }
+    processFile(file);
+  };
+
+  const handleZoneKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (!isImporting) fileInputRef.current?.click();
+    }
+  };
+
+  const processFile = async (file: File) => {
     setIsImporting(true);
     setImportResult(null);
-    setImportMetadata(null);
-    setSkippedRowsLog([]);
 
     try {
       const name = datasetName || `Week of ${new Date().toLocaleDateString()}`;
@@ -74,12 +105,13 @@ export function DataImport({ onImportComplete }: DataImportProps) {
       
       setImportResult({
         success: true,
-        validRows: result.importResult.validRows,
-        skippedRows: result.importResult.skippedRows,
+        newCount: result.counts.newCount,
+        duplicateCount: result.counts.duplicateCount,
+        invalidCount: result.counts.invalidCount,
         errors: result.importResult.errors
       });
       
-      // Set addendum data
+      // Set addendum data. The log stays until the user clears it.
       setImportMetadata(result.metadata);
       setSkippedRowsLog(result.skippedRows);
       
@@ -89,8 +121,9 @@ export function DataImport({ onImportComplete }: DataImportProps) {
       console.error('Import failed:', error);
       setImportResult({
         success: false,
-        validRows: 0,
-        skippedRows: 0,
+        newCount: 0,
+        duplicateCount: 0,
+        invalidCount: 0,
         errors: [{ row: 0, field: 'file', value: '', reason: String(error) }]
       });
     } finally {
@@ -127,23 +160,36 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                 />
               </div>
 
-              <div className="flex items-center gap-4">
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label="Drop a permit file here, or press Enter to choose one"
+                aria-disabled={isImporting}
+                onClick={() => !isImporting && fileInputRef.current?.click()}
+                onKeyDown={handleZoneKey}
+                onDragOver={(e) => { e.preventDefault(); if (!isImporting) setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                className={`flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 text-center cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  dragOver ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'
+                } ${isImporting ? 'opacity-60 cursor-wait' : ''}`}
+              >
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept=".xlsx,.xls,.csv"
                   onChange={handleFileSelect}
+                  onClick={(e) => e.stopPropagation()}
                   className="hidden"
                   id="file-upload"
                 />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isImporting}
-                  className="gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  {isImporting ? 'Processing...' : 'Upload Excel/CSV File'}
-                </Button>
+                <Upload className="h-6 w-6 text-muted-foreground" />
+                <p className="text-sm font-medium">
+                  {isImporting ? 'Processing...' : 'Drag and drop your file here'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {isImporting ? 'This can take a few seconds.' : 'or click to choose an Excel or CSV file'}
+                </p>
               </div>
 
               {importResult && (
@@ -160,7 +206,8 @@ export function DataImport({ onImportComplete }: DataImportProps) {
                       </p>
                       {importResult.success && (
                         <p className="text-sm text-muted-foreground">
-                          {importResult.validRows} new permits imported • {importResult.skippedRows} rows skipped/duplicates
+                          {importResult.newCount} new, {importResult.duplicateCount} duplicate, {importResult.invalidCount} invalid.
+                          {importResult.newCount === 0 && importResult.duplicateCount > 0 ? ' Every valid row was already in your data.' : ''}
                         </p>
                       )}
                       {importResult.errors.length > 0 && (
@@ -188,6 +235,14 @@ export function DataImport({ onImportComplete }: DataImportProps) {
             <div className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-primary" />
               <h3 className="font-semibold text-foreground">Import Guide & Support</h3>
+            </div>
+
+            {/* Weekly feed status */}
+            <div className="rounded-md border border-border bg-background px-3 py-2 text-sm space-y-0.5">
+              <p className="font-medium">
+                Weekly feed: {feedUpdatedAt && formatFeedDate(feedUpdatedAt) ? `updated ${formatFeedDate(feedUpdatedAt)}` : 'no permits yet'}
+              </p>
+              <p className="text-xs text-muted-foreground">Oklahoma permits update themselves every Monday.</p>
             </div>
 
             {/* State Selection */}

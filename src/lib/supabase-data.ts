@@ -17,6 +17,8 @@ export interface ExtendedImportResult {
   importResult: ImportResult;
   metadata: ImportMetadata;
   skippedRows: SkippedRow[];
+  /** What happened to the rows in the file: added, already in the database, or unusable. */
+  counts: { newCount: number; duplicateCount: number; invalidCount: number };
 }
 
 // Types for database records
@@ -400,6 +402,7 @@ export async function deleteDeal(id: string): Promise<void> {
 }
 
 export async function deleteDataset(datasetId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
   // Delete permits associated with the dataset
   const { error: permitsError } = await supabase
     .from('permits')
@@ -415,6 +418,9 @@ export async function deleteDataset(datasetId: string): Promise<void> {
     .eq('id', datasetId);
 
   if (error) throw error;
+
+  // Companies and their scores were built from these permits, so refresh them.
+  if (user) await rebuildCompanies(user.id);
 }
 
 // ============ IMPORT OPERATIONS ============
@@ -594,15 +600,6 @@ export async function importFile(
   const existingApis = new Set(existingPermits.map(p => p.api));
   const newPermits = importResult.permits.filter(p => !existingApis.has(p.api));
   
-  // Free accounts can import a small file to try the workflow.
-  if (newPermits.length > FREE_IMPORT_ROW_LIMIT) {
-    const { data: prof } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle();
-    if ((prof?.plan ?? 'free') === 'free') {
-      window.dispatchEvent(new CustomEvent('midconsight:free-limit'));
-      throw new Error(`The free plan imports up to ${FREE_IMPORT_ROW_LIMIT} permits at a time. This file has ${newPermits.length}.`);
-    }
-  }
-
   // Track duplicates as skipped rows
   const duplicatePermits = importResult.permits.filter(p => existingApis.has(p.api));
   for (const dup of duplicatePermits) {
@@ -700,7 +697,12 @@ export async function importFile(
       skippedRows: importResult.skippedRows + duplicatePermits.length
     },
     metadata,
-    skippedRows: allSkippedRows
+    skippedRows: allSkippedRows,
+    counts: {
+      newCount: newPermits.length,
+      duplicateCount: duplicatePermits.length,
+      invalidCount: importResult.skippedRows,
+    },
   };
 }
 
@@ -793,8 +795,6 @@ function announceFreeLimit(err: unknown) {
 export function promptUpgrade(source = 'free_limit') {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('midconsight:free-limit', { detail: { source } }));
 }
-
-export const FREE_IMPORT_ROW_LIMIT = 100;
 
 export async function saveSellingOption(
   option: Omit<DbSellingOption, 'id' | 'user_id' | 'created_at' | 'updated_at'>
@@ -1198,6 +1198,10 @@ export interface DbProfile {
   activated_at: string | null;
   paywall_hits: number;
   last_digest_sent_at: string | null;
+  /** Kept in step with Stripe by the webhook. May be missing until the 20261007220000 migration is applied. */
+  subscription_status?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean | null;
   created_at: string;
   updated_at: string;
 }
