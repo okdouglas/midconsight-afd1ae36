@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from './useAuth';
 import {
   getAllPermits,
@@ -6,13 +6,13 @@ import {
   getAllDeals,
   getAllDatasets,
   deleteDataset as deleteDatasetFn,
-  calculateScore,
   AVG_PERMIT_VALUE,
   type DbCompany,
   type DbDeal,
   type DbDataset
 } from '@/lib/supabase-data';
 import type { Permit } from '@/lib/schema-mapping';
+import { computeOperatorStats, DEFAULT_WINDOW_DAYS, SCORE_WINDOWS } from '@/lib/scoring';
 
 // Frontend-friendly types (matching old indexeddb types for compatibility)
 export interface Company {
@@ -34,6 +34,8 @@ export interface Company {
    *  live data on day one instead of an empty CRM. Becomes a real record
    *  the moment you act on it (mark as client, create a deal). */
   isPreview?: boolean;
+  /** Permits in the scoring window. Drives the live score. */
+  windowCount?: number;
 }
 
 export interface Deal {
@@ -111,69 +113,80 @@ function mapDbDatasetToDataset(db: DbDataset): Dataset {
   };
 }
 
-const ROLLUP_WINDOW_DAYS = 30;
+const WINDOW_STORAGE_KEY = 'midconsight.scoreWindowDays';
+
+function loadWindowDays(): number {
+  try {
+    const raw = Number(localStorage.getItem(WINDOW_STORAGE_KEY));
+    if (SCORE_WINDOWS.some((w) => w.days === raw)) return raw;
+  } catch {
+    // storage unavailable, use the default
+  }
+  return DEFAULT_WINDOW_DAYS;
+}
 
 /**
- * Builds a default company view from recent permits so a first-time paid
- * user sees real, connected data (permits → companies) immediately,
- * instead of an empty CRM until they run their own import.
+ * Builds the company list live from the permits you can see.
  *
- * Real company records (rows you've created/edited — marked as a client,
- * linked to a deal, etc.) always take priority. This only fills in
- * operators that don't have a real record yet, computed from permits
- * imported in the last 30 days that you have visibility into (your own
- * permits, plus the shared feed if you're on the paid plan — free-plan
- * permits are already 30+ days delayed by RLS, so this naturally
- * contributes nothing extra for free accounts).
+ * Counts, last permit date and score all come from permits and the scoring
+ * window, never from the stored company row, which is only a snapshot from
+ * the last import. Stored rows still supply the CRM fields (client flag,
+ * HQ address, primary contact). A stored company with no tracked permits is
+ * kept only if it is a client or has a deal. The rest are counted as hidden.
  */
-function buildCompanyRollups(permits: Permit[], realCompanies: Company[]): Company[] {
-  const realNames = new Set(realCompanies.map((c) => c.name.toLowerCase()));
+function buildLiveCompanies(
+  permits: Permit[],
+  realCompanies: Company[],
+  deals: Deal[],
+  windowDays: number,
+): { companies: Company[]; hiddenCount: number } {
+  const stats = computeOperatorStats(permits, windowDays);
+  const realByName = new Map(realCompanies.map((c) => [c.name.toLowerCase(), c]));
+  const dealCompanyIds = new Set(deals.map((d) => d.companyId));
+  const out: Company[] = [];
+  const used = new Set<string>();
 
-  const windowStart = new Date();
-  windowStart.setDate(windowStart.getDate() - ROLLUP_WINDOW_DAYS);
-  const windowStartStr = windowStart.toISOString().split('T')[0];
-
-  const recentPermits = permits.filter((p) => p.dateImported >= windowStartStr);
-
-  const byOperator = new Map<string, Permit[]>();
-  for (const permit of recentPermits) {
-    if (!permit.operator || realNames.has(permit.operator.toLowerCase())) continue;
-    const existing = byOperator.get(permit.operator) || [];
-    existing.push(permit);
-    byOperator.set(permit.operator, existing);
-  }
-
-  const previews: Company[] = [];
-  byOperator.forEach((operatorPermits, operatorName) => {
-    const lastPermitDate = operatorPermits.reduce((latest, p) => {
-      const date = p.approvalDate || p.dateImported;
-      return date > latest ? date : latest;
-    }, '1900-01-01');
-
-    previews.push({
-      id: `preview-${operatorName}`,
-      name: operatorName,
-      operatorNumber: operatorPermits[0]?.operatorNumber,
-      permitCount: operatorPermits.length,
-      totalValue: operatorPermits.length * AVG_PERMIT_VALUE,
-      score: calculateScore(operatorPermits.length, operatorPermits.length),
-      lastPermitDate,
-      createdDate: lastPermitDate,
-      city: operatorPermits[0]?.city,
-      state: operatorPermits[0]?.state,
-      isCurrentClient: false,
-      isPreview: true,
+  stats.forEach((st, operatorName) => {
+    const real = realByName.get(operatorName.toLowerCase());
+    if (real) used.add(real.id);
+    const first = st.permits[0];
+    out.push({
+      id: real?.id ?? `preview-${operatorName}`,
+      name: real?.name ?? operatorName,
+      operatorNumber: real?.operatorNumber ?? first?.operatorNumber,
+      permitCount: st.total,
+      windowCount: st.inWindow,
+      totalValue: st.total * AVG_PERMIT_VALUE,
+      score: st.score,
+      lastPermitDate: st.lastPermitDate || real?.lastPermitDate || '',
+      createdDate: real?.createdDate ?? st.lastPermitDate,
+      city: real?.city ?? first?.city,
+      state: real?.state ?? first?.state,
+      isCurrentClient: real?.isCurrentClient ?? false,
+      hqAddress: real?.hqAddress,
+      primaryContactId: real?.primaryContactId,
+      isPreview: !real,
     });
   });
 
-  return [...realCompanies, ...previews];
+  let hiddenCount = 0;
+  for (const real of realCompanies) {
+    if (used.has(real.id)) continue;
+    if (real.isCurrentClient || dealCompanyIds.has(real.id)) {
+      out.push({ ...real, permitCount: 0, windowCount: 0, totalValue: 0, score: 'cold' });
+    } else {
+      hiddenCount += 1;
+    }
+  }
+  return { companies: out, hiddenCount };
 }
 
 export function useSupabaseData() {
   const { user } = useAuth();
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [permits, setPermits] = useState<Permit[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [realCompanies, setRealCompanies] = useState<Company[]>([]);
+  const [windowDays, setWindowDaysState] = useState<number>(loadWindowDays);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -181,7 +194,7 @@ export function useSupabaseData() {
     if (!user) {
       setDatasets([]);
       setPermits([]);
-      setCompanies([]);
+      setRealCompanies([]);
       setDeals([]);
       setLoading(false);
       return;
@@ -197,8 +210,7 @@ export function useSupabaseData() {
       ]);
 
       setPermits(perms);
-      const realCompanies = comps.map(mapDbCompanyToCompany);
-      setCompanies(buildCompanyRollups(perms, realCompanies));
+      setRealCompanies(comps.map(mapDbCompanyToCompany));
       setDeals(dls.map(mapDbDealToDeal));
       setDatasets(ds.map(mapDbDatasetToDataset));
     } catch (error) {
@@ -218,6 +230,20 @@ export function useSupabaseData() {
   };
 
   // Computed values
+  const setWindowDays = useCallback((days: number) => {
+    setWindowDaysState(days);
+    try {
+      localStorage.setItem(WINDOW_STORAGE_KEY, String(days));
+    } catch {
+      // storage unavailable, the choice just will not persist
+    }
+  }, []);
+
+  const { companies, hiddenCount: hiddenCompanyCount } = useMemo(
+    () => buildLiveCompanies(permits, realCompanies, deals, windowDays),
+    [permits, realCompanies, deals, windowDays],
+  );
+
   const hotLeads = companies.filter(c => c.score === 'hot').length;
   const warmLeads = companies.filter(c => c.score === 'warm').length;
   const pipelineValue = deals.filter(d => d.status === 'open').reduce((sum, d) => sum + d.value, 0);
@@ -237,6 +263,9 @@ export function useSupabaseData() {
     companies,
     deals,
     loading,
+    windowDays,
+    setWindowDays,
+    hiddenCompanyCount,
     refresh,
     removeDataset,
     newThisWeekPermits,

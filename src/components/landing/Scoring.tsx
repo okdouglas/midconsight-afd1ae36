@@ -6,7 +6,7 @@ const TONE: Record<string, { dot: string; text: string }> = {
   steady: { dot: '#6fa3d3', text: '#ffffff' },
 };
 
-/** The scoring rule, listed in full. Mirrors calculateScore in src/lib/data-processor.ts. */
+/** The scoring rule, listed in full. Mirrors src/lib/scoring.ts. */
 export function ScoringLogic() {
   return (
     <section id="scoring" className="lp-on-dark bg-[#0b2545] lp-band" aria-labelledby="score-h2">
@@ -31,9 +31,8 @@ export function ScoringLogic() {
               <thead>
                 <tr className="border-b border-[#2b3f5c]">
                   <th scope="col" className="lp-label pb-4 pr-4 font-semibold text-[#6fa3d3]">{SCORING.headers.tier}</th>
-                  <th scope="col" className="lp-label pb-4 pr-4 font-semibold text-[#6fa3d3]">{SCORING.headers.total}</th>
-                  <th scope="col" className="pb-4 pr-4"><span className="sr-only">Joined by</span></th>
-                  <th scope="col" className="lp-label pb-4 font-semibold text-[#6fa3d3]">{SCORING.headers.recent}</th>
+                  <th scope="col" className="lp-label pb-4 pr-4 font-semibold text-[#6fa3d3]">{SCORING.headers.rule}</th>
+                  <th scope="col" className="lp-label pb-4 font-semibold text-[#6fa3d3]">{SCORING.headers.meaning}</th>
                 </tr>
               </thead>
               <tbody>
@@ -45,13 +44,18 @@ export function ScoringLogic() {
                         {t.name}
                       </span>
                     </th>
-                    <td className="py-6 pr-4 text-lg font-medium tabular-nums text-white md:text-xl">{t.total}</td>
-                    <td className="py-6 pr-4 text-base text-[#a9c0d8]">{t.joiner}</td>
-                    <td className="py-6 text-lg font-medium tabular-nums text-white md:text-xl">{t.recent}</td>
+                    <td className="py-6 pr-4 text-lg font-medium tabular-nums text-white md:text-xl">{t.rule}</td>
+                    <td className="py-6 text-base text-[#c9d8e8] md:text-lg">{t.meaning}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <p className="lp-label mt-8 text-[#6fa3d3]">Pick a window</p>
+            <ul className="mt-3 flex flex-wrap gap-2" aria-label="Time windows">
+              {SCORING.windows.map((w) => (
+                <li key={w} className="rounded-full border border-[#2b3f5c] px-3 py-1 text-sm text-[#c9d8e8]">{w}</li>
+              ))}
+            </ul>
             <ul className="mt-8 space-y-3 text-base leading-relaxed text-[#c9d8e8]">
               {SCORING.notes.map((n) => (
                 <li key={n}>{n}</li>

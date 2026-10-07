@@ -16,7 +16,10 @@ import {
   MapPin,
   Calendar,
   Layers,
-  UserCheck
+  UserCheck,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,6 +44,7 @@ import { ResearchSidebar } from './ResearchSidebar';
 import { type Permit } from '@/lib/schema-mapping';
 import { type Company } from '@/hooks/useSupabaseData';
 import { toast } from 'sonner';
+import { scoreForCount, windowStart, permitDate, windowLabel } from '@/lib/scoring';
 import { updateCompany, getAllResearchStatuses, setResearchStatus as persistResearchStatus } from '@/lib/supabase-data';
 
 type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
@@ -62,6 +66,7 @@ interface ResearchDeskProps {
   permits: Permit[];
   companies: Company[];
   onRefresh: () => void;
+  windowDays: number;
 }
 
 const STATUS_CONFIG: Record<ResearchStatus, { label: string; color: string }> = {
@@ -78,27 +83,19 @@ const PRIORITY_CONFIG: Record<Priority, { label: string; icon: React.ReactNode; 
   cold: { label: 'Cold', icon: <Layers className="h-3 w-3" />, color: 'text-primary' },
 };
 
-// Calculate priority based on permit characteristics
-function calculatePriority(permits: Permit[], company?: Company): Priority {
-  if (company?.score === 'hot') return 'hot';
-  if (company?.score === 'warm') return 'warm';
-  
-  // Hot if recent permit or high-value well type
-  const hasRecent = permits.some(p => 
-    p.approvalDate && new Date(p.approvalDate) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  );
-  const hasHighValue = permits.some(p => 
-    ['HORIZONTAL', 'DIRECTIONAL'].includes(p.drillType?.toUpperCase() || '')
-  );
-  
-  if (hasRecent || hasHighValue) return 'warm';
-  return 'cold';
+// Priority is the live lead score: permits inside the global score window.
+function calculatePriority(permits: Permit[], windowDays: number): Priority {
+  const start = windowStart(windowDays);
+  const inWindow = permits.filter(p => permitDate(p) >= start).length;
+  return scoreForCount(inWindow);
 }
 
 // Research status now persists server-side via Supabase (operator_research_status
 // table) instead of localStorage, so it syncs across devices and team members.
 
-export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProps) {
+export function ResearchDesk({ permits, companies, onRefresh, windowDays }: ResearchDeskProps) {
+  // Null means the default order: priority first, then newest permit.
+  const [dateSort, setDateSort] = useState<'asc' | 'desc' | null>(null);
   const [selectedOperator, setSelectedOperator] = useState<string | null>(null);
   const [selectedOperators, setSelectedOperators] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -174,11 +171,11 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
         county: latestPermit.county || 'Unknown',
         state: latestPermit.state || 'Unknown',
         researchStatus: statusMap[operator] ?? 'new',
-        priority: calculatePriority(opPermits, company),
+        priority: calculatePriority(opPermits, windowDays),
         company,
       };
     });
-  }, [permits, companies, currentClientOperators, statusMap]);
+  }, [permits, companies, currentClientOperators, statusMap, windowDays]);
 
   // Filter and sort leads
   const filteredLeads = useMemo(() => {
@@ -206,14 +203,19 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
         return true;
       })
       .sort((a, b) => {
-        // Sort by priority (hot first), then by date
+        // A date sort set from the column header wins over the default order
+        if (dateSort) {
+          const diff = new Date(a.latestPermitDate).getTime() - new Date(b.latestPermitDate).getTime();
+          return dateSort === 'asc' ? diff : -diff;
+        }
+        // Default: priority (hot first), then newest permit
         const priorityOrder = { hot: 0, warm: 1, cold: 2 };
         if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
           return priorityOrder[a.priority] - priorityOrder[b.priority];
         }
         return new Date(b.latestPermitDate).getTime() - new Date(a.latestPermitDate).getTime();
       });
-  }, [operatorLeads, statusFilter, priorityFilter, searchQuery]);
+  }, [operatorLeads, statusFilter, priorityFilter, searchQuery, dateSort]);
 
   const selectedLead = selectedOperator 
     ? operatorLeads.find(l => l.operator === selectedOperator) 
@@ -394,7 +396,17 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
                 </TableHead>
                 <TableHead className="w-24">Priority</TableHead>
                 <TableHead>Operator</TableHead>
-                <TableHead>Latest Permit</TableHead>
+                <TableHead aria-sort={dateSort === 'asc' ? 'ascending' : dateSort === 'desc' ? 'descending' : 'none'}>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 font-medium hover:text-foreground"
+                    onClick={() => setDateSort(dateSort === null ? 'asc' : dateSort === 'asc' ? 'desc' : null)}
+                    title="Sort by latest permit. Oldest first, then newest first, then back to priority order."
+                  >
+                    Latest Permit
+                    {dateSort === 'asc' ? <ArrowUp className="h-3 w-3" /> : dateSort === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
+                  </button>
+                </TableHead>
                 <TableHead>County</TableHead>
                 <TableHead className="w-36">Status</TableHead>
                 <TableHead className="w-10"></TableHead>
@@ -432,7 +444,11 @@ export function ResearchDesk({ permits, companies, onRefresh }: ResearchDeskProp
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">{lead.operator}</div>
-                      <div className="text-xs text-muted-foreground">{lead.permits.length} permit{lead.permits.length > 1 ? 's' : ''}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {lead.permits.length} permit{lead.permits.length > 1 ? 's' : ''}
+                        {' · '}
+                        {lead.permits.filter(p => permitDate(p) >= windowStart(windowDays)).length} in last {windowLabel(windowDays)}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1 text-sm">
