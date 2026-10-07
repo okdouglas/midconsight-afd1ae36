@@ -210,16 +210,6 @@ const Index = () => {
     return () => window.removeEventListener('midconsight:free-limit', onLimit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // Modules ask to switch tabs with a 'midconsight:goto-tab' event.
-  useEffect(() => {
-    const onGoto = (e: Event) => {
-      const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
-      if (tab) setActiveTab(tab);
-    };
-    window.addEventListener('midconsight:goto-tab', onGoto);
-    return () => window.removeEventListener('midconsight:goto-tab', onGoto);
-  }, []);
-
   // /app?upgrade=starter|pro (from the landing page or sign-up): open the plan dialog once, then drop the param.
   useEffect(() => {
     const plan = searchParams.get('upgrade');
@@ -246,16 +236,6 @@ const Index = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, hasStarter, isPro, profileLoading]);
-
-  // Let child components switch tabs (e.g. the Deals empty state).
-  useEffect(() => {
-    const onGoto = (e: Event) => {
-      const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
-      if (tab) setActiveTab(tab);
-    };
-    window.addEventListener('midconsight:goto-tab', onGoto);
-    return () => window.removeEventListener('midconsight:goto-tab', onGoto);
-  }, []);
 
   // Mark activation the first time the user has any permits to look at
   // (server-side no-op after the first call, safe to fire repeatedly).
