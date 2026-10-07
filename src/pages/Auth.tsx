@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Database, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -127,10 +128,8 @@ export default function Auth() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 h-12 w-12 rounded-lg bg-primary flex items-center justify-center">
-            <Database className="h-7 w-7 text-primary-foreground" />
-          </div>
-          <CardTitle className="text-2xl">MidconSight</CardTitle>
+          <Logo showCredit width={300} className="mx-auto mb-5" />
+          <CardTitle className="sr-only">MidconSight</CardTitle>
           <CardDescription>Permit Intelligence Platform</CardDescription>
         </CardHeader>
         <CardContent>

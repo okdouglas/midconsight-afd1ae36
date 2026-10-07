@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Logo } from '@/components/Logo';
 import { Database, BarChart3, Users, Map, DollarSign, LogOut, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -103,14 +104,8 @@ const Index = () => {
     <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
       <aside className="w-60 shrink-0 bg-sidebar text-sidebar-foreground flex flex-col h-screen sticky top-0 border-r border-sidebar-border">
-        <div className="flex items-center gap-2.5 px-4 h-16 border-b border-sidebar-border shrink-0">
-          <div className="h-8 w-8 rounded-md bg-primary flex items-center justify-center shrink-0">
-            <Database className="h-4.5 w-4.5 text-primary-foreground" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-sm leading-tight truncate">MidconSight</p>
-            <p className="text-[11px] text-sidebar-foreground/60 leading-tight truncate">Permit Intelligence</p>
-          </div>
+        <div className="flex items-center px-4 h-16 border-b border-sidebar-border shrink-0">
+          <Logo variant="reversed" height={26} />
         </div>
 
         <nav className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5">
@@ -123,11 +118,11 @@ const Index = () => {
                 onClick={() => setActiveTab(item.value)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
                   isActive
-                    ? 'bg-sidebar-accent text-sidebar-primary font-medium'
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
                     : 'text-sidebar-foreground/75 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
                 }`}
               >
-                <item.icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-sidebar-primary' : ''}`} />
+                <item.icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-sidebar-ring' : ''}`} />
                 <span className="flex-1 text-left">{item.label}</span>
                 {showLock && <Lock className="h-3 w-3 shrink-0 text-sidebar-foreground/40" />}
               </button>
