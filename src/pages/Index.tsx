@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '@/components/Logo';
 import { Database, BarChart3, Users, Map, DollarSign, LogOut, CreditCard, Package, Search, ArrowLeft, Lock, Clock } from 'lucide-react';
@@ -58,9 +58,11 @@ function UpgradePrompt({ label, tier, onUpgradeClick }: { label: string; tier: '
 
 const Index = () => {
   const { user, signOut } = useAuth();
-  const { profile, isPaid, hasStarter, isPro, refresh: refreshProfile } = useProfile();
+  const { profile, plan, isPaid, hasStarter, isPro, refresh: refreshProfile } = useProfile();
   // Coming back from Stripe Checkout. The plan changes when Stripe's webhook lands, a few seconds
-  // after payment, so check the profile a few times before giving up.
+  // after payment. Keep checking (up to a minute) until the plan is no longer Free.
+  const planRef = useRef(plan);
+  planRef.current = plan;
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const result = params.get('checkout');
@@ -75,9 +77,28 @@ const Index = () => {
     const timer = window.setInterval(() => {
       tries += 1;
       refreshProfile();
-      if (tries >= 6) window.clearInterval(timer);
+      if (planRef.current !== 'free' || tries >= 20) window.clearInterval(timer);
     }, 3000);
     return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // A new plan changes which permits and tabs the user can see, so reload the data when it changes.
+  const lastPlan = useRef(plan);
+  useEffect(() => {
+    if (lastPlan.current !== plan) {
+      const wasLoading = lastPlan.current === undefined;
+      lastPlan.current = plan;
+      if (!wasLoading) refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan]);
+
+  // Also re-check the plan when the user comes back to this tab (for example after the billing portal).
+  useEffect(() => {
+    const onFocus = () => refreshProfile();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

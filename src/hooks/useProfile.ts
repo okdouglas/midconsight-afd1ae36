@@ -17,7 +17,7 @@ export function useProfile() {
       const data = await getProfile();
       setProfile(data);
     } catch {
-      setProfile(null);
+      // Keep the last good profile. A single failed read must not lock paid users out.
     } finally {
       setLoading(false);
     }
