@@ -84,8 +84,8 @@ const jsonld = `<script type="application/ld+json">\n${JSON.stringify(graph, nul
 const li = (items) => `<ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
 const sec = (h2, body, id = '') => `<section${id ? ` id="${id}"` : ''}><h2>${esc(h2)}</h2>${body}</section>`;
 const p = (t) => `<p>${esc(t)}</p>`;
-const H = C.HERO, W = C.WEEK_START, L = C.LEAD, M = C.MAP_SECTION, D = C.DATA_SECTION, CO = C.COMPANIES;
-const R = C.RESEARCH, MO = C.MONDAY, V = C.VOICE, PL = C.PLAIN, PR = C.PRICING, CL = C.CLOSING, N = C.NEWSLETTER, F = C.FOOTER;
+const H = C.HERO, W = C.WEEK_START, L = C.LEAD, SC = C.SCORING, CO = C.COMPANIES;
+const R = C.RESEARCH, MO = C.MONDAY, V = C.VOICE, PR = C.PRICING, CL = C.CLOSING, N = C.NEWSLETTER, F = C.FOOTER;
 const noscript = [
   '<noscript>',
   '<header><nav aria-label="Primary">' + C.NAV_LINKS.map((l) => `<a href="/${l.href}">${esc(l.label)}</a>`).join(' ') + ' <a href="/auth">Sign in</a></nav></header>',
@@ -99,13 +99,11 @@ const noscript = [
   p(C.KPI_CAPTION),
   sec(W.h2, p(W.lead) + li(W.facts.map((f) => `${esc(f.title)} ${esc(f.body)}`)) + p(W.ladderTitle) + li(W.ladder.map((t) => `${esc(t.sample)} ${esc(t.label)}`)), 'platform'),
   sec(L.h2, p(L.lead) + p(L.eyebrow) + p(`${L.operator}, ${L.well}. ${L.score}.`) + li(L.rows.map(([k, v]) => `${esc(k)}: ${esc(v)}`)) + p(L.source) + p(L.barTitle) + li([`${C.FACTS.hot} Hot`, `${C.FACTS.warm} Warm`, `${C.FACTS.steady} Steady`]) + p(L.barCaption)),
-  sec(M.h2, p(M.lead) + li(M.legend.map((l) => esc(l.label))) + p(M.note)),
-  sec(D.h2, p(D.lead) + `<h3>${esc(D.countiesTitle)}</h3>` + li(D.counties.map(([n, v]) => `${esc(n)} ${v}`)) + `<h3>${esc(D.operatorsTitle)}</h3>` + li(D.operators.map(([n, v]) => `${esc(n)} ${v}`)) + p(D.caption)),
+  sec(SC.h2, p(SC.lead) + li(SC.tiers.map((t) => `${esc(t.name)}: ${esc(t.total)} permits in the feed ${esc(t.joiner)} ${esc(t.recent)} imported in the last 30 days`)) + p(`${SC.example.text} ${SC.example.caption}`) + li(SC.notes.map(esc)), 'scoring'),
   sec(CO.h2, p(CO.lead) + li(CO.stages.map(esc)) + p(CO.note)),
   sec(R.h2, R.cards.map((c) => `<h3>${esc(c.title)}</h3>${p(c.body)}${p(c.plan)}`).join('')),
   sec(MO.h2, p(MO.lead) + `<h3>${esc(MO.title)}</h3>` + li(MO.steps.map((s) => `${esc(s.n)} ${esc(s.when)}. ${esc(s.title)} ${esc(s.body)}`)), 'how-it-works'),
   sec(V.h2, li(V.lines.map((l) => `${esc(l.k)} ${esc(l.v)}`))),
-  sec(PL.h2, li([...PL.lines, PL.last].map(esc))),
   sec(PR.h2, p(PR.lead) + PR.plans.map((pl) => `<h3>${esc(pl.name)} ${esc(pl.price)}${esc(pl.per)}</h3>${p(pl.limit)}${li(pl.features.map(esc))}`).join('') + p(PR.note), 'pricing'),
   sec(C.FAQ_H2, '<dl>' + C.FAQ.map((f) => `<dt>${esc(f.q)}</dt><dd>${esc(f.a)}</dd>`).join('') + '</dl>', 'faq'),
   sec(CL.h2, p(CL.lead) + '<p><a href="/auth">Start free</a></p>'),

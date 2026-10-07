@@ -1,14 +1,13 @@
 import { Hero } from '@/components/landing/Hero';
 import { SkipLink, SiteNav, SiteFooter } from '@/components/landing/Chrome';
-import { WeekStart, VoiceCount, SayItPlain } from '@/components/landing/VoiceSections';
+import { WeekStart, VoiceCount } from '@/components/landing/VoiceSections';
 import {
   ScoredLeads,
-  MapSection,
-  DataSection,
   CompaniesDeals,
   ResearchExport,
   MondayImport,
 } from '@/components/landing/ProductSections';
+import { ScoringLogic } from '@/components/landing/Scoring';
 import { Pricing, Faq, ClosingCta, Newsletter } from '@/components/landing/Commerce';
 import '@/components/landing/landing.css';
 
@@ -25,13 +24,11 @@ export default function Landing() {
         <Hero />
         <WeekStart />
         <ScoredLeads />
-        <MapSection />
-        <DataSection />
+        <ScoringLogic />
         <CompaniesDeals />
         <ResearchExport />
         <MondayImport />
         <VoiceCount />
-        <SayItPlain />
         <Pricing />
         <Faq />
         <ClosingCta />

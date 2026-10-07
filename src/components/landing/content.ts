@@ -86,7 +86,7 @@ export const WEEK_START = {
 /** A real hot permit from the latest import (public filing fields only). */
 export const LEAD = {
   h2: 'Oklahoma Intent to Drill filings, scored hot or warm',
-  lead: 'Every filing gets a score. Strong ones show as hot. The next tier shows as warm. The rest stay steady.',
+  lead: 'Every filing carries its operator’s score. Strong ones show as hot. The next tier shows as warm. The rest stay steady.',
   eyebrow: 'A real lead',
   score: 'Hot',
   operator: 'Camino Natural Resources LLC',
@@ -258,7 +258,7 @@ export const FAQ: { q: string; a: string; link?: { text: string; href: string } 
   },
   {
     q: 'What does a lead score mean?',
-    a: 'Each permit is scored as a lead. Strong ones show as hot, the next tier as warm.',
+    a: 'Each operator is scored on its permit count and its recent filings. Hot is 5 or more permits, or 3 or more in the last 30 days. Warm is 3 or 4 permits, or 2 in the last 30 days. Everything else is steady.',
   },
   {
     q: 'What can I do with a lead?',
@@ -304,3 +304,26 @@ export const NAV_LINKS = [
   { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
 ] as const;
+
+/** The scoring rule, as the app applies it today (src/lib/data-processor.ts calculateScore). */
+export const SCORING = {
+  eyebrow: 'How the score works',
+  h2: 'Hot, warm, steady. Here is the rule.',
+  lead: 'No black box. Each operator is scored on two numbers: how many permits it has in the feed, and how many arrived in the last 30 days.',
+  headers: { tier: 'Tier', total: 'Permits in the feed', joiner: '', recent: 'Imported in the last 30 days' },
+  tiers: [
+    { tone: 'hot', name: 'Hot', total: '5 or more', joiner: 'or', recent: '3 or more' },
+    { tone: 'warm', name: 'Warm', total: '3 or 4', joiner: 'or', recent: '2' },
+    { tone: 'steady', name: 'Steady', total: 'Fewer than 3', joiner: 'and', recent: 'Fewer than 2' },
+  ],
+  example: {
+    label: 'One real example',
+    text: 'Camino Natural Resources LLC has 5 permits in the feed. Five or more is hot.',
+    caption: `As of ${FACTS.asOf}.`,
+  },
+  notes: [
+    'The score belongs to the operator. Every permit it files carries that tier.',
+    'In Lead Research, an operator that is not hot or warm moves up to warm when it has a permit approved in the last 7 days, or a horizontal or directional well.',
+    'The company list calls the bottom tier cold.',
+  ],
+} as const;
