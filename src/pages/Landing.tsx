@@ -4,7 +4,6 @@ import { WeekStart } from '@/components/landing/VoiceSections';
 import {
   ScoredLeads,
   CompaniesDeals,
-  ResearchExport,
 } from '@/components/landing/ProductSections';
 import { ScoringLogic } from '@/components/landing/Scoring';
 import { Pricing, Faq, ClosingCta, Newsletter } from '@/components/landing/Commerce';
@@ -25,7 +24,6 @@ export default function Landing() {
         <ScoredLeads />
         <ScoringLogic />
         <CompaniesDeals />
-        <ResearchExport />
         <Pricing />
         <Faq />
         <ClosingCta />
