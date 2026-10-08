@@ -1,4 +1,4 @@
-import { COMPANIES, FACTS, LEAD, RESEARCH } from './content';
+import { COMPANIES, FACTS, LEAD } from './content';
 import { Eyebrow } from './Frames';
 
 /** Intent to Drill filings, scored hot or warm: a real lead card and the real score split. */
@@ -102,47 +102,6 @@ export function CompaniesDeals() {
           ))}
         </ol>
         <p className="mt-6 text-sm text-[#5b6f8a]">{COMPANIES.note}</p>
-      </div>
-    </section>
-  );
-}
-
-const STATUS_CHIPS = [
-  { t: 'New', c: 'bg-[#d3e4f4] text-[#00467a]' },
-  { t: 'Researching', c: 'bg-[#f6e3bf] text-[#7a4b00]' },
-  { t: 'Verified', c: 'bg-[#dcebe1] text-[#245a39]' },
-  { t: 'Current client', c: 'bg-[#0b2545] text-white' },
-];
-
-export function ResearchExport() {
-  return (
-    <section className="bg-white lp-band" aria-labelledby="rx-h2">
-      <div className="lp-wrap">
-        <h2 id="rx-h2" className="lp-h2 lp-reveal max-w-4xl">
-          {RESEARCH.h2}
-        </h2>
-        <div className="mt-14 grid gap-6 md:grid-cols-2">
-          {RESEARCH.cards.map((c, i) => (
-            <article key={c.title} className="lp-reveal flex flex-col rounded-lg border border-[#d5dfea] bg-[#eef4fa] p-7 md:p-10">
-              <p className="lp-label text-[#005a9c]">{c.plan}</p>
-              <h3 className="mt-3 text-3xl font-semibold tracking-[-0.02em] text-[#0b2545]">{c.title}</h3>
-              <p className="mt-3 max-w-md text-lg leading-relaxed text-[#2b3f5c]">{c.body}</p>
-              <div className="mt-8 flex flex-wrap gap-2" aria-hidden="true">
-                {i === 0
-                  ? STATUS_CHIPS.map((s) => (
-                      <span key={s.t} className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${s.c}`}>
-                        {s.t}
-                      </span>
-                    ))
-                  : ['CSV', 'Excel'].map((t) => (
-                      <span key={t} className="rounded-md border-2 border-[#005a9c] bg-white px-4 py-1.5 text-sm font-semibold text-[#005a9c]">
-                        {t}
-                      </span>
-                    ))}
-              </div>
-            </article>
-          ))}
-        </div>
       </div>
     </section>
   );

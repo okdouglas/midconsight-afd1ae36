@@ -85,7 +85,7 @@ const li = (items) => `<ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
 const sec = (h2, body, id = '') => `<section${id ? ` id="${id}"` : ''}><h2>${esc(h2)}</h2>${body}</section>`;
 const p = (t) => `<p>${esc(t)}</p>`;
 const H = C.HERO, W = C.WEEK_START, L = C.LEAD, SC = C.SCORING, CO = C.COMPANIES;
-const R = C.RESEARCH, PR = C.PRICING, CL = C.CLOSING, N = C.NEWSLETTER, F = C.FOOTER;
+const PR = C.PRICING, CL = C.CLOSING, N = C.NEWSLETTER, F = C.FOOTER;
 const noscript = [
   '<noscript>',
   '<header><nav aria-label="Primary">' + C.NAV_LINKS.map((l) => `<a href="/${l.href}">${esc(l.label)}</a>`).join(' ') + ' <a href="/auth">Sign in</a></nav></header>',
@@ -101,7 +101,6 @@ const noscript = [
   sec(L.h2, p(L.lead) + p(L.eyebrow) + p(L.headline) + p(L.reason) + p(`${L.operator}, ${L.well}. ${L.score}.`) + li(L.rows.map(([k, v]) => `${esc(k)}: ${esc(v)}`)) + p(L.source) + p(L.barTitle) + li([`${C.FACTS.hot} Hot`, `${C.FACTS.warm} Warm`, `${C.FACTS.cold} Cold`]) + p(L.barCaption)),
   sec(SC.h2, p(SC.lead) + li(SC.tiers.map((t) => `${esc(t.name)}: heat ${esc(t.rule)}. ${esc(t.meaning)}.`)) + p(`${SC.example.text} ${SC.example.caption}`) + li(SC.notes.map(esc)), 'scoring'),
   sec(CO.h2, p(CO.lead) + li(CO.stages.map(esc)) + p(CO.note)),
-  sec(R.h2, R.cards.map((c) => `<h3>${esc(c.title)}</h3>${p(c.body)}${p(c.plan)}`).join('')),
   sec(PR.h2, p(PR.lead) + PR.plans.map((pl) => `<h3>${esc(pl.name)} ${esc(pl.price)}${esc(pl.per)}</h3>${p(pl.limit)}${li(pl.features.map(esc))}`).join('') + p(PR.note), 'pricing'),
   sec(C.FAQ_H2, '<dl>' + C.FAQ.map((f) => `<dt>${esc(f.q)}</dt><dd>${esc(f.a)}</dd>`).join('') + '</dl>', 'faq'),
   sec(CL.h2, p(CL.lead) + '<p><a href="/auth">Start free</a></p>'),

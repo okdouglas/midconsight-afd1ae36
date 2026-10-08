@@ -123,22 +123,6 @@ export const COMPANIES = {
   note: 'Free accounts track up to 3 deals. Paid plans have no limit.',
 } as const;
 
-export const RESEARCH = {
-  h2: 'Research a lead, then export it to CSV',
-  cards: [
-    {
-      title: 'Research',
-      body: 'Triage new permits in Lead Research. Mark each one new, researching, verified or current client.',
-      plan: 'Every plan',
-    },
-    {
-      title: 'Export',
-      body: 'Export the map view to CSV or Excel. Take the list to your call sheet.',
-      plan: 'Every plan',
-    },
-  ],
-} as const;
-
 export const PRICING = {
   h2: 'Plans: Free, Starter $10, Pro $20',
   lead: 'Start free with the last 30 days of permits. Move up for the full history and no limits.',
@@ -258,8 +242,8 @@ export const SCORING = {
   },
   notes: [
     'The median horizontal well takes about 6 months from permit to first production. About 1 in 6 permits never becomes a producing well. The weights come from 6,590 Oklahoma permits.',
-    'Only new drills count. Amendments and recompletions re-approve a well that already has a permit, so they add nothing.',
-    'Permits count for up to 12 months. Older ones add nothing.',
+    'Only new drills are scored. Amendments and recompletions re-approve a well that already has a permit, so they are left out.',
+    'Each permit is scored for 12 months. After that it drops out of the score.',
     'The score belongs to the operator. Every permit it files carries that tier.',
     'Cold does not mean a bad operator. It means little of its pipeline is left. A new filing moves it back up.',
   ],
