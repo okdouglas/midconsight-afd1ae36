@@ -28,6 +28,8 @@ export interface DbPermit {
   api: string;
   operator: string;
   operator_number?: string;
+  permit_state?: string;
+  location_precision?: string;
   lat: number;
   lon: number;
   county?: string;
@@ -77,7 +79,7 @@ export interface DbCompany {
   operator_number?: string;
   permit_count: number;
   total_value: number;
-  score: 'hot' | 'warm' | 'cold';
+  score: 'hot' | 'warm' | 'cold' | 'pending';
   last_permit_date?: string;
   city?: string;
   state?: string;
@@ -182,7 +184,7 @@ function dbPermitToApp(p: DbPermit): Permit {
   // For TX, assume centroid unless we have evidence of precise GPS (from ASCII sync etc)
   // For OK, always use precise GPS (never centroid mapped)
   // This flag is set during import and we preserve it based on state
-  const isCentroidMapped = state === 'TX';
+  const isCentroidMapped = state === 'TX' || p.location_precision === 'county' || p.location_precision === 'section';
   
   return {
     id: p.id,
@@ -217,6 +219,8 @@ function dbPermitToApp(p: DbPermit): Permit {
     signName: p.sign_name,
     city: p.city,
     state: p.state,
+    permitState: p.permit_state ?? 'OK',
+    locationPrecision: (p.location_precision ?? 'exact') as Permit['locationPrecision'],
     zipCode: p.zip_code,
     imageUrl: p.image_url,
     remarks: p.remarks,
@@ -1063,7 +1067,7 @@ export async function promoteCompanyPreview(preview: {
   operatorNumber?: string;
   permitCount: number;
   totalValue: number;
-  score: 'hot' | 'warm' | 'cold';
+  score: 'hot' | 'warm' | 'cold' | 'pending';
   lastPermitDate: string;
   city?: string;
   state?: string;

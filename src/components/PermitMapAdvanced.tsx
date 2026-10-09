@@ -27,7 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useProfile } from '@/hooks/useProfile';
 import { computeOperatorStats, DEFAULT_WINDOW_DAYS, type LeadScore } from '@/lib/scoring';
-import { Flame, Thermometer, Snowflake, Maximize2 } from 'lucide-react';
+import { Flame, Thermometer, Snowflake, Maximize2, Clock } from 'lucide-react';
 import { BRAND } from '@/lib/brand-colors';
 
 // Fix default marker icons for Leaflet
@@ -56,6 +56,7 @@ const HEAT_BADGE: Record<LeadScore, { cls: string; label: string; Icon: typeof F
   hot: { cls: 'bg-score-hot/10 text-score-hot border-score-hot/30', label: 'Hot', Icon: Flame },
   warm: { cls: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30', label: 'Warm', Icon: Thermometer },
   cold: { cls: 'bg-secondary text-primary-hover border-primary/20', label: 'Cold', Icon: Snowflake },
+  pending: { cls: 'bg-muted text-muted-foreground border-border', label: 'Pending', Icon: Clock },
 };
 
 function daysAgoMidnight(days: number): Date {
@@ -235,6 +236,7 @@ export function PermitMapAdvanced({
   const datesTouched = useRef(false);
   const [endDate, setEndDate] = useState<Date | undefined>(getDefaultEndDate());
   const [selectedStages, setSelectedStages] = useState<LifecycleStage[]>([]);
+  const [selectedStates, setSelectedStates] = useState<string[]>([]);
   const [viewportOperators, setViewportOperators] = useState<{ name: string; count: number }[]>([]);
 
   // Default start date matches the plan: 30 days for Free, a year for paid plans.
@@ -368,8 +370,20 @@ export function PermitMapAdvanced({
       filtered = filtered.filter((p) => selectedStages.includes(classifyLifecycleStage(p)));
     }
 
+    // State filter — which state the well is in
+    if (selectedStates.length > 0) {
+      filtered = filtered.filter((p) => selectedStates.includes(p.permitState || 'OK'));
+    }
+
     return filtered;
-  }, [processedPermits, startDate, endDate, searchQuery, selectedStages, compact]);
+  }, [processedPermits, startDate, endDate, searchQuery, selectedStages, selectedStates, compact]);
+
+  // States present in the data the user can see (RLS already limits this by plan).
+  const stateOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    permits.forEach((p) => counts.set(p.permitState || 'OK', (counts.get(p.permitState || 'OK') ?? 0) + 1));
+    return [...counts.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, count]) => ({ code, count }));
+  }, [permits]);
 
   // Valid permits (with coordinates)
   const validPermits = useMemo(() =>
@@ -511,9 +525,11 @@ export function PermitMapAdvanced({
         icon: getMarkerIcon(permit, permit.isCentroidMapped),
       });
 
-      const sourceLabel = permit.isCentroidMapped
-        ? 'Source: County Estimate'
-        : 'Source: State GPS';
+      const sourceLabel = permit.locationPrecision === 'section'
+        ? 'Source: Section Estimate'
+        : permit.isCentroidMapped
+          ? 'Source: County Estimate'
+          : 'Source: State GPS';
 
       const sourceColor = BRAND.navy;
 
@@ -620,6 +636,10 @@ export function PermitMapAdvanced({
   };
 
   // Toggle status filter
+  const toggleState = (code: string) => {
+    setSelectedStates(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
+  };
+
   const toggleStage = (stage: LifecycleStage) => {
     setSelectedStages(prev =>
       prev.includes(stage)
@@ -802,6 +822,24 @@ export function PermitMapAdvanced({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="h-9 text-sm"
               />
+              {stateOptions.length > 1 && (
+                <div className="space-y-2">
+                  <span className="text-xs text-muted-foreground">State</span>
+                  <div className="space-y-1.5">
+                    {stateOptions.map(opt => (
+                      <div key={opt.code} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <Checkbox id={`state-${opt.code}`} checked={selectedStates.includes(opt.code)} onCheckedChange={() => toggleState(opt.code)} />
+                          <label htmlFor={`state-${opt.code}`} className="text-xs cursor-pointer truncate">
+                            {opt.code}{opt.code !== 'OK' ? ' (pending, not scored)' : ''}
+                          </label>
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">{opt.count}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <span className="text-xs text-muted-foreground">Lifecycle stage</span>
                 {stageFilterOptions.length === 0 ? (
@@ -830,7 +868,7 @@ export function PermitMapAdvanced({
 
             </div>
 
-            {(selectedStages.length > 0 || searchQuery) && (
+            {(selectedStages.length > 0 || selectedStates.length > 0 || searchQuery) && (
               <Button
                 type="button"
                 variant="ghost"
@@ -838,6 +876,7 @@ export function PermitMapAdvanced({
                 className="h-7 px-2 text-xs"
                 onClick={() => {
                   setSelectedStages([]);
+                  setSelectedStates([]);
                   setSearchQuery('');
                 }}
               >
@@ -954,7 +993,7 @@ export function PermitMapAdvanced({
         <div className={cn('absolute top-28 right-4 bg-card/95 backdrop-blur-sm rounded-lg p-3 border border-border text-xs z-[1000] shadow-lg', compact && 'hidden')}>
           <div className="font-semibold">{validPermits.length} Permits Mapped</div>
           <div className="text-muted-foreground">of {permits.length} total</div>
-          {(selectedStages.length > 0 || searchQuery) && (
+          {(selectedStages.length > 0 || selectedStates.length > 0 || searchQuery) && (
             <div className="text-primary mt-1 text-xs">Filters active</div>
           )}
         </div>

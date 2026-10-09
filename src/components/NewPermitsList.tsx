@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Calendar, MapPin, Layers, Flame, Thermometer, Snowflake } from 'lucide-react';
+import { Calendar, MapPin, Layers, Flame, Thermometer, Snowflake, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { type Permit } from '@/lib/schema-mapping';
 import { WELL_TYPE_COLORS, wellTypeKey } from '@/lib/brand-colors';
@@ -31,6 +31,7 @@ const HEAT: Record<LeadScore, { cls: string; label: string; Icon: typeof Flame }
   hot: { cls: 'bg-score-hot/10 text-score-hot border-score-hot/30', label: 'Hot', Icon: Flame },
   warm: { cls: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30', label: 'Warm', Icon: Thermometer },
   cold: { cls: 'bg-secondary text-primary-hover border-primary/20', label: 'Cold', Icon: Snowflake },
+  pending: { cls: 'bg-muted text-muted-foreground border-border', label: 'Pending', Icon: Clock },
 };
 
 interface NewPermitsListProps {

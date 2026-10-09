@@ -7,7 +7,8 @@ import { useState, useEffect } from 'react';
 import { 
   X, Plus, User, Phone, Mail, Briefcase, Building2, FileText, 
   Flame, Thermometer, Snowflake, Calendar, MapPin, Edit2, Check, 
-  Package, Trash2 
+  Package, Trash2,
+  Clock,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { CompanyPermitsMap } from '@/components/CompanyPermitsMap';
@@ -390,6 +391,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
       case 'hot': return <Flame className="h-4 w-4 text-score-hot" />;
       case 'warm': return <Thermometer className="h-4 w-4 text-score-warm-foreground" />;
       case 'cold': return <Snowflake className="h-4 w-4 text-primary" />;
+      case 'pending': return <Clock className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
@@ -398,6 +400,7 @@ export function CompanyDetailModal({ company, companyPermits = [], onClose, onUp
       hot: 'bg-score-hot/10 text-score-hot border-score-hot/30',
       warm: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30',
       cold: 'bg-secondary text-primary-hover border-primary/20',
+      pending: 'bg-muted text-muted-foreground border-border',
     };
     return variants[score];
   };

@@ -172,6 +172,11 @@ export interface Permit {
   // Calculated
   estimatedValue: number;
   
+  // v2.1 multi-state. permitState is where the WELL is (OK, KS, NM, TX). The older `state` field is the operator's mailing state.
+  permitState?: string;
+  // exact = surveyed point, section = centre of the section, county = county centre
+  locationPrecision?: 'exact' | 'section' | 'county';
+
   // Flag for centroid-mapped coordinates (Texas permits without exact location)
   isCentroidMapped?: boolean;
 

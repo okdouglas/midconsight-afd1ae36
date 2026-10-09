@@ -21,7 +21,7 @@ export interface Company {
   operatorNumber?: string;
   permitCount: number;
   totalValue: number;
-  score: 'hot' | 'warm' | 'cold';
+  score: 'hot' | 'warm' | 'cold' | 'pending';
   lastPermitDate: string;
   createdDate: string;
   city?: string;
@@ -78,7 +78,7 @@ function mapDbCompanyToCompany(db: DbCompany): Company {
     operatorNumber: db.operator_number,
     permitCount: db.permit_count || 0,
     totalValue: Number(db.total_value) || 0,
-    score: db.score as 'hot' | 'warm' | 'cold',
+    score: db.score as 'hot' | 'warm' | 'cold' | 'pending',
     lastPermitDate: db.last_permit_date || db.created_at,
     createdDate: db.created_at,
     city: db.city,

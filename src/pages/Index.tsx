@@ -164,7 +164,7 @@ const Index = () => {
   //   window.dispatchEvent(new CustomEvent('midconsight:open-company', { detail: { name } }))
   //   window.dispatchEvent(new CustomEvent('midconsight:goto-tab', { detail: { tab } }))
   const [pendingCompany, setPendingCompany] = useState<string | null>(null);
-  const [pendingScoreFilter, setPendingScoreFilter] = useState<'hot' | 'warm' | 'cold' | null>(null);
+  const [pendingScoreFilter, setPendingScoreFilter] = useState<'hot' | 'warm' | 'cold' | 'pending' | null>(null);
   useEffect(() => {
     const onOpenCompany = (e: Event) => {
       const name = (e as CustomEvent<{ name?: string }>).detail?.name;

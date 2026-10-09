@@ -19,7 +19,8 @@ import {
   UserCheck,
   ArrowUp,
   ArrowDown,
-  ArrowUpDown
+  ArrowUpDown,
+  Clock,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,7 +50,7 @@ import { ensureRealCompany } from '@/lib/research-company';
 import { updateCompany, getAllResearchStatuses, setResearchStatus as persistResearchStatus } from '@/lib/supabase-data';
 
 type ResearchStatus = 'new' | 'researching' | 'verified' | 'current_client' | 'archived';
-type Priority = 'hot' | 'warm' | 'cold';
+type Priority = 'hot' | 'warm' | 'cold' | 'pending';
 
 // Grouped operator lead
 interface OperatorLead {
@@ -83,6 +84,7 @@ const PRIORITY_CONFIG: Record<Priority, { label: string; icon: React.ReactNode; 
   hot: { label: 'Hot', icon: <Flame className="h-3 w-3" />, color: 'text-score-hot' },
   warm: { label: 'Warm', icon: <Thermometer className="h-3 w-3" />, color: 'text-score-warm-foreground' },
   cold: { label: 'Cold', icon: <Layers className="h-3 w-3" />, color: 'text-primary' },
+  pending: { label: 'Pending', icon: <Clock className="h-3 w-3" />, color: 'text-muted-foreground' },
 };
 
 // Priority is the live lead score (rule v4.1, src/lib/scoring.ts): expected wells still coming from permits inside the lookback.

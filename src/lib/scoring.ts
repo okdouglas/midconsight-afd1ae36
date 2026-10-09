@@ -38,7 +38,19 @@
  */
 import type { Permit } from '@/lib/schema-mapping';
 
-export type LeadScore = 'hot' | 'warm' | 'cold';
+/**
+ * 'pending' is for operators whose permits are all in states we do not score yet
+ * (everything except Oklahoma, for now). They show on the map and in lists but get no
+ * heat. The rule was measured on Oklahoma data only.
+ */
+export type LeadScore = 'hot' | 'warm' | 'cold' | 'pending';
+
+/** States whose permits are scored. Everything else is pending. */
+export const SCORED_STATES = ['OK'] as const;
+
+export function isScoredState(p: Pick<Permit, 'permitState'>): boolean {
+  return (SCORED_STATES as readonly string[]).includes((p.permitState || 'OK').toUpperCase());
+}
 
 export const RULE_VERSION = 'v4.1';
 export const HOT_MIN = 1.6;
@@ -127,6 +139,7 @@ function isExpired(p: Pick<Permit, 'expireDate'>, now: Date): boolean {
 export function permitHeat(p: Permit, windowDays: number, now: Date = new Date()): number {
   const d = permitDate(p);
   if (!d) return 0;
+  if (!isScoredState(p)) return 0;
   if (!isNewDrill(p)) return 0;
   if (isExpired(p, now)) return 0;
   const age = ageInDays(d, now);
@@ -163,14 +176,14 @@ export function computeOperatorStats(permits: Permit[], windowDays: number): Map
     s.permits.push(p);
     s.total += 1;
     const d = permitDate(p);
-    const counts = isNewDrill(p);
+    const counts = isNewDrill(p) && isScoredState(p);
     if (d && d >= start && counts) s.inWindow += 1;
     if (d && d >= recentStart && d >= start && counts && !isExpired(p, now)) s.recent += 1;
     if (d && d > s.lastPermitDate) s.lastPermitDate = d;
     s.heat += permitHeat(p, windowDays, now);
   }
   out.forEach((s) => {
-    s.score = scoreForHeat(s.heat, s.recent);
+    s.score = s.permits.every((p) => !isScoredState(p)) ? 'pending' : scoreForHeat(s.heat, s.recent);
   });
   return out;
 }
@@ -183,8 +196,9 @@ export function scoreOperator(permits: Permit[], windowDays: number): { heat: nu
   const heat = permits.reduce((sum, p) => sum + permitHeat(p, windowDays, now), 0);
   const recent = permits.filter((p) => {
     const d = permitDate(p);
-    return d && d >= recentStart && d >= start && isNewDrill(p) && !isExpired(p, now);
+    return d && d >= recentStart && d >= start && isNewDrill(p) && isScoredState(p) && !isExpired(p, now);
   }).length;
+  if (permits.length > 0 && permits.every((p) => !isScoredState(p))) return { heat: 0, score: 'pending' };
   return { heat, score: scoreForHeat(heat, recent) };
 }
 

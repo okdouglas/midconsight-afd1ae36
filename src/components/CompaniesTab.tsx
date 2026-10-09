@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { windowLabel, computeOperatorStats, whyLine } from '@/lib/scoring';
-import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown, UserCheck, X, Loader2 } from 'lucide-react';
+import { Users, Flame, Thermometer, Snowflake, Search, Building2, ChevronUp, ChevronDown, ArrowUpDown, UserCheck, X, Loader2, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { type Company, type Deal } from '@/hooks/useSupabaseData';
@@ -36,7 +36,7 @@ interface CompaniesTabProps {
   openCompanyName?: string | null;
   onOpenCompanyHandled?: () => void;
   /** Apply a hot, warm or cold filter once (the Hot Leads card on the dashboard). */
-  requestedScoreFilter?: 'hot' | 'warm' | 'cold' | null;
+  requestedScoreFilter?: 'hot' | 'warm' | 'cold' | 'pending' | null;
   onRequestedScoreFilterHandled?: () => void;
 }
 
@@ -116,7 +116,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
         operatorNumber: real.operator_number,
         permitCount: real.permit_count || 0,
         totalValue: Number(real.total_value) || 0,
-        score: real.score as 'hot' | 'warm' | 'cold',
+        score: real.score as 'hot' | 'warm' | 'cold' | 'pending',
         lastPermitDate: real.last_permit_date || real.created_at,
         createdDate: real.created_at,
         city: real.city,
@@ -131,7 +131,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
     }
   };
   const [searchQuery, setSearchQuery] = useState('');
-  const [scoreFilter, setScoreFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
+  const [scoreFilter, setScoreFilter] = useState<'all' | 'hot' | 'warm' | 'cold' | 'pending'>('all');
   const [contacts, setContacts] = useState<Record<string, DbContact[]>>({});
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
@@ -169,6 +169,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
       case 'hot': return <Flame className="h-4 w-4 text-score-hot" />;
       case 'warm': return <Thermometer className="h-4 w-4 text-score-warm-foreground" />;
       case 'cold': return <Snowflake className="h-4 w-4 text-primary" />;
+      case 'pending': return <Clock className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
@@ -177,6 +178,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
       hot: 'bg-score-hot/10 text-score-hot border-score-hot/30',
       warm: 'bg-score-warm text-score-warm-foreground border-score-warm-foreground/30',
       cold: 'bg-secondary text-primary-hover border-primary/20',
+      pending: 'bg-muted text-muted-foreground border-border',
     };
     return variants[score];
   };
@@ -302,6 +304,7 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
   const hotCount = viewBase.filter(c => c.score === 'hot').length;
   const warmCount = viewBase.filter(c => c.score === 'warm').length;
   const coldCount = viewBase.filter(c => c.score === 'cold').length;
+  const pendingCount = viewBase.filter(c => c.score === 'pending').length;
 
   useEffect(() => {
     if (!requestedScoreFilter) return;
@@ -369,6 +372,11 @@ export function CompaniesTab({ companies, permits, deals, onRefresh, windowDays,
         <FilterChip active={scoreFilter === 'cold'} onClick={() => setScoreFilter(scoreFilter === 'cold' ? 'all' : 'cold')} clearable icon={<Snowflake className="h-3.5 w-3.5 text-primary" />}>
           Cold ({coldCount})
         </FilterChip>
+        {pendingCount > 0 && (
+          <FilterChip active={scoreFilter === 'pending'} onClick={() => setScoreFilter(scoreFilter === 'pending' ? 'all' : 'pending')} clearable icon={<Clock className="h-3.5 w-3.5 text-muted-foreground" />}>
+            Pending ({pendingCount})
+          </FilterChip>
+        )}
       </div>
 
       {/* Search and Filter */}

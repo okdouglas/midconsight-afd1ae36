@@ -350,6 +350,8 @@ export type Database = {
           image_url: string | null
           is_shared: boolean
           lat: number
+          location_precision: string
+          permit_state: string
           lon: number
           measured_total_depth: number | null
           operator: string
@@ -397,6 +399,8 @@ export type Database = {
           image_url?: string | null
           is_shared?: boolean
           lat: number
+          location_precision?: string
+          permit_state?: string
           lon: number
           measured_total_depth?: number | null
           operator: string
@@ -444,6 +448,8 @@ export type Database = {
           image_url?: string | null
           is_shared?: boolean
           lat?: number
+          location_precision?: string
+          permit_state?: string
           lon?: number
           measured_total_depth?: number | null
           operator?: string
